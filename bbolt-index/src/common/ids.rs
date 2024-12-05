@@ -91,44 +91,6 @@ impl PageId {
 
 id!(
   /// The Transaction ID. Monotonic and incremented every commit
-  LotId
-);
-
-impl LotId {
-  /// Create a TxId
-  #[inline(always)]
-  pub const fn of(id: u64) -> LotId {
-    LotId(id)
-  }
-
-  pub fn from_page_id(id: PageId) -> (LotId, usize) {
-    (LotId::of(id.0 / 8), (id.0 % 8) as usize)
-  }
-}
-
-
-id!(
-  /// The Transaction ID. Monotonic and incremented every commit
-  LotKey
-);
-
-impl LotKey {
-  /// Create a TxId
-  #[inline(always)]
-  pub const fn of(id: u64) -> LotKey {
-    LotKey(id)
-  }
-
-  #[inline]
-  pub fn from_page_id_and_size(id: PageId, page_size: usize) -> LotKey {
-    let page_size = page_size as u64;
-    let lot_id = id.0 / 8;
-    LotKey::of((id.0 / (8 * page_size)) * page_size)
-  }
-}
-
-id!(
-  /// The Transaction ID. Monotonic and incremented every commit
   TxId
 );
 

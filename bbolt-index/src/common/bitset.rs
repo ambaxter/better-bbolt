@@ -1,6 +1,4 @@
-
 pub trait BitSet {
-
   fn clear(&mut self);
   fn get(&self, bit: u8) -> bool;
   fn unset(&mut self, bit: u8);

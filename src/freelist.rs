@@ -365,25 +365,26 @@ pub mod search {
 
 #[cfg(test)]
 mod test {
-  use std::collections::BTreeMap;
   use crate::freelist::search::{NEEDLE_08, SPREAD_02};
-  use crate::freelist::{FreelistManager};
-  use bbolt_index::common::ids::{FreePageId, LotId, LotKey, PageId};
+  use crate::freelist::FreelistManager;
+  use bbolt_index::common::bitset::BitSet;
+  use bbolt_index::common::ids::{FreePageId, PageId};
   use itertools::Itertools;
   use parking_lot::Mutex;
-  use bbolt_index::common::bitset::BitSet;
+  use std::collections::BTreeMap;
+  use std::mem;
   /*  #[test]
-    fn test_freelist_manager() {
-      let mut freelist_manager = NaiveClosestFreelistManager::new(&[]);
-      for i in 2..12 {
-        freelist_manager.free(FreePageId::of(i));
-      }
-      for i in 20..30 {
-        freelist_manager.free(FreePageId::of(i));
-      }
-      let l = freelist_manager.assign(PageId::from(330), 6);
-      assert_eq!(20, freelist_manager.len());
-    }*/
+  fn test_freelist_manager() {
+    let mut freelist_manager = NaiveClosestFreelistManager::new(&[]);
+    for i in 2..12 {
+      freelist_manager.free(FreePageId::of(i));
+    }
+    for i in 20..30 {
+      freelist_manager.free(FreePageId::of(i));
+    }
+    let l = freelist_manager.assign(PageId::from(330), 6);
+    assert_eq!(20, freelist_manager.len());
+  }*/
 
   #[derive(Debug, Copy, Clone)]
   pub enum FindResult {
@@ -513,23 +514,6 @@ mod test {
     }
   }
 
-
-  // TODO: Redo spread bitmaps? I don't think I did them right
-  #[test]
-  fn test_tree() {
-    let mut i = 0b0000_0001u8;
-    i = 1 << 0;
-    i <<= 7;
-    let lot_key = LotKey::from_page_id_and_size(PageId::of(8192), 4096);
-    let (lot_id, offset) = LotId::from_page_id(PageId::of(8193));
-    let mut tree = BTreeMap::new();
-    tree.insert(LotId::of(0), vec![0u8; 4096]);
-    tree.insert(LotId::of(4096), vec![0u8; 4096]);
-    tree.insert(LotId::of(4096 * 2), vec![0u8; 4096]);
-
-  }
-
-
   #[test]
   fn test_setting() {
     let mut v = vec![0u8; 8];
@@ -543,4 +527,157 @@ mod test {
     }
   }
 
+  pub enum LotType {
+    Swap,
+    Claimed(usize),
+    Freed(usize),
+    Array(Box<[u8]>),
+    Vec(Vec<u8>),
+  }
+
+  impl LotType {
+    #[inline]
+    pub const fn claimed(page_size: usize) -> LotType {
+      LotType::Claimed(page_size)
+    }
+
+    #[inline]
+    pub const fn freed(page_size: usize) -> LotType {
+      LotType::Freed(page_size)
+    }
+
+    pub fn array<T: Into<Box<[u8]>>>(a: T) -> LotType {
+      LotType::Array(a.into())
+    }
+
+    pub fn vec<T: Into<Vec<u8>>>(a: T) -> LotType {
+      LotType::Vec(a.into())
+    }
+
+    pub fn len(&self) -> usize {
+      match self {
+        LotType::Swap => unreachable!(),
+        LotType::Claimed(page_size) => *page_size,
+        LotType::Freed(page_size) => *page_size,
+        LotType::Array(a) => a.len(),
+        LotType::Vec(v) => v.len(),
+      }
+    }
+
+    pub fn is_claimed(&self) -> bool {
+      match self {
+        LotType::Swap => unreachable!(),
+        LotType::Claimed(_) => true,
+        LotType::Freed(_) => false,
+        LotType::Array(a) => a.iter().all(|x| *x == 0),
+        LotType::Vec(v) => v.iter().all(|x| *x == 0),
+      }
+    }
+
+    pub fn is_free(&self) -> bool {
+      match self {
+        LotType::Swap => unreachable!(),
+        LotType::Claimed(_) => false,
+        LotType::Freed(_) => true,
+        LotType::Array(a) => a.iter().any(|x| *x != 0),
+        LotType::Vec(v) => v.iter().any(|x| *x != 0),
+      }
+    }
+
+    pub fn is_mut(&self) -> bool {
+      match self {
+        LotType::Vec(_) => true,
+        _ => false,
+      }
+    }
+
+    pub fn get_mut(&mut self) -> &mut [u8] {
+      if !self.is_mut() {
+        let mut swap = LotType::Swap;
+        mem::swap(self, &mut swap);
+        let v = match swap {
+          LotType::Swap => unreachable!(),
+          LotType::Claimed(page_size) => vec![0u8; page_size],
+          LotType::Freed(page_size) => vec![u8::MAX; page_size],
+          LotType::Array(a) => a.into(),
+          LotType::Vec(_) => unreachable!(),
+        };
+        swap = LotType::Vec(v);
+        mem::swap(self, &mut swap);
+      }
+      match self {
+        LotType::Vec(v) => v,
+        _ => unreachable!(),
+      }
+    }
+  }
+
+  pub struct FreePageStore {
+    page_size: usize,
+    store: BTreeMap<usize, LotType>,
+  }
+
+  impl FreePageStore {
+    pub fn new(page_size: usize) -> FreePageStore {
+      FreePageStore {
+        page_size,
+        store: BTreeMap::new(),
+      }
+    }
+
+    pub fn with_free_pages(page_size: usize, page_count: usize) -> FreePageStore {
+      let mut store = BTreeMap::new();
+      for i in page_count {
+        store.insert(i, LotType::Freed(page_size));
+      }
+      FreePageStore { page_size, store }
+    }
+
+    pub fn with_claimed_pages(page_size: usize, page_count: usize) -> FreePageStore {
+      let mut store = BTreeMap::new();
+      for i in page_count {
+        store.insert(i, LotType::Claimed(page_size));
+      }
+      FreePageStore { page_size, store }
+    }
+
+    pub fn with_free_page_ids(page_size: usize, page_ids: &[FreePageId]) -> FreePageStore {
+      let mut store = FreePageStore::new(page_size);
+      for page_id in page_ids {
+        store.free(page_id);
+      }
+      store
+    }
+
+    pub fn get_location(&self, page_id: PageId) -> (usize, usize, u8) {
+      let id = page_id.0;
+      let store_lot = id / 8;
+      let offset = (id % 8) as u8;
+      let store_index = (store_lot / self.page_size as u64) as usize;
+      let lot_index = (store_lot % self.page_size as u64) as usize;
+      (store_index, lot_index, offset)
+    }
+
+    pub fn free<T: Into<PageId>>(&mut self, page_id: T) {
+      let page_id = page_id.into();
+      let (store_index, lot_index, offset) = self.get_location(page_id);
+      self
+        .store
+        .entry(store_index)
+        .or_insert(LotType::Freed(self.page_size))
+        .get_mut()[lot_index]
+        .set(offset);
+    }
+
+    pub fn claim<T: Into<PageId>>(&mut self, page_id: T) {
+      let page_id = page_id.into();
+      let (store_index, lot_index, offset) = self.get_location(page_id);
+      self
+        .store
+        .entry(store_index)
+        .or_insert(LotType::Freed(self.page_size))
+        .get_mut()[lot_index]
+        .unset(offset);
+    }
+  }
 }
