@@ -1,0 +1,28 @@
+[package]
+name = "bbolt-index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "The Rust port Bolt database index"
+
+[dependencies]
+aligners.workspace = true
+parking_lot.workspace = true
+memmap2.workspace = true
+fs4.workspace = true
+bytemuck.workspace = true
+bitflags.workspace = true
+page_size.workspace = true
+itertools.workspace = true
+once_cell.workspace = true
+size.workspace = true
+delegate.workspace = true
+fnv_rs.workspace = true
+rayon.workspace = true
+crossbeam-channel.workspace = true
+dashmap.workspace = true
+fake.workspace = true
+hashbrown.workspace = true
+fs-err.workspace = true
+moka.workspace = true
+getset.workspace = true

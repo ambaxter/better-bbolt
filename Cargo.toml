@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = [
+    "bbolt-index",
+    "."
+]
+default-members = ["bbolt-index", "."]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.76"
+
+[package]
+name = "better-bbolt"
+description = "A better Rust port Bolt database"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+itertools.workspace = true
+bumpalo.workspace = true
+bon.workspace = true
+size.workspace = true
+parking_lot.workspace = true
+lz4_flex.workspace = true
+bbolt-index.workspace = true
+
+[workspace.dependencies]
+aligners = { version = "0.0.10", default-features = false }
+# Until the aligners miri fix is in crates.io depend on the git main branch
+# Swap 0.0.10 for the git version to run the miri test
+#aligners = {git = "https://github.com/V0ldek/aligners.git", default-features = false }
+parking_lot = "0.12.3"
+memmap2 = "0.9.4"
+fs4 = { version = "0.12.0", features = ["sync", "fs-err3"] }
+bytemuck = { version = "1.20", features = ["derive"] }
+bitflags = "2.6.0"
+itertools = "0.13.0"
+once_cell = "1.20.2"
+size = "0.4.1"
+delegate = "0.13.1"
+fnv_rs = "0.4.3"
+rayon = "1.10.0"
+crossbeam-channel = "0.5.13"
+dashmap = "6.1.0"
+fake = { version = "3.0.1", features = ["derive"] }
+hashbrown = "0.15.2"
+fs-err = "3.0.0"
+page_size = "0.6.0"
+moka = { version = "0.12.8", features = ["sync"] }
+getset = "0.1.3"
+bon = { version = "3.2", features = ["implied-bounds"] }
+bumpalo = "3.16.0"
+lz4_flex = "0.11.3"
+bbolt-index = {path = "bbolt-index"}
