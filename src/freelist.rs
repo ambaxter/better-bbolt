@@ -35,48 +35,16 @@ pub mod search {
       &self.masks
     }
 
-    pub fn eq_mask<'a>(&'a self) -> impl Fn(&u8) -> bool + 'a {
-      |byte| self.masks.iter().any(|mask| (*byte & mask) == *mask)
+    pub fn eq_mask<'a>(&'a self) -> impl Fn(u8) -> bool + 'a {
+      |byte| self.masks.iter().any(|mask| (byte & mask) == *mask)
     }
 
-    pub fn any_mask<'a>(&'a self) -> impl Fn(&u8) -> bool + 'a {
-      |byte| self.masks.iter().any(|mask| (*byte & mask) != 0)
-    }
-  }
-
-  pub struct Spread<const M: usize> {
-    left_masks: [u8; M],
-    right_masks: [u8; M],
-  }
-
-  impl<const M: usize> Spread<M> {
-    pub const fn new(left_masks: [u8; M], right_masks: [u8; M]) -> Spread<M> {
-      Spread {
-        left_masks,
-        right_masks,
-      }
-    }
-
-    #[inline]
-    pub fn left_masks(&self) -> &[u8; M] {
-      &self.left_masks
-    }
-
-    #[inline]
-    pub fn right_masks(&self) -> &[u8; M] {
-      &self.right_masks
-    }
-
-    pub fn eq_mask<'a>(&'a self) -> impl Fn(&u8, &u8) -> bool + 'a {
-      |l_byte, r_byte| {
-        izip!(&self.left_masks, &self.right_masks).any(|(l_mask, r_mask)| {
-          ((*l_byte & l_mask) == *l_mask) && ((*r_byte & r_mask) == *r_mask)
-        })
-      }
+    pub fn any_bits<'a>(&'a self) -> impl Fn(u8) -> bool + 'a {
+      |byte| self.masks.iter().copied().any(|mask| (byte & mask) != 0)
     }
   }
 
-  pub static NEEDLE_02: Needle<7> = Needle::new([
+  pub const N2: Needle<7> = Needle::new([
     0b1100_0000u8,
     0b0110_0000u8,
     0b0011_0000u8,
@@ -86,9 +54,7 @@ pub mod search {
     0b0000_0011u8,
   ]);
 
-  pub static SPREAD_02: Spread<1> = Spread::new([0b0000_0001u8], [0b1000_0000u8]);
-
-  pub static NEEDLE_03: Needle<6> = Needle::new([
+  pub const N3: Needle<6> = Needle::new([
     0b1110_0000u8,
     0b0111_0000u8,
     0b0011_1000u8,
@@ -97,12 +63,7 @@ pub mod search {
     0b0000_0111u8,
   ]);
 
-  pub static SPREAD_03: Spread<2> = Spread::new(
-    [0b0000_011u8, 0b0000_0001u8],
-    [0b1000_0000u8, 0b1100_0000u8],
-  );
-
-  pub static NEEDLE_04: Needle<5> = Needle::new([
+  pub const N4: Needle<5> = Needle::new([
     0b1111_0000u8,
     0b0111_1000u8,
     0b0011_1100u8,
@@ -110,210 +71,220 @@ pub mod search {
     0b0000_1111u8,
   ]);
 
-  pub static SPREAD_04: Spread<3> = Spread::new(
-    [0b0000_0111u8, 0b0000_0011u8, 0b0000_0001u8],
-    [0b1000_0000u8, 0b1100_0000u8, 0b1110_0000u8],
-  );
-
-  pub static NEEDLE_05: Needle<4> =
+  pub const N5: Needle<4> =
     Needle::new([0b1111_1000u8, 0b0111_1100u8, 0b0011_1110u8, 0b0001_1111u8]);
+  pub const N6: Needle<3> = Needle::new([0b1111_1100u8, 0b0111_1110u8, 0b0011_1111u8]);
 
-  pub static SPREAD_05: Spread<4> = Spread::new(
-    [0b0000_1111u8, 0b0000_0111u8, 0b0000_0011u8, 0b0000_0001u8],
-    [0b1000_0000u8, 0b1100_0000u8, 0b1110_0000u8, 0b1111_0000u8],
-  );
+  // I’ve killed worse than you on my way to real problems - Commander Shepard
+  pub const N7: Needle<2> = Needle::new([0b1111_1110u8, 0b0111_1111u8]);
 
-  pub static NEEDLE_06: Needle<3> = Needle::new([0b1111_1100u8, 0b0111_1110u8, 0b0011_1111u8]);
+  pub const N8: Needle<1> = Needle::new([0b1111_1111u8]);
 
-  pub static SPREAD_06: Spread<5> = Spread::new(
-    [
-      0b0001_1111u8,
-      0b0000_1111u8,
-      0b0000_0111u8,
-      0b0000_0011u8,
-      0b0000_0001u8,
-    ],
-    [
-      0b1000_0000u8,
-      0b1100_0000u8,
-      0b1110_0000u8,
-      0b1111_0000u8,
-      0b1111_1000u8,
-    ],
-  );
+  pub struct SingleEnded {
+    left: u8,
+    right: u8,
+  }
 
-  pub static NEEDLE_07: Needle<2> = Needle::new([0b1111_1110u8, 0b0111_1111u8]);
+  impl SingleEnded {
+    pub const fn new(left: u8, right: u8) -> SingleEnded {
+      SingleEnded { left, right }
+    }
 
-  pub static SPREAD_07: Spread<6> = Spread::new(
-    [
-      0b0011_1111u8,
-      0b0001_1111u8,
-      0b0000_1111u8,
-      0b0000_0111u8,
-      0b0000_0011u8,
-      0b0000_0001u8,
-    ],
-    [
-      0b1000_0000u8,
-      0b1100_0000u8,
-      0b1110_0000u8,
-      0b1111_0000u8,
-      0b1111_1000u8,
-      0b1111_1100u8,
-    ],
-  );
+    #[inline]
+    pub fn left(&self) -> u8 {
+      self.left
+    }
 
-  pub static NEEDLE_08: Needle<1> = Needle::new([0b1111_1111u8]);
+    #[inline]
+    pub fn right(&self) -> u8 {
+      self.right
+    }
+  }
 
-  pub static SPREAD_08: Spread<7> = Spread::new(
-    [
-      0b0111_1111u8,
-      0b0011_1111u8,
-      0b0001_1111u8,
-      0b0000_1111u8,
-      0b0000_0111u8,
-      0b0000_0011u8,
-      0b0000_0001u8,
-    ],
-    [
-      0b1000_0000u8,
-      0b1100_0000u8,
-      0b1110_0000u8,
-      0b1111_0000u8,
-      0b1111_1000u8,
-      0b1111_1100u8,
-      0b1111_1110u8,
-    ],
-  );
+  pub const SE1: SingleEnded = SingleEnded::new(0b1000_0000u8, 0b0000_0001u8);
+  pub const SE2: SingleEnded = SingleEnded::new(0b1100_0000u8, 0b0000_0011u8);
+  pub const SE3: SingleEnded = SingleEnded::new(0b1110_0000u8, 0b0000_0111u8);
+  pub const SE4: SingleEnded = SingleEnded::new(0b1111_0000u8, 0b0000_1111u8);
+  pub const SE5: SingleEnded = SingleEnded::new(0b1111_1000u8, 0b0001_1111u8);
+  pub const SE6: SingleEnded = SingleEnded::new(0b1111_1100u8, 0b0011_1111u8);
+  pub const SE7: SingleEnded = SingleEnded::new(0b1111_1110u8, 0b0111_1111u8);
 
-  pub static SPREAD_09: Spread<8> = Spread::new(
-    [
-      0b1111_1111u8,
-      0b0111_1111u8,
-      0b0011_1111u8,
-      0b0001_1111u8,
-      0b0000_1111u8,
-      0b0000_0111u8,
-      0b0000_0011u8,
-      0b0000_0001u8,
-    ],
-    [
-      0b1000_0000u8,
-      0b1100_0000u8,
-      0b1110_0000u8,
-      0b1111_0000u8,
-      0b1111_1000u8,
-      0b1111_1100u8,
-      0b1111_1110u8,
-      0b1111_1111u8,
-    ],
-  );
+  pub struct DoubleEnded<const N: usize> {
+    masks: [(u8, u8); N],
+  }
 
-  // Spread 10 can also be 8 + spread 2
+  impl<const N: usize> DoubleEnded<N> {
+    pub const fn new(masks: [(u8, u8); N]) -> DoubleEnded<N> {
+      DoubleEnded { masks }
+    }
 
-  pub static SPREAD_10: Spread<7> = Spread::new(
-    [
-      0b1111_1111u8,
-      0b0111_1111u8,
-      0b0011_1111u8,
-      0b0001_1111u8,
-      0b0000_1111u8,
-      0b0000_0111u8,
-      0b0000_0011u8,
-    ],
-    [
-      0b1100_0000u8,
-      0b1110_0000u8,
-      0b1111_0000u8,
-      0b1111_1000u8,
-      0b1111_1100u8,
-      0b1111_1110u8,
-      0b1111_1111u8,
-    ],
-  );
+    pub fn masks(&self) -> &[(u8, u8); N] {
+      &self.masks
+    }
 
-  // Spread 11 can also be 8 + spread 3
+    pub fn eq_mask<'a>(&'a self) -> impl Fn(u8, u8) -> bool + 'a {
+      |l_byte, r_byte| {
+        self
+          .masks
+          .iter()
+          .copied()
+          .any(|(l_mask, r_mask)| (l_byte & l_mask) == l_mask && (r_byte & r_mask) == r_mask)
+      }
+    }
+  }
 
-  pub static SPREAD_11: Spread<6> = Spread::new(
-    [
-      0b1111_1111u8,
-      0b0111_1111u8,
-      0b0011_1111u8,
-      0b0001_1111u8,
-      0b0000_1111u8,
-      0b0000_0111u8,
-    ],
-    [
-      0b1110_0000u8,
-      0b1111_0000u8,
-      0b1111_1000u8,
-      0b1111_1100u8,
-      0b1111_1110u8,
-      0b1111_1111u8,
-    ],
-  );
+  pub const DE2: DoubleEnded<1> = DoubleEnded::new([(0b1000_0000u8, 0b0000_0001u8)]);
+  pub const DE3: DoubleEnded<2> = DoubleEnded::new([
+    (0b1100_0000u8, 0b0000_0001u8),
+    (0b1000_0000u8, 0b0000_0011u8),
+  ]);
 
-  // Spread 12 can also be 8 + spread 4
-  pub static SPREAD_12: Spread<5> = Spread::new(
-    [
-      0b1111_1111u8,
-      0b0111_1111u8,
-      0b0011_1111u8,
-      0b0001_1111u8,
-      0b0000_1111u8,
-    ],
-    [
-      0b1111_0000u8,
-      0b1111_1000u8,
-      0b1111_1100u8,
-      0b1111_1110u8,
-      0b1111_1111u8,
-    ],
-  );
+  pub const DE4: DoubleEnded<3> = DoubleEnded::new([
+    (0b1110_0000u8, 0b0000_0001u8),
+    (0b1100_0000u8, 0b0000_0011u8),
+    (0b1000_0000u8, 0b0000_0111u8),
+  ]);
 
-  // Spread 13 can also be 8 + spread 5
-  pub static SPREAD_13: Spread<4> = Spread::new(
-    [0b1111_1111u8, 0b0111_1111u8, 0b0011_1111u8, 0b0001_1111u8],
-    [0b1111_1000u8, 0b1111_1100u8, 0b1111_1110u8, 0b1111_1111u8],
-  );
+  pub const DE5: DoubleEnded<4> = DoubleEnded::new([
+    (0b1111_0000u8, 0b0000_0001u8),
+    (0b1110_0000u8, 0b0000_0011u8),
+    (0b1100_0000u8, 0b0000_0111u8),
+    (0b1000_0000u8, 0b0000_1111u8),
+  ]);
 
-  // Spread 14 can also be 8 + spread 6
-  pub static SPREAD_14: Spread<3> = Spread::new(
-    [0b1111_1111u8, 0b0111_1111u8, 0b0011_1111u8],
-    [0b1111_1100u8, 0b1111_1110u8, 0b1111_1111u8],
-  );
+  pub const DE6: DoubleEnded<5> = DoubleEnded::new([
+    (0b1111_1000u8, 0b0000_0001u8),
+    (0b1111_0000u8, 0b0000_0011u8),
+    (0b1110_0000u8, 0b0000_0111u8),
+    (0b1100_0000u8, 0b0000_1111u8),
+    (0b1000_0000u8, 0b0001_1111u8),
+  ]);
 
-  // Spread 15 can also be 8 + spread 7
-  pub static SPREAD_15: Spread<2> = Spread::new(
-    [0b1111_1111u8, 0b0111_1111u8],
-    [0b1111_1110u8, 0b1111_1111u8],
-  );
+  pub const DE7: DoubleEnded<6> = DoubleEnded::new([
+    (0b1111_1100u8, 0b0000_0001u8),
+    (0b1111_1000u8, 0b0000_0011u8),
+    (0b1111_0000u8, 0b0000_0111u8),
+    (0b1110_0000u8, 0b0000_1111u8),
+    (0b1100_0000u8, 0b0001_1111u8),
+    (0b1000_0000u8, 0b0011_1111u8),
+  ]);
 
-  pub static SPREAD_16: Spread<1> = Spread::new([0b1111_1111u8], [0b1111_1111u8]);
+  pub const DE8: DoubleEnded<7> = DoubleEnded::new([
+    (0b1111_1110u8, 0b0000_0001u8),
+    (0b1111_1100u8, 0b0000_0011u8),
+    (0b1111_1000u8, 0b0000_0111u8),
+    (0b1111_0000u8, 0b0000_1111u8),
+    (0b1110_0000u8, 0b0001_1111u8),
+    (0b1100_0000u8, 0b0011_1111u8),
+    (0b1000_0000u8, 0b0111_1111u8),
+  ]);
+
+  #[cfg(test)]
+  mod tests {
+    use crate::freelist::search::*;
+
+    #[test]
+    fn count_needles() {
+      for mask in N2.masks().iter() {
+        assert_eq!(mask.count_ones(), 2)
+      }
+      for mask in N3.masks().iter() {
+        assert_eq!(mask.count_ones(), 3)
+      }
+      for mask in N4.masks().iter() {
+        assert_eq!(mask.count_ones(), 4)
+      }
+      for mask in N5.masks().iter() {
+        assert_eq!(mask.count_ones(), 5)
+      }
+      for mask in N6.masks().iter() {
+        assert_eq!(mask.count_ones(), 6)
+      }
+      for mask in N7.masks().iter() {
+        assert_eq!(mask.count_ones(), 7)
+      }
+      for mask in N8.masks().iter() {
+        assert_eq!(mask.count_ones(), 8)
+      }
+    }
+
+    #[test]
+    fn count_single_ended() {
+      assert_eq!(1, SE1.left().count_ones());
+      assert_eq!(1, SE1.right().count_ones());
+      assert_eq!(2, SE2.left().count_ones());
+      assert_eq!(2, SE2.right().count_ones());
+      assert_eq!(3, SE3.left().count_ones());
+      assert_eq!(3, SE3.right().count_ones());
+      assert_eq!(4, SE4.left().count_ones());
+      assert_eq!(4, SE4.right().count_ones());
+      assert_eq!(5, SE5.left().count_ones());
+      assert_eq!(5, SE5.right().count_ones());
+      assert_eq!(6, SE6.left().count_ones());
+      assert_eq!(6, SE6.right().count_ones());
+      assert_eq!(7, SE7.left().count_ones());
+      assert_eq!(7, SE7.right().count_ones());
+    }
+
+    #[test]
+    fn count_double_ended() {
+      DE3
+        .masks()
+        .iter()
+        .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 3);
+      DE4
+        .masks()
+        .iter()
+        .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 4);
+      DE5
+        .masks()
+        .iter()
+        .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 5);
+      DE6
+        .masks()
+        .iter()
+        .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 6);
+      DE7
+        .masks()
+        .iter()
+        .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 7);
+      DE8
+        .masks()
+        .iter()
+        .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 8);
+    }
+
+    #[test]
+    fn needle_all_or_none() {
+      let all = 0b1111_1111u8;
+      let none = 0u8;
+      assert!(N2.eq_mask()(all));
+      assert!(!N2.eq_mask()(none));
+      assert!(N3.eq_mask()(all));
+      assert!(!N3.eq_mask()(none));
+      assert!(N4.eq_mask()(all));
+      assert!(!N4.eq_mask()(none));
+      assert!(N5.eq_mask()(all));
+      assert!(!N5.eq_mask()(none));
+      assert!(N6.eq_mask()(all));
+      assert!(!N6.eq_mask()(none));
+      assert!(N7.eq_mask()(all));
+      assert!(!N7.eq_mask()(none));
+      assert!(N8.eq_mask()(all));
+      assert!(!N8.eq_mask()(none));
+    }
+  }
 }
 
 #[cfg(test)]
 mod test {
-  use crate::freelist::search::{NEEDLE_08, SPREAD_02};
+  use crate::freelist::search::N8;
   use crate::freelist::FreelistManager;
   use bbolt_engine::common::bitset::BitSet;
   use bbolt_engine::common::ids::{FreePageId, PageId};
-  use itertools::Itertools;
-  use parking_lot::Mutex;
-  use std::collections::BTreeMap;
+  use std::collections::{btree_map, BTreeMap};
   use std::mem;
-  /*  #[test]
-  fn test_freelist_manager() {
-    let mut freelist_manager = NaiveClosestFreelistManager::new(&[]);
-    for i in 2..12 {
-      freelist_manager.free(FreePageId::of(i));
-    }
-    for i in 20..30 {
-      freelist_manager.free(FreePageId::of(i));
-    }
-    let l = freelist_manager.assign(PageId::from(330), 6);
-    assert_eq!(20, freelist_manager.len());
-  }*/
+  use std::ops::{Index, Range};
 
   #[derive(Debug, Copy, Clone)]
   pub enum FindResult {
@@ -323,7 +294,7 @@ mod test {
   }
 
   impl FindResult {
-    pub fn min_dist_to(&self, lot: usize) -> usize {
+    pub fn mid_dist_to(&self, lot: usize) -> usize {
       match self {
         FindResult::Needle(n_lot, _) => n_lot.abs_diff(lot),
         FindResult::Pair((l_lot, _), (r_lot, _)) => l_lot.abs_diff(lot).min(r_lot.abs_diff(lot)),
@@ -348,7 +319,7 @@ mod test {
     pub fn is_dist_exceeded(&self, current_lot: usize) -> bool {
       match self.result {
         None => false,
-        Some(r) => current_lot.abs_diff(self.partition) > r.min_dist_to(self.partition),
+        Some(r) => current_lot.abs_diff(self.partition) > r.mid_dist_to(self.partition),
       }
     }
 
@@ -356,7 +327,7 @@ mod test {
       match self.result.take() {
         None => self.result = Some(result),
         Some(found) => {
-          if found.min_dist_to(self.partition) < result.min_dist_to(self.partition) {
+          if found.mid_dist_to(self.partition) < result.mid_dist_to(self.partition) {
             self.result = Some(found);
           } else {
             self.result = Some(result);
@@ -384,7 +355,7 @@ mod test {
     for (a, b) in v
       .iter()
       .enumerate()
-      .filter(|(_, byte)| NEEDLE_08.any_mask()(byte))
+      .filter(|(_, byte)| N8.any_bits()(**byte))
     {
       println!("{:?} {:?}", a, b);
     }
@@ -393,51 +364,7 @@ mod test {
       .iter()
       .enumerate()
       .rev()
-      .filter(|(_, byte)| NEEDLE_08.any_mask()(byte))
-    {
-      println!("{:?} {:?}", a, b);
-    }
-  }
-
-  #[test]
-  fn test_find_spread_simple() {
-    let v = [
-      0u8,
-      0,
-      0b0000_0001u8,
-      0b1000_0000u8,
-      0b1000_0000u8,
-      0,
-      0,
-      0,
-      0,
-      0,
-      10,
-    ];
-    let store = Mutex::new(FindStore::new(3));
-    for (a, b) in v
-      .iter()
-      .enumerate()
-      .take_while(|(lot, _)| {
-        if lot % 32 == 0 {
-          (&store).lock().is_dist_exceeded(*lot)
-        } else {
-          true
-        }
-      })
-      .tuple_windows()
-      .filter(|((_, l), (_, r))| SPREAD_02.eq_mask()(l, r))
-    {
-      println!("{:?} {:?}", a, b);
-    }
-
-    for (a, b) in v
-      .iter()
-      .enumerate()
-      .rev()
-      .tuple_windows()
-      .map(|(r, l)| (l, r))
-      .filter(|((_, l), (_, r))| SPREAD_02.eq_mask()(l, r))
+      .filter(|(_, byte)| N8.any_bits()(**byte))
     {
       println!("{:?} {:?}", a, b);
     }
@@ -456,104 +383,158 @@ mod test {
     }
   }
 
-  pub enum LotType {
+  pub enum LotPage {
     Swap,
     Claimed(usize),
     Freed(usize),
     Array(Box<[u8]>),
-    Vec(Vec<u8>),
   }
 
-  impl LotType {
+  impl LotPage {
     #[inline]
-    pub const fn claimed(page_size: usize) -> LotType {
-      LotType::Claimed(page_size)
+    pub const fn claimed(page_size: usize) -> LotPage {
+      LotPage::Claimed(page_size)
     }
 
     #[inline]
-    pub const fn freed(page_size: usize) -> LotType {
-      LotType::Freed(page_size)
+    pub const fn freed(page_size: usize) -> LotPage {
+      LotPage::Freed(page_size)
     }
 
-    pub fn array<T: Into<Box<[u8]>>>(a: T) -> LotType {
-      LotType::Array(a.into())
-    }
-
-    pub fn vec<T: Into<Vec<u8>>>(a: T) -> LotType {
-      LotType::Vec(a.into())
+    pub fn array<T: Into<Box<[u8]>>>(a: T) -> LotPage {
+      LotPage::Array(a.into())
     }
 
     pub fn len(&self) -> usize {
       match self {
-        LotType::Swap => unreachable!(),
-        LotType::Claimed(page_size) => *page_size,
-        LotType::Freed(page_size) => *page_size,
-        LotType::Array(a) => a.len(),
-        LotType::Vec(v) => v.len(),
+        LotPage::Swap => unreachable!(),
+        LotPage::Claimed(page_size) => *page_size,
+        LotPage::Freed(page_size) => *page_size,
+        LotPage::Array(a) => a.len(),
       }
     }
 
     pub fn is_claimed(&self) -> bool {
       match self {
-        LotType::Swap => unreachable!(),
-        LotType::Claimed(_) => true,
-        LotType::Freed(_) => false,
-        LotType::Array(a) => a.iter().all(|x| *x == 0),
-        LotType::Vec(v) => v.iter().all(|x| *x == 0),
+        LotPage::Swap => unreachable!(),
+        LotPage::Claimed(_) => true,
+        LotPage::Freed(_) => false,
+        LotPage::Array(a) => a.iter().all(|x| *x == 0),
       }
     }
 
     pub fn is_free(&self) -> bool {
       match self {
-        LotType::Swap => unreachable!(),
-        LotType::Claimed(_) => false,
-        LotType::Freed(_) => true,
-        LotType::Array(a) => a.iter().all(|x| *x != 0),
-        LotType::Vec(v) => v.iter().all(|x| *x != 0),
+        LotPage::Swap => unreachable!(),
+        LotPage::Claimed(_) => false,
+        LotPage::Freed(_) => true,
+        LotPage::Array(a) => a.iter().all(|x| *x != 0),
       }
     }
 
     pub fn has_free(&self) -> bool {
       match self {
-        LotType::Swap => unreachable!(),
-        LotType::Claimed(_) => false,
-        LotType::Freed(_) => true,
-        LotType::Array(a) => a.iter().any(|x| *x != 0),
-        LotType::Vec(v) => v.iter().any(|x| *x != 0),
+        LotPage::Swap => unreachable!(),
+        LotPage::Claimed(_) => false,
+        LotPage::Freed(_) => true,
+        LotPage::Array(a) => a.iter().any(|x| *x != 0),
       }
     }
 
     pub fn is_mut(&self) -> bool {
       match self {
-        LotType::Vec(_) => true,
+        LotPage::Array(_) => true,
         _ => false,
       }
     }
 
     pub fn get_mut(&mut self) -> &mut [u8] {
       if !self.is_mut() {
-        let mut swap = LotType::Swap;
+        let mut swap = LotPage::Swap;
         mem::swap(self, &mut swap);
         let v = match swap {
-          LotType::Swap => unreachable!(),
-          LotType::Claimed(page_size) => vec![0u8; page_size],
-          LotType::Freed(page_size) => vec![u8::MAX; page_size],
-          LotType::Array(a) => a.into(),
-          LotType::Vec(_) => unreachable!(),
+          LotPage::Swap => unreachable!(),
+          LotPage::Claimed(page_size) => vec![0u8; page_size].into(),
+          LotPage::Freed(page_size) => vec![u8::MAX; page_size].into(),
+          LotPage::Array(a) => unreachable!(),
         };
-        swap = LotType::Vec(v);
+        swap = LotPage::Array(v);
         mem::swap(self, &mut swap);
       }
       match self {
-        LotType::Vec(v) => v,
+        LotPage::Array(a) => a,
         _ => unreachable!(),
       }
+    }
+
+    pub fn iter_from(&self, lot_page_index: usize, lot: usize) -> LotPageIter {
+      assert!(lot <= self.len());
+      LotPageIter {
+        lot_page_index,
+        lot_page: &self,
+        range: lot..self.len(),
+      }
+    }
+
+    pub fn iter_to(&self, lot_page_index: usize, lot: usize) -> LotPageIter {
+      assert!(lot <= self.len());
+      LotPageIter {
+        lot_page_index,
+        lot_page: &self,
+        range: 0..lot,
+      }
+    }
+  }
+
+  impl Index<usize> for LotPage {
+    type Output = u8;
+
+    fn index(&self, index: usize) -> &Self::Output {
+      debug_assert!(index < self.len());
+      match self {
+        LotPage::Swap => unreachable!(),
+        LotPage::Claimed(_) => &0,
+        LotPage::Freed(_) => &u8::MAX,
+        LotPage::Array(a) => &a[index],
+      }
+    }
+  }
+
+  pub struct LotPageIter<'a> {
+    lot_page: &'a LotPage,
+    lot_page_index: usize,
+    range: Range<usize>,
+  }
+
+  impl<'a> Iterator for LotPageIter<'a> {
+    type Item = (usize, u8);
+
+    fn next(&mut self) -> Option<Self::Item> {
+      match self.range.next() {
+        None => None,
+        Some(lot) => Some((self.lot_page_index + lot, self.lot_page[lot])),
+      }
+    }
+  }
+
+  impl<'a> DoubleEndedIterator for LotPageIter<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+      match self.range.next_back() {
+        None => None,
+        Some(lot) => Some((self.lot_page_index + lot, self.lot_page[lot])),
+      }
+    }
+  }
+
+  impl<'a> ExactSizeIterator for LotPageIter<'a> {
+    fn len(&self) -> usize {
+      self.range.len()
     }
   }
 
   pub struct FreePageStore {
     page_size: usize,
-    store: BTreeMap<usize, LotType>,
+    store: BTreeMap<usize, LotPage>,
   }
 
   impl FreePageStore {
@@ -567,7 +548,7 @@ mod test {
     pub fn with_free_pages(page_size: usize, page_count: usize) -> FreePageStore {
       let mut store = BTreeMap::new();
       for i in 0..page_count {
-        store.insert(i, LotType::Freed(page_size));
+        store.insert(i, LotPage::Freed(page_size));
       }
       FreePageStore { page_size, store }
     }
@@ -575,7 +556,7 @@ mod test {
     pub fn with_claimed_pages(page_size: usize, page_count: usize) -> FreePageStore {
       let mut store = BTreeMap::new();
       for i in 0..page_count {
-        store.insert(i, LotType::Claimed(page_size));
+        store.insert(i, LotPage::Claimed(page_size));
       }
       FreePageStore { page_size, store }
     }
@@ -601,7 +582,7 @@ mod test {
       self
         .store
         .entry(store_index)
-        .or_insert(LotType::Freed(self.page_size))
+        .or_insert(LotPage::Freed(self.page_size))
         .get_mut()[lot_index]
         .set(offset);
     }
@@ -611,15 +592,48 @@ mod test {
       self
         .store
         .entry(store_index)
-        .or_insert(LotType::Freed(self.page_size))
+        .or_insert(LotPage::Freed(self.page_size))
         .get_mut()[lot_index]
         .unset(offset);
     }
 
     pub fn find_near<T: Into<PageId>>(&self, page_id: T, len: usize) -> Option<FreePageId> {
       assert_ne!(len, 0);
+      match (len / 8, (len % 8) as u8) {
+        (0, n) => match n {
+          1 => unimplemented!(),
+          2 => unimplemented!(),
+          3 => unimplemented!(),
+          4 => unimplemented!(),
+          5 => unimplemented!(),
+          6 => unimplemented!(),
+          7 => unimplemented!(),
+          _ => unreachable!(),
+        },
+        (m, n) => unimplemented!(),
+      }
+    }
 
-      unimplemented!()
+    pub fn iter_from<'a>(&'a self, store_lot: u64) -> impl Iterator<Item = (usize, u8)> + 'a {
+      let store_index = (store_lot / self.page_size as u64) as usize;
+      let lot_index = (store_lot % self.page_size as u64) as usize;
+      self
+        .store
+        .range(store_index..)
+        .flat_map(move |(store_index, lot_page)| {
+          lot_page.iter_from(*store_index * self.page_size, lot_index)
+        })
+    }
+
+    pub fn iter_to<'a>(&'a self, store_lot: u64) -> impl Iterator<Item = (usize, u8)> + 'a {
+      let store_index = (store_lot / self.page_size as u64) as usize;
+      let lot_index = (store_lot % self.page_size as u64) as usize;
+      self
+        .store
+        .range(0..store_index + 1)
+        .flat_map(move |(store_index, lot_page)| {
+          lot_page.iter_to(*store_index * self.page_size, lot_index)
+        })
     }
   }
 
@@ -629,6 +643,16 @@ mod test {
       let div = i / 8;
       let rem = i % 8;
       println!("{:?}: {:?} - {:?}", i, div, rem);
+    }
+  }
+
+  #[test]
+  pub fn test () {
+
+    let store = FreePageStore::with_free_pages(4096, 4);
+    let iter = store.iter_to(1);
+    for i in iter {
+      println!("{:?}", i);
     }
   }
 }
