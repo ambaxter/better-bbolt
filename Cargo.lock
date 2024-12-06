@@ -26,7 +26,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
-name = "bbolt-index"
+name = "bbolt-engine"
 version = "0.1.0"
 dependencies = [
  "aligners",
@@ -55,7 +55,7 @@ dependencies = [
 name = "better-bbolt"
 version = "0.1.0"
 dependencies = [
- "bbolt-index",
+ "bbolt-engine",
  "bon",
  "bumpalo",
  "itertools",

@@ -1,4 +1,4 @@
-use bbolt_index::backend::{PagingBackend, PagingSystem};
+use bbolt_engine::backend::{PagingBackend, PagingSystem};
 use std::sync::Arc;
 
 pub mod options;

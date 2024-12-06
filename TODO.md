@@ -13,7 +13,7 @@
 * MMap backend
 * File Backend
 * ~~Free page assignment? Can't be any worse than what we already do~~
-* 
+  * Fuck yeah
 
 Version 3:
 * NodePageId (page id) is mapped to the physical disk page
@@ -23,3 +23,4 @@ Version 3:
   * Maybe a special page for that more cache friendly searching algorithm would work?
 * Compaction ideas
   * https://ieeexplore.ieee.org/document/10102447
+* Merkle tree validation?

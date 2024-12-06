@@ -1,4 +1,4 @@
-use bbolt_index::common::ids::{FreePageId, GetPageId, PageId};
+use bbolt_engine::common::ids::{FreePageId, GetPageId, PageId};
 use itertools::izip;
 
 pub trait FreelistManager {
@@ -17,77 +17,6 @@ pub trait FreelistManager {
   /// Write out all free pages to an array
   fn write(&self, freelist: &mut [FreePageId]);
 }
-/*
-//TODO: This will be so much easier once StepBy gets stabilized
-pub struct NaiveClosestFreelistManager {
-  freelist: RangeSet<u64>,
-  len: usize,
-}
-
-impl FreelistManager for NaiveClosestFreelistManager {
-  fn new(freelist_array: &[FreePageId]) -> Self {
-    let len = freelist_array.len();
-    let mut freelist = RangeSet::new();
-    for free_page_id in freelist_array {
-      let page_id = free_page_id.page_id().0;
-      freelist.insert(page_id..page_id + 1)
-    }
-
-    NaiveClosestFreelistManager { freelist, len }
-  }
-
-  fn free(&mut self, free_page_id: FreePageId) {
-    let page_id = free_page_id.page_id().0;
-    self.freelist.insert(page_id..page_id + 1);
-    self.len += 1;
-  }
-
-  fn assign(&mut self, parent: PageId, len: usize) -> Option<FreePageId> {
-    let len = len as u64;
-    let parent_page = parent.0;
-    let l_overlap = self.freelist.overlapping(0..parent_page);
-    let l_match = l_overlap
-      .filter(|r| r.end - r.start >= len)
-      .next_back()
-      .cloned();
-    // Note: this will not see the veeerrrrryyyyy last page due to rangemap limitations. If we need to we have other problems
-    let r_overlap = self.freelist.overlapping(parent_page..u64::MAX);
-    let r_match = r_overlap.filter(|r| r.end - r.start >= len).next().cloned();
-    let m = match (l_match, r_match) {
-      (Some(left_match), Some(right_match)) => {
-        let l_dist = parent_page.abs_diff(left_match.end);
-        let r_dist = parent_page.abs_diff(right_match.start);
-        // Closer to the left match
-        if l_dist < r_dist {
-          Some(left_match.end - len..left_match.end)
-        } else {
-          Some(right_match.start..right_match.start + len)
-        }
-      }
-      (Some(left_match), None) => Some(left_match.end - len..left_match.end),
-      (None, Some(right_match)) => Some(right_match.start..right_match.start + len),
-      (None, None) => None,
-    }?;
-    let free_page_id = FreePageId::of(m.start);
-    self.freelist.remove(m);
-    self.len -= len as usize;
-    Some(free_page_id)
-  }
-
-  fn len(&self) -> usize {
-    self.len
-  }
-
-  fn write(&self, freelist: &mut [FreePageId]) {
-    assert!(self.len() <= freelist.len());
-    let freelist_iter = self.freelist.iter().flat_map(|range| range.clone());
-
-    for (i, free_page) in izip!(freelist_iter, &mut *freelist) {
-      *free_page = FreePageId::of(i);
-    }
-    freelist.sort()
-  }
-}*/
 
 pub mod search {
   use itertools::izip;
@@ -367,8 +296,8 @@ pub mod search {
 mod test {
   use crate::freelist::search::{NEEDLE_08, SPREAD_02};
   use crate::freelist::FreelistManager;
-  use bbolt_index::common::bitset::BitSet;
-  use bbolt_index::common::ids::{FreePageId, PageId};
+  use bbolt_engine::common::bitset::BitSet;
+  use bbolt_engine::common::ids::{FreePageId, PageId};
   use itertools::Itertools;
   use parking_lot::Mutex;
   use std::collections::BTreeMap;
@@ -579,6 +508,16 @@ mod test {
         LotType::Swap => unreachable!(),
         LotType::Claimed(_) => false,
         LotType::Freed(_) => true,
+        LotType::Array(a) => a.iter().all(|x| *x != 0),
+        LotType::Vec(v) => v.iter().all(|x| *x != 0),
+      }
+    }
+
+    pub fn has_free(&self) -> bool {
+      match self {
+        LotType::Swap => unreachable!(),
+        LotType::Claimed(_) => false,
+        LotType::Freed(_) => true,
         LotType::Array(a) => a.iter().any(|x| *x != 0),
         LotType::Vec(v) => v.iter().any(|x| *x != 0),
       }
@@ -627,7 +566,7 @@ mod test {
 
     pub fn with_free_pages(page_size: usize, page_count: usize) -> FreePageStore {
       let mut store = BTreeMap::new();
-      for i in page_count {
+      for i in 0..page_count {
         store.insert(i, LotType::Freed(page_size));
       }
       FreePageStore { page_size, store }
@@ -635,7 +574,7 @@ mod test {
 
     pub fn with_claimed_pages(page_size: usize, page_count: usize) -> FreePageStore {
       let mut store = BTreeMap::new();
-      for i in page_count {
+      for i in 0..page_count {
         store.insert(i, LotType::Claimed(page_size));
       }
       FreePageStore { page_size, store }
@@ -643,14 +582,12 @@ mod test {
 
     pub fn with_free_page_ids(page_size: usize, page_ids: &[FreePageId]) -> FreePageStore {
       let mut store = FreePageStore::new(page_size);
-      for page_id in page_ids {
-        store.free(page_id);
-      }
+      page_ids.iter().for_each(|page_id| store.free(*page_id));
       store
     }
 
-    pub fn get_location(&self, page_id: PageId) -> (usize, usize, u8) {
-      let id = page_id.0;
+    pub fn get_location<T: Into<PageId>>(&self, page_id: T) -> (usize, usize, u8) {
+      let id = page_id.into().0;
       let store_lot = id / 8;
       let offset = (id % 8) as u8;
       let store_index = (store_lot / self.page_size as u64) as usize;
@@ -658,9 +595,9 @@ mod test {
       (store_index, lot_index, offset)
     }
 
-    pub fn free<T: Into<PageId>>(&mut self, page_id: T) {
-      let page_id = page_id.into();
-      let (store_index, lot_index, offset) = self.get_location(page_id);
+    // TODO: Handle len/overflow
+    pub fn free<T: Into<FreePageId>>(&mut self, page_id: T) {
+      let (store_index, lot_index, offset) = self.get_location(page_id.into());
       self
         .store
         .entry(store_index)
@@ -670,7 +607,6 @@ mod test {
     }
 
     pub fn claim<T: Into<PageId>>(&mut self, page_id: T) {
-      let page_id = page_id.into();
       let (store_index, lot_index, offset) = self.get_location(page_id);
       self
         .store
@@ -678,6 +614,21 @@ mod test {
         .or_insert(LotType::Freed(self.page_size))
         .get_mut()[lot_index]
         .unset(offset);
+    }
+
+    pub fn find_near<T: Into<PageId>>(&self, page_id: T, len: usize) -> Option<FreePageId> {
+      assert_ne!(len, 0);
+
+      unimplemented!()
+    }
+  }
+
+  #[test]
+  pub fn near() {
+    for i in 1..33u8 {
+      let div = i / 8;
+      let rem = i % 8;
+      println!("{:?}: {:?} - {:?}", i, div, rem);
     }
   }
 }

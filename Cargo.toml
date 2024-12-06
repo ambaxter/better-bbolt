@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "bbolt-index",
+    "bbolt-engine",
     "."
 ]
-default-members = ["bbolt-index", "."]
+default-members = ["bbolt-engine", "."]
 
 [workspace.package]
 version = "0.1.0"
@@ -25,7 +25,7 @@ bon.workspace = true
 size.workspace = true
 parking_lot.workspace = true
 lz4_flex.workspace = true
-bbolt-index.workspace = true
+bbolt-engine.workspace = true
 
 [workspace.dependencies]
 aligners = { version = "0.0.10", default-features = false }
@@ -54,4 +54,4 @@ getset = "0.1.3"
 bon = { version = "3.2", features = ["implied-bounds"] }
 bumpalo = "3.16.0"
 lz4_flex = "0.11.3"
-bbolt-index = {path = "bbolt-index"}
+bbolt-engine = {path = "bbolt-engine" }

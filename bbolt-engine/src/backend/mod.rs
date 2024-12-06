@@ -27,14 +27,31 @@ pub mod closed;
 
 pub mod shared;
 
-pub const VERSION: u32 = 2;
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct DbIdentifier {
+  pub version: u32,
+  pub magic: u32,
+}
 
-#[cfg(not(feature = "compat"))]
-// Chosen from https://nedbatchelder.com/text/hexwords.html
-// as we are using the Go BBolt project code as a scaffold
-pub const MAGIC: u32 = 0x5caff01d;
-#[cfg(feature = "compat")]
-pub const MAGIC: u32 = 0xED0CDAED;
+pub const BBOLT_COMPATIBLE_ID: DbIdentifier = DbIdentifier {
+  version: 2,
+  magic: 0xED0CDAED,
+};
+
+pub const ORIG_BBOLT_RS_ID: DbIdentifier = DbIdentifier {
+  version: 2,
+  // Chosen from https://nedbatchelder.com/text/hexwords.html
+  // as we are using the Go BBolt project code as a scaffold
+  magic: 0x5caff01d,
+};
+
+pub const BETTER_BBOLT_RS_ID: DbIdentifier = DbIdentifier {
+  // Lucky Number 7!
+  version: 777,
+  // Chosen from https://nedbatchelder.com/text/hexwords.html
+  // as we are using the Go BBolt project code as a scaffold
+  magic: 0x5caff01d,
+};
 
 pub const IGNORE_NO_SYNC: bool = cfg!(target_os = "openbsd");
 
@@ -49,7 +66,7 @@ pub fn initialize_database(page_size: Size) -> AlignedBytes<alignment::Page> {
     match i {
       0..2 => {
         let page_header = PageHeader::init_meta(PageId::of(i as u64));
-        let meta = Meta::init(page_size, TxId::of(i as u64));
+        let meta = Meta::init(page_size, BBOLT_COMPATIBLE_ID, TxId::of(i as u64));
         MetaPage::write(bytes, &page_header, &meta);
       }
       2 => {
@@ -73,12 +90,12 @@ pub fn initialize_dummy_database(page_size: Size) -> AlignedBytes<alignment::Pag
     match i {
       0 => {
         let page_header = PageHeader::init_meta(PageId::of(i as u64));
-        let meta = Meta::init(page_size, TxId::of(i as u64));
+        let meta = Meta::init(page_size, BBOLT_COMPATIBLE_ID, TxId::of(i as u64));
         MetaPage::write(bytes, &page_header, &meta);
       }
       1 => {
         let page_header = PageHeader::init_meta(PageId::of(i as u64));
-        let mut meta = Meta::init(page_size, TxId::of(i as u64));
+        let mut meta = Meta::init(page_size, BBOLT_COMPATIBLE_ID, TxId::of(i as u64));
         meta.eof_id = EOFPageId::of(20);
         meta.root = BucketHeader::new(BucketPageId::of(4), 0);
         meta.update_checksum();

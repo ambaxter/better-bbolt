@@ -1,4 +1,4 @@
-use crate::backend::{MAGIC, VERSION};
+use crate::backend::DbIdentifier;
 use crate::common::bucket::BucketHeader;
 use crate::common::buffer::PageBuffer;
 use crate::common::ids::{BucketPageId, EOFPageId, FreelistPageId, PageId, TxId};
@@ -34,10 +34,10 @@ pub struct Meta {
 }
 
 impl Meta {
-  pub fn init(page_size: usize, tx_id: TxId) -> Meta {
+  pub fn init(page_size: usize, db_id: DbIdentifier, tx_id: TxId) -> Meta {
     let mut meta = Meta {
-      magic: MAGIC,
-      version: VERSION,
+      magic: db_id.magic,
+      version: db_id.version,
       page_size: page_size as u32,
       flags: 0,
       root: BucketHeader::new(BucketPageId::of(3), 0),
