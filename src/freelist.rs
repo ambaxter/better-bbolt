@@ -282,9 +282,9 @@ mod test {
   use crate::freelist::FreelistManager;
   use bbolt_engine::common::bitset::BitSet;
   use bbolt_engine::common::ids::{FreePageId, PageId};
-  use std::collections::{btree_map, BTreeMap};
+  use std::collections::{btree_map, BTreeMap, Bound};
   use std::mem;
-  use std::ops::{Index, Range};
+  use std::ops::{Index, Range, RangeBounds};
 
   #[derive(Debug, Copy, Clone)]
   pub enum FindResult {
@@ -467,21 +467,24 @@ mod test {
       }
     }
 
-    pub fn iter_from(&self, lot_page_index: usize, lot: usize) -> LotPageIter {
-      assert!(lot <= self.len());
+    pub fn iter_range<R: RangeBounds<usize>>(&self, lot_page_index: usize, range: R) -> LotPageIter {
+      let start = match range.start_bound() {
+        Bound::Included(lot) => *lot,
+        Bound::Excluded(lot) => *lot + 1,
+        Bound::Unbounded => 0,
+      };
+      let end = match range.end_bound() {
+        Bound::Included(lot) => *lot + 1,
+        Bound::Excluded(lot) => *lot,
+        Bound::Unbounded => self.len(),
+      };
+      let len = self.len();
+      assert!(start <= len);
+      assert!(end <= len);
       LotPageIter {
         lot_page_index,
         lot_page: &self,
-        range: lot..self.len(),
-      }
-    }
-
-    pub fn iter_to(&self, lot_page_index: usize, lot: usize) -> LotPageIter {
-      assert!(lot <= self.len());
-      LotPageIter {
-        lot_page_index,
-        lot_page: &self,
-        range: 0..lot,
+        range: start..end,
       }
     }
   }
@@ -613,26 +616,59 @@ mod test {
         (m, n) => unimplemented!(),
       }
     }
-
-    pub fn iter_from<'a>(&'a self, store_lot: u64) -> impl Iterator<Item = (usize, u8)> + 'a {
-      let store_index = (store_lot / self.page_size as u64) as usize;
-      let lot_index = (store_lot % self.page_size as u64) as usize;
-      self
-        .store
-        .range(store_index..)
-        .flat_map(move |(store_index, lot_page)| {
-          lot_page.iter_from(*store_index * self.page_size, lot_index)
-        })
-    }
-
-    pub fn iter_to<'a>(&'a self, store_lot: u64) -> impl Iterator<Item = (usize, u8)> + 'a {
-      let store_index = (store_lot / self.page_size as u64) as usize;
-      let lot_index = (store_lot % self.page_size as u64) as usize;
-      self
-        .store
-        .range(0..store_index + 1)
-        .flat_map(move |(store_index, lot_page)| {
-          lot_page.iter_to(*store_index * self.page_size, lot_index)
+    fn range<'a, R: RangeBounds<usize>>(&'a self, range: R) -> impl Iterator<Item = (usize, u8)> + DoubleEndedIterator + Sized + 'a {
+      let (store_index_start, lot_index_start) = match range.start_bound() {
+        Bound::Included(store_lot_start) => {
+          let store_index_start = store_lot_start / self.page_size;
+          let lot_index_start = store_lot_start % self.page_size;
+          (store_index_start, lot_index_start)
+        }
+        Bound::Excluded(store_lot_start) => {
+          let mut lot_index_start = store_lot_start / self.page_size;
+          let mut store_index_start = store_lot_start % self.page_size;
+          if lot_index_start + 1 == self.page_size {
+            store_index_start += 1;
+            lot_index_start = 0;
+          } else {
+            lot_index_start += 1;
+          }
+          (store_index_start, lot_index_start)
+        }
+        Bound::Unbounded => (0,0)
+      };
+      let (store_index_end, lot_index_end) = match range.end_bound() {
+        Bound::Included(store_lot_end) => {
+          let store_index_end = store_lot_end / self.page_size;
+          let lot_index_end = store_lot_end % self.page_size;
+          (store_index_end, lot_index_end)
+        }
+        Bound::Excluded(store_lot_end) => {
+          let mut store_index_end = store_lot_end / self.page_size;
+          let mut lot_index_end = store_lot_end % self.page_size;
+          if lot_index_end + 1 == self.page_size {
+            store_index_end += 1;
+            lot_index_end = 0;
+          } else {
+            lot_index_end += 1;
+          }
+          (store_index_end, lot_index_end)
+        }
+        Bound::Unbounded => {
+          if let Some((store_index_end, _)) = self.store.last_key_value() {
+            (*store_index_end + 1, 0)
+          } else {
+            (0, 0)
+          }
+        }
+      };
+      self.store.range(store_index_start..store_index_end + 1)
+        .flat_map(move |(store_index, lot)| {
+          match (*store_index == store_index_start, *store_index == store_index_end) {
+            (true, true) => lot.iter_range(*store_index * self.page_size, lot_index_start..lot_index_end),
+            (true, false) => lot.iter_range(*store_index * self.page_size, lot_index_start..),
+            (false, true) => lot.iter_range(*store_index * self.page_size, ..lot_index_end),
+            (false, false) => lot.iter_range(*store_index * self.page_size, ..),
+          }
         })
     }
   }
@@ -647,11 +683,9 @@ mod test {
   }
 
   #[test]
-  pub fn test () {
-
+  pub fn test_page_iter () {
     let store = FreePageStore::with_free_pages(4096, 4);
-    let iter = store.iter_to(1);
-    for i in iter {
+    for i in store.range(0..16000) {
       println!("{:?}", i);
     }
   }
