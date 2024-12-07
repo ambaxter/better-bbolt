@@ -284,6 +284,8 @@ mod test {
   use bbolt_engine::common::ids::{FreePageId, PageId};
   use itertools::Itertools;
   use std::collections::{btree_map, BTreeMap, Bound};
+  use std::iter::{FlatMap, FusedIterator};
+  use std::marker::PhantomData;
   use std::mem;
   use std::ops::{Index, Range, RangeBounds};
 
@@ -504,6 +506,7 @@ mod test {
     }
   }
 
+  #[derive(Clone)]
   pub struct LotPageIter<'a> {
     lot_page: &'a LotPage,
     lot_page_index: usize,
@@ -535,6 +538,8 @@ mod test {
       self.range.len()
     }
   }
+
+  impl<'a> FusedIterator for LotPageIter<'a> {}
 
   pub struct FreePageStore {
     page_size: usize,
@@ -621,7 +626,7 @@ mod test {
     }
     fn range<'a, R: RangeBounds<usize>>(
       &'a self, range: R,
-    ) -> impl Iterator<Item = (usize, u8)> + DoubleEndedIterator + Sized + 'a {
+    ) -> FreePageRangeIter<'a, impl FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> {
       let (store_index_start, lot_index_start) = match range.start_bound() {
         Bound::Included(store_lot_start) => {
           let store_index_start = store_lot_start / self.page_size;
@@ -666,25 +671,72 @@ mod test {
           }
         }
       };
-      self
+
+      let page_size = self.page_size;
+
+      let f = move |(store_index, lot): (&'a usize, &'a LotPage)| match (
+        *store_index == store_index_start,
+        *store_index == store_index_end,
+      ) {
+        (true, true) => lot.range(*store_index * page_size, lot_index_start..lot_index_end),
+        (true, false) => lot.range(*store_index * page_size, lot_index_start..),
+        (false, true) => lot.range(*store_index * page_size, ..lot_index_end),
+        (false, false) => lot.range(*store_index * page_size, ..),
+      };
+
+      let len = self
         .store
         .range(store_index_start..store_index_end + 1)
-        .flat_map(move |(store_index, lot)| {
-          match (
-            *store_index == store_index_start,
-            *store_index == store_index_end,
-          ) {
-            (true, true) => lot.range(
-              *store_index * self.page_size,
-              lot_index_start..lot_index_end,
-            ),
-            (true, false) => lot.range(*store_index * self.page_size, lot_index_start..),
-            (false, true) => lot.range(*store_index * self.page_size, ..lot_index_end),
-            (false, false) => lot.range(*store_index * self.page_size, ..),
-          }
-        })
+        .map(f)
+        .map(|i| i.len())
+        .sum();
+
+      let r = self
+        .store
+        .range(store_index_start..store_index_end + 1)
+        .flat_map(f);
+      FreePageRangeIter { r, len }
     }
   }
+
+  #[derive(Clone)]
+  struct FreePageRangeIter<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> {
+    r: FlatMap<btree_map::Range<'a, usize, LotPage>, LotPageIter<'a>, F>,
+    len: usize,
+  }
+
+  impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> Iterator
+    for FreePageRangeIter<'a, F>
+  {
+    type Item = (usize, u8);
+
+    fn next(&mut self) -> Option<Self::Item> {
+      self.r.next().inspect(|_| self.len -= 1)
+    }
+  }
+
+  impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> DoubleEndedIterator
+    for FreePageRangeIter<'a, F>
+  {
+    fn next_back(&mut self) -> Option<Self::Item> {
+      self.r.next_back().inspect(|_| self.len -= 1)
+    }
+  }
+
+  impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> ExactSizeIterator
+    for FreePageRangeIter<'a, F>
+  {
+    fn len(&self) -> usize {
+      self.len
+    }
+  }
+
+  impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> FusedIterator
+    for FreePageRangeIter<'a, F>
+  {
+  }
+
+  impl<'a, F> FreePageRangeIter<'a, F> where F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> {}
 
   #[test]
   pub fn near() {
@@ -698,7 +750,7 @@ mod test {
   #[test]
   pub fn test_page_iter() {
     let store = FreePageStore::with_free_pages(4096, 4);
-    for i in store.range(0..16000) {
+    for i in store.range(0..160000) {
       println!("{:?}", i);
     }
   }
@@ -750,7 +802,7 @@ mod test {
       println!("{:?}", i);
     };
 
-    if let Some(i) = &store
+    if let Some(i) = store
       .range(0..400)
       .rev()
       .tuple_windows()
