@@ -736,7 +736,7 @@ mod test {
   {
   }
 
-  impl<'a, F> FreePageRangeIter<'a, F> where F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> {}
+  impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a>> FreePageRangeIter<'a, F> {}
 
   #[test]
   pub fn near() {
@@ -787,7 +787,7 @@ mod test {
 
     if let Some(i) = &store
       .range(0..400)
-      .filter(|(_, byte)| N8.eq_mask()(*byte))
+      .filter(|(_, byte)| N8.any_bits()(*byte))
       .next()
     {
       println!("{:?}", i);
