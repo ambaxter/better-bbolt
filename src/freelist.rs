@@ -1,5 +1,9 @@
+use std::collections::{btree_map, BTreeMap, Bound};
+use std::iter::{FlatMap, FusedIterator};
+use std::mem;
+use std::ops::{Index, Range, RangeBounds};
 use bbolt_engine::common::ids::{FreePageId, GetPageId, PageId};
-use itertools::izip;
+use bbolt_engine::common::bitset::BitSet;
 
 pub trait FreelistManager {
   /// Creates a new Freelist Manager
@@ -276,10 +280,364 @@ pub mod search {
   }
 }
 
+
+pub enum LotPage {
+  Swap,
+  Claimed(usize),
+  Freed(usize),
+  Array(Box<[u8]>),
+}
+
+impl LotPage {
+  #[inline]
+  pub const fn claimed(page_size: usize) -> LotPage {
+    LotPage::Claimed(page_size)
+  }
+
+  #[inline]
+  pub const fn freed(page_size: usize) -> LotPage {
+    LotPage::Freed(page_size)
+  }
+
+  pub fn array<T: Into<Box<[u8]>>>(a: T) -> LotPage {
+    LotPage::Array(a.into())
+  }
+
+  pub fn len(&self) -> usize {
+    match self {
+      LotPage::Swap => unreachable!(),
+      LotPage::Claimed(page_size) => *page_size,
+      LotPage::Freed(page_size) => *page_size,
+      LotPage::Array(a) => a.len(),
+    }
+  }
+
+  pub fn is_claimed(&self) -> bool {
+    match self {
+      LotPage::Swap => unreachable!(),
+      LotPage::Claimed(_) => true,
+      LotPage::Freed(_) => false,
+      LotPage::Array(a) => a.iter().all(|x| *x == 0),
+    }
+  }
+
+  pub fn is_free(&self) -> bool {
+    match self {
+      LotPage::Swap => unreachable!(),
+      LotPage::Claimed(_) => false,
+      LotPage::Freed(_) => true,
+      LotPage::Array(a) => a.iter().all(|x| *x != 0),
+    }
+  }
+
+  pub fn has_free(&self) -> bool {
+    match self {
+      LotPage::Swap => unreachable!(),
+      LotPage::Claimed(_) => false,
+      LotPage::Freed(_) => true,
+      LotPage::Array(a) => a.iter().any(|x| *x != 0),
+    }
+  }
+
+  pub fn is_mut(&self) -> bool {
+    match self {
+      LotPage::Array(_) => true,
+      _ => false,
+    }
+  }
+
+  pub fn get_mut(&mut self) -> &mut [u8] {
+    if !self.is_mut() {
+      let mut swap = LotPage::Swap;
+      mem::swap(self, &mut swap);
+      let v = match swap {
+        LotPage::Swap => unreachable!(),
+        LotPage::Claimed(page_size) => vec![0u8; page_size].into(),
+        LotPage::Freed(page_size) => vec![u8::MAX; page_size].into(),
+        LotPage::Array(a) => unreachable!(),
+      };
+      swap = LotPage::Array(v);
+      mem::swap(self, &mut swap);
+    }
+    match self {
+      LotPage::Array(a) => a,
+      _ => unreachable!(),
+    }
+  }
+
+  pub fn range<R: RangeBounds<usize>>(&self, lot_page_index: usize, range: R) -> LotPageIter {
+    let start = match range.start_bound() {
+      Bound::Included(lot) => *lot,
+      Bound::Excluded(lot) => *lot + 1,
+      Bound::Unbounded => 0,
+    };
+    let end = match range.end_bound() {
+      Bound::Included(lot) => *lot + 1,
+      Bound::Excluded(lot) => *lot,
+      Bound::Unbounded => self.len(),
+    };
+    let len = self.len();
+    assert!(start <= len);
+    assert!(end <= len);
+    LotPageIter {
+      lot_page_index,
+      lot_page: &self,
+      range: start..end,
+    }
+  }
+}
+
+impl Index<usize> for LotPage {
+  type Output = u8;
+
+  fn index(&self, index: usize) -> &Self::Output {
+    debug_assert!(index < self.len());
+    match self {
+      LotPage::Swap => unreachable!(),
+      LotPage::Claimed(_) => &0,
+      LotPage::Freed(_) => &u8::MAX,
+      LotPage::Array(a) => &a[index],
+    }
+  }
+}
+
+#[derive(Clone)]
+pub struct LotPageIter<'a> {
+  lot_page: &'a LotPage,
+  lot_page_index: usize,
+  range: Range<usize>,
+}
+
+impl<'a> Iterator for LotPageIter<'a> {
+  type Item = (usize, u8);
+
+  fn next(&mut self) -> Option<Self::Item> {
+    match self.range.next() {
+      None => None,
+      Some(lot) => Some((self.lot_page_index + lot, self.lot_page[lot])),
+    }
+  }
+}
+
+impl<'a> DoubleEndedIterator for LotPageIter<'a> {
+  fn next_back(&mut self) -> Option<Self::Item> {
+    match self.range.next_back() {
+      None => None,
+      Some(lot) => Some((self.lot_page_index + lot, self.lot_page[lot])),
+    }
+  }
+}
+
+impl<'a> ExactSizeIterator for LotPageIter<'a> {
+  fn len(&self) -> usize {
+    self.range.len()
+  }
+}
+
+impl<'a> FusedIterator for LotPageIter<'a> {}
+
+pub struct FreePageStore {
+  page_size: usize,
+  store: BTreeMap<usize, LotPage>,
+}
+
+impl FreePageStore {
+  pub fn new(page_size: usize) -> FreePageStore {
+    FreePageStore {
+      page_size,
+      store: BTreeMap::new(),
+    }
+  }
+
+  pub fn with_free_pages(page_size: usize, page_count: usize) -> FreePageStore {
+    let mut store = BTreeMap::new();
+    for i in 0..page_count {
+      store.insert(i, LotPage::Freed(page_size));
+    }
+    FreePageStore { page_size, store }
+  }
+
+  pub fn with_claimed_pages(page_size: usize, page_count: usize) -> FreePageStore {
+    let mut store = BTreeMap::new();
+    for i in 0..page_count {
+      store.insert(i, LotPage::Claimed(page_size));
+    }
+    FreePageStore { page_size, store }
+  }
+
+  pub fn with_free_page_ids(page_size: usize, page_ids: &[FreePageId]) -> FreePageStore {
+    let mut store = FreePageStore::new(page_size);
+    page_ids.iter().for_each(|page_id| store.free(*page_id));
+    store
+  }
+
+  pub fn get_location<T: Into<PageId>>(&self, page_id: T) -> (usize, usize, u8) {
+    let id = page_id.into().0;
+    let store_lot = id / 8;
+    let offset = (id % 8) as u8;
+    let store_index = (store_lot / self.page_size as u64) as usize;
+    let lot_index = (store_lot % self.page_size as u64) as usize;
+    (store_index, lot_index, offset)
+  }
+
+  // TODO: Handle len/overflow
+  pub fn free<T: Into<FreePageId>>(&mut self, page_id: T) {
+    let (store_index, lot_index, offset) = self.get_location(page_id.into());
+    self
+      .store
+      .entry(store_index)
+      .or_insert(LotPage::Freed(self.page_size))
+      .get_mut()[lot_index]
+      .set(offset);
+  }
+
+  pub fn claim<T: Into<PageId>>(&mut self, page_id: T) {
+    let (store_index, lot_index, offset) = self.get_location(page_id);
+    self
+      .store
+      .entry(store_index)
+      .or_insert(LotPage::Freed(self.page_size))
+      .get_mut()[lot_index]
+      .unset(offset);
+  }
+
+  pub fn find_near<T: Into<PageId>>(&self, page_id: T, len: usize) -> Option<FreePageId> {
+    assert_ne!(len, 0);
+    match (len / 8, (len % 8) as u8) {
+      (0, n) => match n {
+        1 => {
+          unimplemented!()
+        }
+        2 => unimplemented!(),
+        3 => unimplemented!(),
+        4 => unimplemented!(),
+        5 => unimplemented!(),
+        6 => unimplemented!(),
+        7 => unimplemented!(),
+        _ => unreachable!(),
+      },
+      (m, n) => unimplemented!(),
+    }
+  }
+  fn range<'a, R: RangeBounds<usize>>(
+    &'a self, range: R,
+  ) -> FreePageRangeIter<'a, impl FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> {
+    let (store_index_start, lot_index_start) = match range.start_bound() {
+      Bound::Included(store_lot_start) => {
+        let store_index_start = store_lot_start / self.page_size;
+        let lot_index_start = store_lot_start % self.page_size;
+        (store_index_start, lot_index_start)
+      }
+      Bound::Excluded(store_lot_start) => {
+        let mut lot_index_start = store_lot_start / self.page_size;
+        let mut store_index_start = store_lot_start % self.page_size;
+        if lot_index_start + 1 == self.page_size {
+          store_index_start += 1;
+          lot_index_start = 0;
+        } else {
+          lot_index_start += 1;
+        }
+        (store_index_start, lot_index_start)
+      }
+      Bound::Unbounded => (0, 0),
+    };
+    let (store_index_end, lot_index_end) = match range.end_bound() {
+      Bound::Included(store_lot_end) => {
+        let mut store_index_end = store_lot_end / self.page_size;
+        let mut lot_index_end = store_lot_end % self.page_size;
+        if lot_index_end + 1 == self.page_size {
+          store_index_end += 1;
+          lot_index_end = 0;
+        } else {
+          lot_index_end += 1;
+        }
+        (store_index_end, lot_index_end)
+      }
+      Bound::Excluded(store_lot_end) => {
+        let store_index_end = store_lot_end / self.page_size;
+        let lot_index_end = store_lot_end % self.page_size;
+        (store_index_end, lot_index_end)
+      }
+      Bound::Unbounded => {
+        if let Some((store_index_end, _)) = self.store.last_key_value() {
+          (*store_index_end + 1, 0)
+        } else {
+          (0, 0)
+        }
+      }
+    };
+
+    let page_size = self.page_size;
+
+    let f = move |(store_index, lot): (&'a usize, &'a LotPage)| match (
+      *store_index == store_index_start,
+      *store_index == store_index_end,
+    ) {
+      (true, true) => lot.range(*store_index * page_size, lot_index_start..lot_index_end),
+      (true, false) => lot.range(*store_index * page_size, lot_index_start..),
+      (false, true) => lot.range(*store_index * page_size, ..lot_index_end),
+      (false, false) => lot.range(*store_index * page_size, ..),
+    };
+
+    let len = self
+      .store
+      .range(store_index_start..store_index_end + 1)
+      .map(f)
+      .map(|i| i.len())
+      .sum();
+
+    let r = self
+      .store
+      .range(store_index_start..store_index_end + 1)
+      .flat_map(f);
+    FreePageRangeIter { r, len }
+  }
+}
+
+#[derive(Clone)]
+struct FreePageRangeIter<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> {
+  r: FlatMap<btree_map::Range<'a, usize, LotPage>, LotPageIter<'a>, F>,
+  len: usize,
+}
+
+impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> Iterator
+for FreePageRangeIter<'a, F>
+{
+  type Item = (usize, u8);
+
+  fn next(&mut self) -> Option<Self::Item> {
+    self.r.next().inspect(|_| self.len -= 1)
+  }
+}
+
+impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> DoubleEndedIterator
+for FreePageRangeIter<'a, F>
+{
+  fn next_back(&mut self) -> Option<Self::Item> {
+    self.r.next_back().inspect(|_| self.len -= 1)
+  }
+}
+
+impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> ExactSizeIterator
+for FreePageRangeIter<'a, F>
+{
+  fn len(&self) -> usize {
+    self.len
+  }
+}
+
+impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> FusedIterator
+for FreePageRangeIter<'a, F>
+{
+}
+
+impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a>> FreePageRangeIter<'a, F> {}
+
+
 #[cfg(test)]
 mod test {
   use crate::freelist::search::{DoubleEnded, DE2, N2, N8};
-  use crate::freelist::FreelistManager;
+  use crate::freelist::{FreePageStore, FreelistManager};
   use bbolt_engine::common::bitset::BitSet;
   use bbolt_engine::common::ids::{FreePageId, PageId};
   use itertools::Itertools;
@@ -287,6 +645,7 @@ mod test {
   use std::iter::{FlatMap, FusedIterator};
   use std::marker::PhantomData;
   use std::mem;
+  use std::num::NonZero;
   use std::ops::{Index, Range, RangeBounds};
 
   #[derive(Debug, Copy, Clone)]
@@ -386,358 +745,6 @@ mod test {
     }
   }
 
-  pub enum LotPage {
-    Swap,
-    Claimed(usize),
-    Freed(usize),
-    Array(Box<[u8]>),
-  }
-
-  impl LotPage {
-    #[inline]
-    pub const fn claimed(page_size: usize) -> LotPage {
-      LotPage::Claimed(page_size)
-    }
-
-    #[inline]
-    pub const fn freed(page_size: usize) -> LotPage {
-      LotPage::Freed(page_size)
-    }
-
-    pub fn array<T: Into<Box<[u8]>>>(a: T) -> LotPage {
-      LotPage::Array(a.into())
-    }
-
-    pub fn len(&self) -> usize {
-      match self {
-        LotPage::Swap => unreachable!(),
-        LotPage::Claimed(page_size) => *page_size,
-        LotPage::Freed(page_size) => *page_size,
-        LotPage::Array(a) => a.len(),
-      }
-    }
-
-    pub fn is_claimed(&self) -> bool {
-      match self {
-        LotPage::Swap => unreachable!(),
-        LotPage::Claimed(_) => true,
-        LotPage::Freed(_) => false,
-        LotPage::Array(a) => a.iter().all(|x| *x == 0),
-      }
-    }
-
-    pub fn is_free(&self) -> bool {
-      match self {
-        LotPage::Swap => unreachable!(),
-        LotPage::Claimed(_) => false,
-        LotPage::Freed(_) => true,
-        LotPage::Array(a) => a.iter().all(|x| *x != 0),
-      }
-    }
-
-    pub fn has_free(&self) -> bool {
-      match self {
-        LotPage::Swap => unreachable!(),
-        LotPage::Claimed(_) => false,
-        LotPage::Freed(_) => true,
-        LotPage::Array(a) => a.iter().any(|x| *x != 0),
-      }
-    }
-
-    pub fn is_mut(&self) -> bool {
-      match self {
-        LotPage::Array(_) => true,
-        _ => false,
-      }
-    }
-
-    pub fn get_mut(&mut self) -> &mut [u8] {
-      if !self.is_mut() {
-        let mut swap = LotPage::Swap;
-        mem::swap(self, &mut swap);
-        let v = match swap {
-          LotPage::Swap => unreachable!(),
-          LotPage::Claimed(page_size) => vec![0u8; page_size].into(),
-          LotPage::Freed(page_size) => vec![u8::MAX; page_size].into(),
-          LotPage::Array(a) => unreachable!(),
-        };
-        swap = LotPage::Array(v);
-        mem::swap(self, &mut swap);
-      }
-      match self {
-        LotPage::Array(a) => a,
-        _ => unreachable!(),
-      }
-    }
-
-    pub fn range<R: RangeBounds<usize>>(&self, lot_page_index: usize, range: R) -> LotPageIter {
-      let start = match range.start_bound() {
-        Bound::Included(lot) => *lot,
-        Bound::Excluded(lot) => *lot + 1,
-        Bound::Unbounded => 0,
-      };
-      let end = match range.end_bound() {
-        Bound::Included(lot) => *lot + 1,
-        Bound::Excluded(lot) => *lot,
-        Bound::Unbounded => self.len(),
-      };
-      let len = self.len();
-      assert!(start <= len);
-      assert!(end <= len);
-      LotPageIter {
-        lot_page_index,
-        lot_page: &self,
-        range: start..end,
-      }
-    }
-  }
-
-  impl Index<usize> for LotPage {
-    type Output = u8;
-
-    fn index(&self, index: usize) -> &Self::Output {
-      debug_assert!(index < self.len());
-      match self {
-        LotPage::Swap => unreachable!(),
-        LotPage::Claimed(_) => &0,
-        LotPage::Freed(_) => &u8::MAX,
-        LotPage::Array(a) => &a[index],
-      }
-    }
-  }
-
-  #[derive(Clone)]
-  pub struct LotPageIter<'a> {
-    lot_page: &'a LotPage,
-    lot_page_index: usize,
-    range: Range<usize>,
-  }
-
-  impl<'a> Iterator for LotPageIter<'a> {
-    type Item = (usize, u8);
-
-    fn next(&mut self) -> Option<Self::Item> {
-      match self.range.next() {
-        None => None,
-        Some(lot) => Some((self.lot_page_index + lot, self.lot_page[lot])),
-      }
-    }
-  }
-
-  impl<'a> DoubleEndedIterator for LotPageIter<'a> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-      match self.range.next_back() {
-        None => None,
-        Some(lot) => Some((self.lot_page_index + lot, self.lot_page[lot])),
-      }
-    }
-  }
-
-  impl<'a> ExactSizeIterator for LotPageIter<'a> {
-    fn len(&self) -> usize {
-      self.range.len()
-    }
-  }
-
-  impl<'a> FusedIterator for LotPageIter<'a> {}
-
-  pub struct FreePageStore {
-    page_size: usize,
-    store: BTreeMap<usize, LotPage>,
-  }
-
-  impl FreePageStore {
-    pub fn new(page_size: usize) -> FreePageStore {
-      FreePageStore {
-        page_size,
-        store: BTreeMap::new(),
-      }
-    }
-
-    pub fn with_free_pages(page_size: usize, page_count: usize) -> FreePageStore {
-      let mut store = BTreeMap::new();
-      for i in 0..page_count {
-        store.insert(i, LotPage::Freed(page_size));
-      }
-      FreePageStore { page_size, store }
-    }
-
-    pub fn with_claimed_pages(page_size: usize, page_count: usize) -> FreePageStore {
-      let mut store = BTreeMap::new();
-      for i in 0..page_count {
-        store.insert(i, LotPage::Claimed(page_size));
-      }
-      FreePageStore { page_size, store }
-    }
-
-    pub fn with_free_page_ids(page_size: usize, page_ids: &[FreePageId]) -> FreePageStore {
-      let mut store = FreePageStore::new(page_size);
-      page_ids.iter().for_each(|page_id| store.free(*page_id));
-      store
-    }
-
-    pub fn get_location<T: Into<PageId>>(&self, page_id: T) -> (usize, usize, u8) {
-      let id = page_id.into().0;
-      let store_lot = id / 8;
-      let offset = (id % 8) as u8;
-      let store_index = (store_lot / self.page_size as u64) as usize;
-      let lot_index = (store_lot % self.page_size as u64) as usize;
-      (store_index, lot_index, offset)
-    }
-
-    // TODO: Handle len/overflow
-    pub fn free<T: Into<FreePageId>>(&mut self, page_id: T) {
-      let (store_index, lot_index, offset) = self.get_location(page_id.into());
-      self
-        .store
-        .entry(store_index)
-        .or_insert(LotPage::Freed(self.page_size))
-        .get_mut()[lot_index]
-        .set(offset);
-    }
-
-    pub fn claim<T: Into<PageId>>(&mut self, page_id: T) {
-      let (store_index, lot_index, offset) = self.get_location(page_id);
-      self
-        .store
-        .entry(store_index)
-        .or_insert(LotPage::Freed(self.page_size))
-        .get_mut()[lot_index]
-        .unset(offset);
-    }
-
-    pub fn find_near<T: Into<PageId>>(&self, page_id: T, len: usize) -> Option<FreePageId> {
-      assert_ne!(len, 0);
-      match (len / 8, (len % 8) as u8) {
-        (0, n) => match n {
-          1 => {
-            unimplemented!()
-          }
-          2 => unimplemented!(),
-          3 => unimplemented!(),
-          4 => unimplemented!(),
-          5 => unimplemented!(),
-          6 => unimplemented!(),
-          7 => unimplemented!(),
-          _ => unreachable!(),
-        },
-        (m, n) => unimplemented!(),
-      }
-    }
-    fn range<'a, R: RangeBounds<usize>>(
-      &'a self, range: R,
-    ) -> FreePageRangeIter<'a, impl FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> {
-      let (store_index_start, lot_index_start) = match range.start_bound() {
-        Bound::Included(store_lot_start) => {
-          let store_index_start = store_lot_start / self.page_size;
-          let lot_index_start = store_lot_start % self.page_size;
-          (store_index_start, lot_index_start)
-        }
-        Bound::Excluded(store_lot_start) => {
-          let mut lot_index_start = store_lot_start / self.page_size;
-          let mut store_index_start = store_lot_start % self.page_size;
-          if lot_index_start + 1 == self.page_size {
-            store_index_start += 1;
-            lot_index_start = 0;
-          } else {
-            lot_index_start += 1;
-          }
-          (store_index_start, lot_index_start)
-        }
-        Bound::Unbounded => (0, 0),
-      };
-      let (store_index_end, lot_index_end) = match range.end_bound() {
-        Bound::Included(store_lot_end) => {
-          let mut store_index_end = store_lot_end / self.page_size;
-          let mut lot_index_end = store_lot_end % self.page_size;
-          if lot_index_end + 1 == self.page_size {
-            store_index_end += 1;
-            lot_index_end = 0;
-          } else {
-            lot_index_end += 1;
-          }
-          (store_index_end, lot_index_end)
-        }
-        Bound::Excluded(store_lot_end) => {
-          let store_index_end = store_lot_end / self.page_size;
-          let lot_index_end = store_lot_end % self.page_size;
-          (store_index_end, lot_index_end)
-        }
-        Bound::Unbounded => {
-          if let Some((store_index_end, _)) = self.store.last_key_value() {
-            (*store_index_end + 1, 0)
-          } else {
-            (0, 0)
-          }
-        }
-      };
-
-      let page_size = self.page_size;
-
-      let f = move |(store_index, lot): (&'a usize, &'a LotPage)| match (
-        *store_index == store_index_start,
-        *store_index == store_index_end,
-      ) {
-        (true, true) => lot.range(*store_index * page_size, lot_index_start..lot_index_end),
-        (true, false) => lot.range(*store_index * page_size, lot_index_start..),
-        (false, true) => lot.range(*store_index * page_size, ..lot_index_end),
-        (false, false) => lot.range(*store_index * page_size, ..),
-      };
-
-      let len = self
-        .store
-        .range(store_index_start..store_index_end + 1)
-        .map(f)
-        .map(|i| i.len())
-        .sum();
-
-      let r = self
-        .store
-        .range(store_index_start..store_index_end + 1)
-        .flat_map(f);
-      FreePageRangeIter { r, len }
-    }
-  }
-
-  #[derive(Clone)]
-  struct FreePageRangeIter<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> {
-    r: FlatMap<btree_map::Range<'a, usize, LotPage>, LotPageIter<'a>, F>,
-    len: usize,
-  }
-
-  impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> Iterator
-    for FreePageRangeIter<'a, F>
-  {
-    type Item = (usize, u8);
-
-    fn next(&mut self) -> Option<Self::Item> {
-      self.r.next().inspect(|_| self.len -= 1)
-    }
-  }
-
-  impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> DoubleEndedIterator
-    for FreePageRangeIter<'a, F>
-  {
-    fn next_back(&mut self) -> Option<Self::Item> {
-      self.r.next_back().inspect(|_| self.len -= 1)
-    }
-  }
-
-  impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> ExactSizeIterator
-    for FreePageRangeIter<'a, F>
-  {
-    fn len(&self) -> usize {
-      self.len
-    }
-  }
-
-  impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a> + 'a> FusedIterator
-    for FreePageRangeIter<'a, F>
-  {
-  }
-
-  impl<'a, F: FnMut((&'a usize, &'a LotPage)) -> LotPageIter<'a>> FreePageRangeIter<'a, F> {}
-
   #[test]
   pub fn near() {
     for i in 1..33u8 {
@@ -812,5 +819,43 @@ mod test {
     {
       println!("{:?}", i);
     };
+  }
+
+  #[test]
+  fn test_len8() {
+    let goal_len = 8usize;
+    let mut store = FreePageStore::with_claimed_pages(4096, 4);
+    for i in 16..16 + 8*16 {
+      store.free(FreePageId::of(i));
+    }
+    let mut front = store.range(0..144);
+    let mut back = front.clone();
+    front.nth(7);
+    let mut in_range = false;
+    let mut start_range = 0;
+    let mut last_range = 0;
+    let mut len = 0;
+    while let Some((page_id, byte)) = front.next() {
+      if !N8.eq_mask()(byte) {
+        in_range = false;
+        front.nth(7);
+        back.nth(8);
+        continue;
+      }
+      let mut back =
+      if !in_range {
+        in_range = true;
+        start_range = page_id;
+        last_range = page_id;
+        len = 1;
+      } else {
+        last_range = page_id;
+        len += 1;
+        if len == 8 {
+          break;
+        }
+      }
+    }
+    println!("{:?} {:?}", start_range, last_range);
   }
 }
