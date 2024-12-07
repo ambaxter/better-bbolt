@@ -278,10 +278,11 @@ pub mod search {
 
 #[cfg(test)]
 mod test {
-  use crate::freelist::search::N8;
+  use crate::freelist::search::{DoubleEnded, DE2, N2, N8};
   use crate::freelist::FreelistManager;
   use bbolt_engine::common::bitset::BitSet;
   use bbolt_engine::common::ids::{FreePageId, PageId};
+  use itertools::Itertools;
   use std::collections::{btree_map, BTreeMap, Bound};
   use std::mem;
   use std::ops::{Index, Range, RangeBounds};
@@ -696,9 +697,68 @@ mod test {
 
   #[test]
   pub fn test_page_iter() {
-    let store = FreePageStore::with_free_pages(4096, 1);
+    let store = FreePageStore::with_free_pages(4096, 4);
     for i in store.range(0..16000) {
       println!("{:?}", i);
     }
+  }
+
+  #[test]
+  pub fn search_page_single() {
+    let mut store = FreePageStore::with_claimed_pages(4096, 1);
+    store.free(FreePageId::of(159));
+    store.free(FreePageId::of(160));
+
+    if let Some(i) = &store
+      .range(0..400)
+      .rev()
+      .filter(|(_, byte)| N8.any_bits()(*byte))
+      .next()
+    {
+      println!("{:?}", i);
+    };
+
+    if let Some(i) = &store
+      .range(0..400)
+      .filter(|(_, byte)| N8.any_bits()(*byte))
+      .next()
+    {
+      println!("{:?}", i);
+    };
+  }
+
+  #[test]
+  pub fn search_page_two() {
+    let mut store = FreePageStore::with_claimed_pages(4096, 1);
+    store.free(FreePageId::of(159));
+    store.free(FreePageId::of(160));
+
+    if let Some(i) = &store
+      .range(0..400)
+      .filter(|(_, byte)| N8.eq_mask()(*byte))
+      .next()
+    {
+      println!("{:?}", i);
+    };
+
+    if let Some(i) = &store
+      .range(0..400)
+      .rev()
+      .filter(|(_, byte)| N2.eq_mask()(*byte))
+      .next()
+    {
+      println!("{:?}", i);
+    };
+
+    if let Some(i) = &store
+      .range(0..400)
+      .rev()
+      .tuple_windows()
+      .map(|(r, l)| (l, r))
+      .filter(|((_, l), (_, r))| DE2.eq_mask()(*l, *r))
+      .next()
+    {
+      println!("{:?}", i);
+    };
   }
 }
