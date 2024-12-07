@@ -467,7 +467,7 @@ mod test {
       }
     }
 
-    pub fn iter_range<R: RangeBounds<usize>>(&self, lot_page_index: usize, range: R) -> LotPageIter {
+    pub fn range<R: RangeBounds<usize>>(&self, lot_page_index: usize, range: R) -> LotPageIter {
       let start = match range.start_bound() {
         Bound::Included(lot) => *lot,
         Bound::Excluded(lot) => *lot + 1,
@@ -604,7 +604,9 @@ mod test {
       assert_ne!(len, 0);
       match (len / 8, (len % 8) as u8) {
         (0, n) => match n {
-          1 => unimplemented!(),
+          1 => {
+            unimplemented!()
+          }
           2 => unimplemented!(),
           3 => unimplemented!(),
           4 => unimplemented!(),
@@ -616,7 +618,9 @@ mod test {
         (m, n) => unimplemented!(),
       }
     }
-    fn range<'a, R: RangeBounds<usize>>(&'a self, range: R) -> impl Iterator<Item = (usize, u8)> + DoubleEndedIterator + Sized + 'a {
+    fn range<'a, R: RangeBounds<usize>>(
+      &'a self, range: R,
+    ) -> impl Iterator<Item = (usize, u8)> + DoubleEndedIterator + Sized + 'a {
       let (store_index_start, lot_index_start) = match range.start_bound() {
         Bound::Included(store_lot_start) => {
           let store_index_start = store_lot_start / self.page_size;
@@ -634,15 +638,10 @@ mod test {
           }
           (store_index_start, lot_index_start)
         }
-        Bound::Unbounded => (0,0)
+        Bound::Unbounded => (0, 0),
       };
       let (store_index_end, lot_index_end) = match range.end_bound() {
         Bound::Included(store_lot_end) => {
-          let store_index_end = store_lot_end / self.page_size;
-          let lot_index_end = store_lot_end % self.page_size;
-          (store_index_end, lot_index_end)
-        }
-        Bound::Excluded(store_lot_end) => {
           let mut store_index_end = store_lot_end / self.page_size;
           let mut lot_index_end = store_lot_end % self.page_size;
           if lot_index_end + 1 == self.page_size {
@@ -653,6 +652,11 @@ mod test {
           }
           (store_index_end, lot_index_end)
         }
+        Bound::Excluded(store_lot_end) => {
+          let store_index_end = store_lot_end / self.page_size;
+          let lot_index_end = store_lot_end % self.page_size;
+          (store_index_end, lot_index_end)
+        }
         Bound::Unbounded => {
           if let Some((store_index_end, _)) = self.store.last_key_value() {
             (*store_index_end + 1, 0)
@@ -661,13 +665,21 @@ mod test {
           }
         }
       };
-      self.store.range(store_index_start..store_index_end + 1)
+      self
+        .store
+        .range(store_index_start..store_index_end + 1)
         .flat_map(move |(store_index, lot)| {
-          match (*store_index == store_index_start, *store_index == store_index_end) {
-            (true, true) => lot.iter_range(*store_index * self.page_size, lot_index_start..lot_index_end),
-            (true, false) => lot.iter_range(*store_index * self.page_size, lot_index_start..),
-            (false, true) => lot.iter_range(*store_index * self.page_size, ..lot_index_end),
-            (false, false) => lot.iter_range(*store_index * self.page_size, ..),
+          match (
+            *store_index == store_index_start,
+            *store_index == store_index_end,
+          ) {
+            (true, true) => lot.range(
+              *store_index * self.page_size,
+              lot_index_start..lot_index_end,
+            ),
+            (true, false) => lot.range(*store_index * self.page_size, lot_index_start..),
+            (false, true) => lot.range(*store_index * self.page_size, ..lot_index_end),
+            (false, false) => lot.range(*store_index * self.page_size, ..),
           }
         })
     }
@@ -683,8 +695,8 @@ mod test {
   }
 
   #[test]
-  pub fn test_page_iter () {
-    let store = FreePageStore::with_free_pages(4096, 4);
+  pub fn test_page_iter() {
+    let store = FreePageStore::with_free_pages(4096, 1);
     for i in store.range(0..16000) {
       println!("{:?}", i);
     }
