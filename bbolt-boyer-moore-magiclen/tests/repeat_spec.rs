@@ -1,4 +1,4 @@
-use bbolt_boyer_moore_magiclen::repeat_spec::{BMRepeat, FindEnds};
+use bbolt_boyer_moore_magiclen::repeat_spec::{BMRepeat, FindEndMasks};
 use serde::{Deserialize, Serialize};
 use std::io::Read;
 
@@ -11,10 +11,10 @@ pub enum ByteMask {
 }
 
 impl ByteMask {
-  fn find_ends<'a>(&'a self) -> FindEnds<impl Fn(u8, u8) -> Option<(u8, u8)> + 'a> {
+  fn find_ends<'a>(&'a self) -> FindEndMasks<impl Fn(u8, u8) -> Option<(u8, u8)> + 'a> {
     match self {
-      ByteMask::Either(mask_l, mask_r) => FindEnds::Either(*mask_l, *mask_r),
-      ByteMask::Both(mask_l, mask_r) => FindEnds::Both(|l, r| {
+      ByteMask::Either(mask_l, mask_r) => FindEndMasks::Either(*mask_l, *mask_r),
+      ByteMask::Both(mask_l, mask_r) => FindEndMasks::Both(|l, r| {
         if (*mask_l & l == *mask_l) && (*mask_r & r == *mask_r) {
           Some((*mask_l, *mask_r))
         } else {

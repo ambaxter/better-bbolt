@@ -19,6 +19,11 @@ impl BMRepeatPattern {
 
 impl LenTrait for BMRepeatPattern {
   #[inline]
+  fn is_empty(&self) -> bool {
+    self.len == 0
+  }
+
+  #[inline]
   fn len(&self) -> usize {
     self.len
   }
@@ -99,7 +104,7 @@ impl BMRepeat {
   ///
   /// assert_eq!(Some(1), bmb.find_first_in("coocoocoocoo"));
   /// ```
-  pub fn find_first_in<'a, T, F>(&'a self, text: &'a T, e: FindEnds<F>) -> Option<FindResults>
+  pub fn find_first_in<'a, T, F>(&'a self, text: &'a T, e: FindEndMasks<F>) -> Option<FindResults>
   where
     T: Index<usize, Output = u8> + LenTrait + ?Sized,
     &'a T: IntoIterator<Item = &'a u8>,
@@ -123,7 +128,7 @@ impl BMRepeat {
   /// assert_eq!(vec![1], bmb.find_in("coocoocoocoo", 1));
   /// ```
   pub fn find_in<'a, T, F>(
-    &'a self, text: &'a T, limit: usize, e: FindEnds<F>,
+    &'a self, text: &'a T, limit: usize, e: FindEndMasks<F>,
   ) -> SmallVec<[FindResults; 1]>
   where
     T: Index<usize, Output = u8> + LenTrait + ?Sized,
@@ -145,7 +150,7 @@ impl BMRepeat {
   ///
   /// assert_eq!(Some(7), bmb.rfind_first_in("coocoocoocoo"));
   /// ```
-  pub fn rfind_first_in<'a, T, F>(&'a self, text: &'a T, e: FindEnds<F>) -> Option<FindResults>
+  pub fn rfind_first_in<'a, T, F>(&'a self, text: &'a T, e: FindEndMasks<F>) -> Option<FindResults>
   where
     T: Index<usize, Output = u8> + LenTrait + ?Sized,
     &'a T: IntoIterator<Item = &'a u8>,
@@ -167,7 +172,7 @@ impl BMRepeat {
   /// assert_eq!(vec![7], bmb.rfind_in("coocoocoocoo", 1));
   /// ```
   pub fn rfind_in<'a, T, F>(
-    &'a self, text: &'a T, limit: usize, e: FindEnds<F>,
+    &'a self, text: &'a T, limit: usize, e: FindEndMasks<F>,
   ) -> SmallVec<[FindResults; 1]>
   where
     T: Index<usize, Output = u8> + LenTrait + ?Sized,
@@ -192,7 +197,7 @@ pub struct FindResults {
   end_masks: EndMasks,
 }
 
-pub enum FindEnds<F>
+pub enum FindEndMasks<F>
 where
   F: Fn(u8, u8) -> Option<(u8, u8)>,
 {
@@ -200,19 +205,19 @@ where
   Both(F),
 }
 
-impl<F> FindEnds<F>
+impl<F> FindEndMasks<F>
 where
   F: Fn(u8, u8) -> Option<(u8, u8)>,
 {
   pub fn find_match(&self, l: Option<u8>, r: Option<u8>) -> Option<EndMasks> {
     match (l, r, self) {
-      (Some(l), _, FindEnds::Either(mask_l, _)) if *mask_l & l == *mask_l => {
+      (Some(l), _, FindEndMasks::Either(mask_l, _)) if *mask_l & l == *mask_l => {
         Some(EndMasks::L(*mask_l))
       }
-      (_, Some(r), FindEnds::Either(_, mask_r)) if *mask_r & r == *mask_r => {
+      (_, Some(r), FindEndMasks::Either(_, mask_r)) if *mask_r & r == *mask_r => {
         Some(EndMasks::R(*mask_r))
       }
-      (Some(l), Some(r), FindEnds::Both(both_masks)) => {
+      (Some(l), Some(r), FindEndMasks::Both(both_masks)) => {
         if let Some((mask_l, mask_r)) = both_masks(l, r) {
           Some(EndMasks::BOTH(mask_l, mask_r))
         } else {
@@ -226,7 +231,7 @@ where
 
 pub fn find_spec<'a, TT: 'a, TP: 'a, F>(
   text: &'a TT, pattern: &'a TP, bad_char_shift_map: &BMRepeatBadCharShiftMap, limit: usize,
-  e: FindEnds<F>,
+  e: FindEndMasks<F>,
 ) -> SmallVec<[FindResults; 1]>
 where
   TT: Index<usize, Output = u8> + LenTrait + ?Sized,
@@ -320,7 +325,7 @@ where
 
 pub fn rfind_spec<'a, TT: 'a, TP: 'a, F>(
   text: &'a TT, pattern: &'a TP, bad_char_shift_map: &BMRepeatBadCharShiftMap, limit: usize,
-  e: FindEnds<F>,
+  e: FindEndMasks<F>,
 ) -> SmallVec<[FindResults; 1]>
 where
   TT: Index<usize, Output = u8> + LenTrait + ?Sized,

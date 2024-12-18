@@ -6,16 +6,30 @@ use core::ops::{Deref, Index};
 // TODO Searchable
 
 pub trait LenTrait {
+  fn is_empty(&self) -> bool;
+
   fn len(&self) -> usize;
 }
 
 impl LenTrait for [u8] {
+  #[inline]
+  fn is_empty(&self) -> bool {
+    self.is_empty()
+  }
+
+  #[inline]
   fn len(&self) -> usize {
     self.len()
   }
 }
 
 impl LenTrait for Vec<u8> {
+  #[inline]
+  fn is_empty(&self) -> bool {
+    self.is_empty()
+  }
+
+  #[inline]
   fn len(&self) -> usize {
     self.len()
   }
