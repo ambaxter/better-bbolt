@@ -2,10 +2,10 @@
 resolver = "2"
 members = [
     "bbolt-engine",
-    "bbolt-boyer-moore-magiclen",
+    "boyer-moore-magiclen",
     "."
 ]
-default-members = ["bbolt-engine", "bbolt-boyer-moore-magiclen", "."]
+default-members = ["bbolt-engine", "boyer-moore-magiclen", "."]
 
 [workspace.package]
 version = "0.1.0"
@@ -27,7 +27,7 @@ size.workspace = true
 parking_lot.workspace = true
 lz4_flex.workspace = true
 smallvec.workspace = true
-bbolt-boyer-moore-magiclen.workspace = true
+boyer-moore-magiclen.workspace = true
 bbolt-engine.workspace = true
 
 [workspace.dependencies]
@@ -58,5 +58,8 @@ bon = { version = "3.3", features = ["implied-bounds"] }
 bumpalo = "3.16.0"
 lz4_flex = "0.11.3"
 smallvec = { version = "1.13.2", features = ["const_generics"] }
+boyer-moore-magiclen = "0.2.20"
 bbolt-engine = {path = "bbolt-engine" }
-bbolt-boyer-moore-magiclen = {path = "bbolt-boyer-moore-magiclen"}
+
+[patch.crates-io]
+boyer-moore-magiclen = {path = "boyer-moore-magiclen" }

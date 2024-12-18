@@ -42,9 +42,9 @@ fn data_input_from_file() {
   for (idx, test) in tests.iter().enumerate() {
     let bm = BMRepeat::new(255, test.repeat_len);
     let r = if test.rev {
-      bm.rfind_first_in(&test.haystack, test.mask.find_ends())
+      bm.rfind_first_in(&test.haystack, test.mask.find_ends(), |_| false)
     } else {
-      bm.find_first_in(&test.haystack, test.mask.find_ends())
+      bm.find_first_in(&test.haystack, test.mask.find_ends(), |_| false)
     };
     match (test.expected_index, r) {
       (Some(expected_index), Some(result)) => assert_eq!(

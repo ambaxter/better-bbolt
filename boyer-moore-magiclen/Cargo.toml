@@ -1,5 +1,5 @@
 [package]
-name = "bbolt-boyer-moore-magiclen"
+name = "boyer-moore-magiclen"
 authors = ["Magic Len <len@magiclen.org>"]
 version.workspace = true
 edition.workspace = true
@@ -14,8 +14,6 @@ include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "benches/full_text_
 
 [dependencies]
 debug-helper = "0.3"
-smallvec.workspace = true
-serde = { version = "1.0.216", features = ["derive"] }
 
 [dev-dependencies]
 scanner-rust = "2"
@@ -23,6 +21,7 @@ bencher = "0.1.5"
 regex = "1.1.5"
 utf8-width = "0.1"
 ron = "0.8.1"
+serde = { version = "1.0.216", features = ["derive"] }
 
 [features]
 character = []

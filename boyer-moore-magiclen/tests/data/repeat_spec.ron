@@ -1,0 +1,82 @@
+[
+// IDX 0
+  MaskTest(
+       mask: Both(0b1110_0000, 0b000_0001),
+       rev: false,
+       repeat_len: 2,
+       haystack: [255, 0, 0b1110_0000, 255, 255, 0b000_0001, 0 , 255],
+       expected_index: Some(3)
+   ),
+   // IDX 1
+   MaskTest(
+       mask: Both(0b1110_0000, 0b000_0001),
+       rev: true,
+       repeat_len: 2,
+       haystack: [255, 0, 0b1110_0000, 255, 255, 0b000_0001, 0 , 255],
+       expected_index: Some(4)
+   ),
+   // IDX 2
+   MaskTest(
+       mask: Both(0b1110_0000, 0b000_0001),
+       rev: false,
+       repeat_len: 2,
+       haystack: [255, 0, 0, 255, 255, 0, 0 , 255],
+       expected_index: None
+   ),
+   // IDX 3
+   MaskTest(
+       mask: Both(0b1110_0000, 0b000_0001),
+       rev: true,
+       repeat_len: 2,
+       haystack: [255, 0, 255, 255, 0, 255],
+       expected_index: None
+   ),
+   // IDX 4
+   MaskTest(
+     mask: Either(0b1110_0000, 0b000_0001),
+     rev: false,
+     repeat_len: 3,
+     haystack: [255, 0, 255, 255, 255, 0b000_0001, 0 , 255],
+     expected_index: Some(2)
+   ),
+   // IDX 5
+   MaskTest(
+     mask: Either(0b1110_0000, 0b000_0001),
+     rev: true,
+     repeat_len: 3,
+     haystack: [255, 0, 0b1110_0000, 255, 255, 255, 0 , 255],
+     expected_index: Some(5)
+   ),
+   // IDX 6
+   MaskTest(
+     mask: Either(0b1110_0000, 0b000_0001),
+     rev: false,
+     repeat_len: 3,
+     haystack: [255, 0, 0, 255, 255, 255, 0, 0 , 255],
+     expected_index: None
+   ),
+   // IDX 7
+  MaskTest(
+    mask: Either(0b1110_0000, 0b000_0001),
+    rev: true,
+    repeat_len: 3,
+    haystack: [255, 0, 0, 255, 255, 255, 0, 0 , 255],
+    expected_index: None
+  ),
+     // IDX 8
+     MaskTest(
+       mask: Either(0b1110_0000, 0b000_0001),
+       rev: false,
+       repeat_len: 3,
+       haystack: [255, 0, 255, 255, 255, 255, 0, 0 , 255],
+       expected_index: Some(2)
+     ),
+     // IDX 9
+    MaskTest(
+      mask: Either(0b1110_0000, 0b000_0001),
+      rev: true,
+      repeat_len: 3,
+      haystack: [255, 0, 255, 255, 255, 255, 0, 0 , 255],
+      expected_index: Some(4)
+    ),
+]

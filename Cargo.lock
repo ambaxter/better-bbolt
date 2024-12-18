@@ -41,20 +41,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
-name = "bbolt-boyer-moore-magiclen"
-version = "0.1.0"
-dependencies = [
- "bencher",
- "debug-helper",
- "regex",
- "ron",
- "scanner-rust",
- "serde",
- "smallvec",
- "utf8-width",
-]
-
-[[package]]
 name = "bbolt-engine"
 version = "0.1.0"
 dependencies = [
@@ -90,9 +76,9 @@ checksum = "7dfdb4953a096c551ce9ace855a604d702e6e62d77fac690575ae347571717f5"
 name = "better-bbolt"
 version = "0.1.0"
 dependencies = [
- "bbolt-boyer-moore-magiclen",
  "bbolt-engine",
  "bon",
+ "boyer-moore-magiclen 0.2.20",
  "bumpalo",
  "itertools",
  "lz4_flex",
@@ -133,6 +119,28 @@ dependencies = [
  "quote",
  "rustversion",
  "syn",
+]
+
+[[package]]
+name = "boyer-moore-magiclen"
+version = "0.1.0"
+dependencies = [
+ "bencher",
+ "debug-helper",
+ "regex",
+ "ron",
+ "scanner-rust",
+ "serde",
+ "utf8-width",
+]
+
+[[package]]
+name = "boyer-moore-magiclen"
+version = "0.2.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95e6233f2d926b5b123caf9d58e3885885255567fbe7776a7fdcae2a4d7241c4"
+dependencies = [
+ "debug-helper",
 ]
 
 [[package]]
