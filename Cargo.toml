@@ -2,9 +2,10 @@
 resolver = "2"
 members = [
     "bbolt-engine",
+    "bbolt-boyer-moore-magiclen",
     "."
 ]
-default-members = ["bbolt-engine", "."]
+default-members = ["bbolt-engine", "bbolt-boyer-moore-magiclen", "."]
 
 [workspace.package]
 version = "0.1.0"
@@ -25,6 +26,8 @@ bon.workspace = true
 size.workspace = true
 parking_lot.workspace = true
 lz4_flex.workspace = true
+smallvec.workspace = true
+bbolt-boyer-moore-magiclen.workspace = true
 bbolt-engine.workspace = true
 
 [workspace.dependencies]
@@ -51,7 +54,9 @@ fs-err = "3.0.0"
 page_size = "0.6.0"
 moka = { version = "0.12.8", features = ["sync"] }
 getset = "0.1.3"
-bon = { version = "3.2", features = ["implied-bounds"] }
+bon = { version = "3.3", features = ["implied-bounds"] }
 bumpalo = "3.16.0"
 lz4_flex = "0.11.3"
+smallvec = { version = "1.13.2", features = ["const_generics"] }
 bbolt-engine = {path = "bbolt-engine" }
+bbolt-boyer-moore-magiclen = {path = "bbolt-boyer-moore-magiclen"}
