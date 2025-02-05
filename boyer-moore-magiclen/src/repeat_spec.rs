@@ -105,7 +105,7 @@ impl BMRepeat {
   /// Find and return the position of the first matched sub-sequence in any text (the haystack).
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
@@ -137,7 +137,7 @@ impl BMRepeat {
   /// Find and return the position of the first matched sub-sequence in any text (the haystack) from its tail to its head.
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///

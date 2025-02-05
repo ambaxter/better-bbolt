@@ -1,4 +1,4 @@
-use bbolt_boyer_moore_magiclen::*;
+use boyer_moore_magiclen::*;
 use regex::Regex;
 
 pub fn naive_search<S: AsRef<str>, P: AsRef<str>>(text: S, pattern: P) -> Vec<usize> {

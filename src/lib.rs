@@ -1,5 +1,9 @@
+#![allow(warnings)]
+
 use std::cmp::Ordering;
 use std::iter::FusedIterator;
+
+
 
 pub mod bucket;
 pub mod freelist;

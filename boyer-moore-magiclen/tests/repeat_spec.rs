@@ -1,20 +1,20 @@
-use bbolt_boyer_moore_magiclen::repeat_spec::{BMRepeat, FindEndMasks};
+use boyer_moore_magiclen::repeat_spec::{BMRepeat, FindEndMasks};
 use serde::{Deserialize, Serialize};
 use std::io::Read;
 
 const INPUT_DATA_PATH: &str = r"tests/data/repeat_spec.ron";
 
 #[derive(Debug, Copy, Clone, Deserialize, Serialize)]
-pub enum ByteMask {
+pub enum EndByteMasks {
   Either(u8, u8),
   Both(u8, u8),
 }
 
-impl ByteMask {
+impl EndByteMasks {
   fn find_ends<'a>(&'a self) -> FindEndMasks<impl Fn(u8, u8) -> Option<(u8, u8)> + 'a> {
     match self {
-      ByteMask::Either(mask_l, mask_r) => FindEndMasks::Either(*mask_l, *mask_r),
-      ByteMask::Both(mask_l, mask_r) => FindEndMasks::Both(|l, r| {
+      EndByteMasks::Either(mask_l, mask_r) => FindEndMasks::Either(*mask_l, *mask_r),
+      EndByteMasks::Both(mask_l, mask_r) => FindEndMasks::Both(|l, r| {
         if (*mask_l & l == *mask_l) && (*mask_r & r == *mask_r) {
           Some((*mask_l, *mask_r))
         } else {
@@ -27,7 +27,7 @@ impl ByteMask {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MaskTest {
   rev: bool,
-  mask: ByteMask,
+  end_byte_masks: EndByteMasks,
   repeat_len: usize,
   haystack: Vec<u8>,
   expected_index: Option<usize>,
@@ -42,9 +42,9 @@ fn data_input_from_file() {
   for (idx, test) in tests.iter().enumerate() {
     let bm = BMRepeat::new(255, test.repeat_len);
     let r = if test.rev {
-      bm.rfind_first_in(&test.haystack, test.mask.find_ends(), |_| false)
+      bm.rfind_first_in(&test.haystack, test.end_byte_masks.find_ends(), |_| false)
     } else {
-      bm.find_first_in(&test.haystack, test.mask.find_ends(), |_| false)
+      bm.find_first_in(&test.haystack, test.end_byte_masks.find_ends(), |_| false)
     };
     match (test.expected_index, r) {
       (Some(expected_index), Some(result)) => assert_eq!(

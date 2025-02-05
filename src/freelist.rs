@@ -2,10 +2,12 @@ use bbolt_engine::common::bitset::BitSet;
 use bbolt_engine::common::ids::{FreePageId, GetPageId, PageId};
 use itertools::traits::IteratorIndex;
 use std::collections::Bound;
-use std::iter::{Enumerate, FlatMap, FusedIterator};
+use std::iter::{Enumerate, FlatMap, FusedIterator, Peekable};
 use std::mem;
 use std::ops::{Index, Range, RangeBounds};
 use std::slice::Iter;
+use futures::executor::ThreadPool;
+use rayon::ThreadPoolBuilder;
 
 pub trait FreelistManager {
   /// Creates a new Freelist Manager
@@ -49,49 +51,49 @@ pub mod search {
   }
 
   pub const N2: Needle<7> = Needle::new([
-    0b1100_0000u8,
-    0b0110_0000u8,
-    0b0011_0000u8,
-    0b0001_1000u8,
-    0b0000_1100u8,
-    0b0000_0110u8,
     0b0000_0011u8,
+    0b0000_0110u8,
+    0b0000_1100u8,
+    0b0001_1000u8,
+    0b0011_0000u8,
+    0b0110_0000u8,
+    0b1100_0000u8,
   ]);
 
   pub const N3: Needle<6> = Needle::new([
-    0b1110_0000u8,
-    0b0111_0000u8,
-    0b0011_1000u8,
-    0b0001_1100u8,
-    0b0000_1110u8,
     0b0000_0111u8,
+    0b0000_1110u8,
+    0b0001_1100u8,
+    0b0011_1000u8,
+    0b0111_0000u8,
+    0b1110_0000u8,
   ]);
 
   pub const N4: Needle<5> = Needle::new([
-    0b1111_0000u8,
-    0b0111_1000u8,
-    0b0011_1100u8,
-    0b0001_1110u8,
     0b0000_1111u8,
+    0b0001_1110u8,
+    0b0011_1100u8,
+    0b0111_1000u8,
+    0b1111_0000u8,
   ]);
 
   pub const N5: Needle<4> =
-    Needle::new([0b1111_1000u8, 0b0111_1100u8, 0b0011_1110u8, 0b0001_1111u8]);
-  pub const N6: Needle<3> = Needle::new([0b1111_1100u8, 0b0111_1110u8, 0b0011_1111u8]);
+    Needle::new([0b0001_1111u8, 0b0011_1110u8, 0b0111_1100u8, 0b1111_1000u8]);
+  pub const N6: Needle<3> = Needle::new([0b0011_1111u8, 0b0111_1110u8, 0b1111_1100u8 ]);
 
   // I’ve killed worse than you on my way to real problems - Commander Shepard
-  pub const N7: Needle<2> = Needle::new([0b1111_1110u8, 0b0111_1111u8]);
+  pub const N7: Needle<2> = Needle::new([0b0111_1111u8, 0b1111_1110u8]);
 
   pub const N8: Needle<1> = Needle::new([0b1111_1111u8]);
 
-  pub struct SingleEnded {
+  pub struct EitherEnd {
     left: u8,
     right: u8,
   }
 
-  impl SingleEnded {
-    pub const fn new(left: u8, right: u8) -> SingleEnded {
-      SingleEnded { left, right }
+  impl EitherEnd {
+    pub const fn new(left: u8, right: u8) -> EitherEnd {
+      EitherEnd { left, right }
     }
 
     #[inline]
@@ -105,21 +107,21 @@ pub mod search {
     }
   }
 
-  pub const SE1: SingleEnded = SingleEnded::new(0b1000_0000u8, 0b0000_0001u8);
-  pub const SE2: SingleEnded = SingleEnded::new(0b1100_0000u8, 0b0000_0011u8);
-  pub const SE3: SingleEnded = SingleEnded::new(0b1110_0000u8, 0b0000_0111u8);
-  pub const SE4: SingleEnded = SingleEnded::new(0b1111_0000u8, 0b0000_1111u8);
-  pub const SE5: SingleEnded = SingleEnded::new(0b1111_1000u8, 0b0001_1111u8);
-  pub const SE6: SingleEnded = SingleEnded::new(0b1111_1100u8, 0b0011_1111u8);
-  pub const SE7: SingleEnded = SingleEnded::new(0b1111_1110u8, 0b0111_1111u8);
+  pub const EE1: EitherEnd = EitherEnd::new(0b1000_0000u8, 0b0000_0001u8);
+  pub const EE2: EitherEnd = EitherEnd::new(0b1100_0000u8, 0b0000_0011u8);
+  pub const EE3: EitherEnd = EitherEnd::new(0b1110_0000u8, 0b0000_0111u8);
+  pub const EE4: EitherEnd = EitherEnd::new(0b1111_0000u8, 0b0000_1111u8);
+  pub const EE5: EitherEnd = EitherEnd::new(0b1111_1000u8, 0b0001_1111u8);
+  pub const EE6: EitherEnd = EitherEnd::new(0b1111_1100u8, 0b0011_1111u8);
+  pub const EE7: EitherEnd = EitherEnd::new(0b1111_1110u8, 0b0111_1111u8);
 
-  pub struct DoubleEnded<const N: usize> {
+  pub struct BothEnds<const N: usize> {
     masks: [(u8, u8); N],
   }
 
-  impl<const N: usize> DoubleEnded<N> {
-    pub const fn new(masks: [(u8, u8); N]) -> DoubleEnded<N> {
-      DoubleEnded { masks }
+  impl<const N: usize> BothEnds<N> {
+    pub const fn new(masks: [(u8, u8); N]) -> BothEnds<N> {
+      BothEnds { masks }
     }
 
     pub fn masks(&self) -> &[(u8, u8); N] {
@@ -137,50 +139,51 @@ pub mod search {
     }
   }
 
-  pub const DE2: DoubleEnded<1> = DoubleEnded::new([(0b1000_0000u8, 0b0000_0001u8)]);
-  pub const DE3: DoubleEnded<2> = DoubleEnded::new([
-    (0b1100_0000u8, 0b0000_0001u8),
+  pub const BE2: BothEnds<1> = BothEnds::new([(0b1000_0000u8, 0b0000_0001u8)]);
+  pub const BE3: BothEnds<2> = BothEnds::new([
     (0b1000_0000u8, 0b0000_0011u8),
+    (0b1100_0000u8, 0b0000_0001u8),
   ]);
 
-  pub const DE4: DoubleEnded<3> = DoubleEnded::new([
-    (0b1110_0000u8, 0b0000_0001u8),
-    (0b1100_0000u8, 0b0000_0011u8),
+  pub const BE4: BothEnds<3> = BothEnds::new([
     (0b1000_0000u8, 0b0000_0111u8),
+    (0b1100_0000u8, 0b0000_0011u8),
+    (0b1110_0000u8, 0b0000_0001u8),
   ]);
 
-  pub const DE5: DoubleEnded<4> = DoubleEnded::new([
-    (0b1111_0000u8, 0b0000_0001u8),
-    (0b1110_0000u8, 0b0000_0011u8),
-    (0b1100_0000u8, 0b0000_0111u8),
+  pub const BE5: BothEnds<4> = BothEnds::new([
     (0b1000_0000u8, 0b0000_1111u8),
+    (0b1100_0000u8, 0b0000_0111u8),
+    (0b1110_0000u8, 0b0000_0011u8),
+    (0b1111_0000u8, 0b0000_0001u8),
   ]);
 
-  pub const DE6: DoubleEnded<5> = DoubleEnded::new([
-    (0b1111_1000u8, 0b0000_0001u8),
-    (0b1111_0000u8, 0b0000_0011u8),
-    (0b1110_0000u8, 0b0000_0111u8),
-    (0b1100_0000u8, 0b0000_1111u8),
+  pub const BE6: BothEnds<5> = BothEnds::new([
     (0b1000_0000u8, 0b0001_1111u8),
+    (0b1100_0000u8, 0b0000_1111u8),
+    (0b1110_0000u8, 0b0000_0111u8),
+    (0b1111_0000u8, 0b0000_0011u8),
+    (0b1111_1000u8, 0b0000_0001u8),
+
   ]);
 
-  pub const DE7: DoubleEnded<6> = DoubleEnded::new([
-    (0b1111_1100u8, 0b0000_0001u8),
-    (0b1111_1000u8, 0b0000_0011u8),
-    (0b1111_0000u8, 0b0000_0111u8),
-    (0b1110_0000u8, 0b0000_1111u8),
-    (0b1100_0000u8, 0b0001_1111u8),
+  pub const BE7: BothEnds<6> = BothEnds::new([
     (0b1000_0000u8, 0b0011_1111u8),
+    (0b1100_0000u8, 0b0001_1111u8),
+    (0b1110_0000u8, 0b0000_1111u8),
+    (0b1111_0000u8, 0b0000_0111u8),
+    (0b1111_1000u8, 0b0000_0011u8),
+    (0b1111_1100u8, 0b0000_0001u8),
   ]);
 
-  pub const DE8: DoubleEnded<7> = DoubleEnded::new([
-    (0b1111_1110u8, 0b0000_0001u8),
-    (0b1111_1100u8, 0b0000_0011u8),
-    (0b1111_1000u8, 0b0000_0111u8),
-    (0b1111_0000u8, 0b0000_1111u8),
-    (0b1110_0000u8, 0b0001_1111u8),
-    (0b1100_0000u8, 0b0011_1111u8),
+  pub const BE8: BothEnds<7> = BothEnds::new([
     (0b1000_0000u8, 0b0111_1111u8),
+    (0b1100_0000u8, 0b0011_1111u8),
+    (0b1110_0000u8, 0b0001_1111u8),
+    (0b1111_0000u8, 0b0000_1111u8),
+    (0b1111_1000u8, 0b0000_0111u8),
+    (0b1111_1100u8, 0b0000_0011u8),
+    (0b1111_1110u8, 0b0000_0001u8),
   ]);
 
   #[cfg(test)]
@@ -214,45 +217,45 @@ pub mod search {
 
     #[test]
     fn count_single_ended() {
-      assert_eq!(1, SE1.left().count_ones());
-      assert_eq!(1, SE1.right().count_ones());
-      assert_eq!(2, SE2.left().count_ones());
-      assert_eq!(2, SE2.right().count_ones());
-      assert_eq!(3, SE3.left().count_ones());
-      assert_eq!(3, SE3.right().count_ones());
-      assert_eq!(4, SE4.left().count_ones());
-      assert_eq!(4, SE4.right().count_ones());
-      assert_eq!(5, SE5.left().count_ones());
-      assert_eq!(5, SE5.right().count_ones());
-      assert_eq!(6, SE6.left().count_ones());
-      assert_eq!(6, SE6.right().count_ones());
-      assert_eq!(7, SE7.left().count_ones());
-      assert_eq!(7, SE7.right().count_ones());
+      assert_eq!(1, EE1.left().count_ones());
+      assert_eq!(1, EE1.right().count_ones());
+      assert_eq!(2, EE2.left().count_ones());
+      assert_eq!(2, EE2.right().count_ones());
+      assert_eq!(3, EE3.left().count_ones());
+      assert_eq!(3, EE3.right().count_ones());
+      assert_eq!(4, EE4.left().count_ones());
+      assert_eq!(4, EE4.right().count_ones());
+      assert_eq!(5, EE5.left().count_ones());
+      assert_eq!(5, EE5.right().count_ones());
+      assert_eq!(6, EE6.left().count_ones());
+      assert_eq!(6, EE6.right().count_ones());
+      assert_eq!(7, EE7.left().count_ones());
+      assert_eq!(7, EE7.right().count_ones());
     }
 
     #[test]
     fn count_double_ended() {
-      DE3
+      BE3
         .masks()
         .iter()
         .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 3);
-      DE4
+      BE4
         .masks()
         .iter()
         .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 4);
-      DE5
+      BE5
         .masks()
         .iter()
         .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 5);
-      DE6
+      BE6
         .masks()
         .iter()
         .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 6);
-      DE7
+      BE7
         .masks()
         .iter()
         .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 7);
-      DE8
+      BE8
         .masks()
         .iter()
         .all(|(l_mask, r_mask)| (l_mask.count_ones() + r_mask.count_ones()) == 8);
@@ -508,6 +511,8 @@ impl FreePageStore {
   }
 
   pub fn find_near<T: Into<PageId>>(&self, page_id: T, len: usize) -> Option<FreePageId> {
+    let page_id = page_id.into();
+    let pool = ThreadPoolBuilder::default().build().unwrap();
     assert_ne!(len, 0);
     match (len / 8, (len % 8) as u8) {
       (0, n) => match n {
@@ -659,12 +664,11 @@ impl<'a, F: FnMut((usize, &'a LotPage)) -> LotPageIter<'a>> FreePageRangeIter<'a
 
 #[cfg(test)]
 mod test {
-  use crate::freelist::search::{DE2, N2, N8};
+  use crate::freelist::search::{BE2, N2, N8};
   use crate::freelist::{FreePageStore, FreelistManager, LotIndex};
   use bbolt_engine::common::bitset::BitSet;
-  use bbolt_engine::common::ids::FreePageId;
+  use bbolt_engine::common::ids::{FreePageId, PageId};
   use itertools::{izip, rev, Itertools};
-  use smallvec::{smallvec, SmallVec};
 
   #[derive(Debug, Copy, Clone)]
   pub enum FindResult {
@@ -832,7 +836,7 @@ mod test {
       .rev()
       .tuple_windows()
       .map(|(r, l)| (l, r))
-      .filter(|((_, l), (_, r))| DE2.eq_mask()(*l, *r))
+      .filter(|((_, l), (_, r))| BE2.eq_mask()(*l, *r))
       .next()
     {
       println!("{:?}", i);
@@ -848,5 +852,13 @@ mod test {
       let u = lot_index[i];
       println!("{:#010b}", u);
     }
+  }
+
+  #[test]
+  fn test_search() {
+    let mut store = FreePageStore::with_claimed_pages(4096, 4);
+    store.free(FreePageId::of(159));
+    store.free(FreePageId::of((4096*3) + 159));
+    let r = store.find_near(PageId::of(100), 1);
   }
 }

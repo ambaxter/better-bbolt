@@ -148,7 +148,7 @@ impl BMByte {
   /// Create a `BMByte` instance from a pattern (the needle).
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   /// ```
@@ -170,7 +170,7 @@ impl BMByte {
   /// Find and return the positions of all matched sub-sequences in any text (the haystack).
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
@@ -183,7 +183,7 @@ impl BMByte {
   /// Find and return the positions of matched sub-sequences in any text (the haystack). If the `limit` is set to `0`, all sub-sequences will be found.
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
@@ -203,7 +203,7 @@ impl BMByte {
   /// Find and return the positions of all matched sub-sequences in any text (the haystack) from its tail to its head.
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
@@ -221,7 +221,7 @@ impl BMByte {
   /// Find and return the positions of matched sub-sequences in any text (the haystack) from its tail to its head. If the `limit` is set to `0`, all sub-sequences will be found.
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
@@ -404,7 +404,7 @@ impl BMByte {
   /// Find and return the positions of all matched sub-sequences in any text (the haystack) but not including the overlap.
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
@@ -417,7 +417,7 @@ impl BMByte {
   /// Find and return the position of the first matched sub-sequence in any text (the haystack).
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
@@ -432,7 +432,7 @@ impl BMByte {
   /// Find and return the positions of matched sub-sequences in any text (the haystack) but not including the overlap. If the `limit` is set to `0`, all sub-sequences will be found.
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
@@ -452,7 +452,7 @@ impl BMByte {
   /// Find and return the positions of all matched sub-sequences in any text (the haystack) but not including the overlap from its tail to its head.
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
@@ -470,7 +470,7 @@ impl BMByte {
   /// Find and return the position of the first matched sub-sequence in any text (the haystack) from its tail to its head.
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
@@ -490,7 +490,7 @@ impl BMByte {
   /// Find and return the positions of matched sub-sequences in any text (the haystack) but not including the overlap from its tail to its head. If the `limit` is set to `0`, all sub-sequences will be found.
   ///
   /// ```
-  /// use bbolt_boyer_moore_magiclen::BMByte;
+  /// use boyer_moore_magiclen::BMByte;
   ///
   /// let bmb = BMByte::from("oocoo").unwrap();
   ///
