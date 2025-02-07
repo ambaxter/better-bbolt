@@ -1,10 +1,11 @@
 use crate::freelist::search::masks::{EndMaskTest, GetLotOffset};
-use bbolt_engine::common::ids::{LotOffset};
+use bbolt_engine::common::ids::LotOffset;
 use std::iter::{repeat_n, RepeatN};
 use std::ops::Index;
 
 pub mod masks {
   use bbolt_engine::common::ids::LotOffset;
+  use itertools::izip;
 
   pub trait GetLotOffset {
     fn high_offset(self) -> LotOffset;
@@ -91,58 +92,84 @@ pub mod masks {
   pub const EE6: (u8, u8) = (0b1111_1100u8, 0b0011_1111u8);
   pub const EE7: (u8, u8) = (0b1111_1110u8, 0b0111_1111u8);
 
-  pub const BE2: [(u8, u8); 1] = [(0b1000_0000u8, 0b0000_0001u8)];
+  pub const BE2: ([u8; 1], [u8; 1]) = ([0b1000_0000u8], [0b0000_0001u8]);
 
-  pub const BE3: [(u8, u8); 2] = [
-    (0b1100_0000u8, 0b0000_0001u8),
-    (0b1000_0000u8, 0b0000_0011u8),
-  ];
+  pub const BE3: ([u8; 2], [u8; 2]) = (
+    [0b1100_0000u8, 0b1000_0000u8],
+    [0b0000_0001u8, 0b0000_0011u8],
+  );
 
-  pub const BE4: [(u8, u8); 3] = [
-    (0b1110_0000u8, 0b0000_0001u8),
-    (0b1100_0000u8, 0b0000_0011u8),
-    (0b1000_0000u8, 0b0000_0111u8),
-  ];
+  pub const BE4: ([u8; 3], [u8; 3]) = (
+    [0b1110_0000u8, 0b1100_0000u8, 0b1000_0000u8],
+    [0b0000_0001u8, 0b0000_0011u8, 0b0000_0111u8],
+  );
 
-  pub const BE5: [(u8, u8); 4] = [
-    (0b1111_0000u8, 0b0000_0001u8),
-    (0b1110_0000u8, 0b0000_0011u8),
-    (0b1100_0000u8, 0b0000_0111u8),
-    (0b1000_0000u8, 0b0000_1111u8),
-  ];
+  pub const BE5: ([u8; 4], [u8; 4]) = (
+    [0b1111_0000u8, 0b1110_0000u8, 0b1100_0000u8, 0b1000_0000u8],
+    [0b0000_0001u8, 0b0000_0011u8, 0b0000_0111u8, 0b0000_1111u8],
+  );
 
-  pub const BE6: [(u8, u8); 5] = [
-    (0b1111_1000u8, 0b0000_0001u8),
-    (0b1111_0000u8, 0b0000_0011u8),
-    (0b1110_0000u8, 0b0000_0111u8),
-    (0b1100_0000u8, 0b0000_1111u8),
-    (0b1000_0000u8, 0b0001_1111u8),
-  ];
+  pub const BE6: ([u8; 5], [u8; 5]) = (
+    [
+      0b1111_1000u8,
+      0b1111_0000u8,
+      0b1110_0000u8,
+      0b1100_0000u8,
+      0b1000_0000u8,
+    ],
+    [
+      0b0000_0001u8,
+      0b0000_0011u8,
+      0b0000_0111u8,
+      0b0000_1111u8,
+      0b0001_1111u8,
+    ],
+  );
 
-  pub const BE7: [(u8, u8); 6] = [
-    (0b1111_1100u8, 0b0000_0001u8),
-    (0b1111_1000u8, 0b0000_0011u8),
-    (0b1111_0000u8, 0b0000_0111u8),
-    (0b1110_0000u8, 0b0000_1111u8),
-    (0b1100_0000u8, 0b0001_1111u8),
-    (0b1000_0000u8, 0b0011_1111u8),
-  ];
+  pub const BE7: ([u8; 6], [u8; 6]) = (
+    [
+      0b1111_1100u8,
+      0b1111_1000u8,
+      0b1111_0000u8,
+      0b1110_0000u8,
+      0b1100_0000u8,
+      0b1000_0000u8,
+    ],
+    [
+      0b0000_0001u8,
+      0b0000_0011u8,
+      0b0000_0111u8,
+      0b0000_1111u8,
+      0b0001_1111u8,
+      0b0011_1111u8,
+    ],
+  );
 
-  pub const BE8: [(u8, u8); 7] = [
-    (0b1111_1110u8, 0b0000_0001u8),
-    (0b1111_1100u8, 0b0000_0011u8),
-    (0b1111_1000u8, 0b0000_0111u8),
-    (0b1111_0000u8, 0b0000_1111u8),
-    (0b1110_0000u8, 0b0001_1111u8),
-    (0b1100_0000u8, 0b0011_1111u8),
-    (0b1000_0000u8, 0b0111_1111u8),
-  ];
-
+  pub const BE8: ([u8; 7], [u8; 7]) = (
+    [
+      0b1111_1110u8,
+      0b1111_1100u8,
+      0b1111_1000u8,
+      0b1111_0000u8,
+      0b1110_0000u8,
+      0b1100_0000u8,
+      0b1000_0000u8,
+    ],
+    [
+      0b0000_0001u8,
+      0b0000_0011u8,
+      0b0000_0111u8,
+      0b0000_1111u8,
+      0b0001_1111u8,
+      0b0011_1111u8,
+      0b1111_1110u8,
+    ],
+  );
 
   #[derive(Clone, Copy)]
   pub enum EndMaskTest<const N: usize> {
     Either(u8, u8),
-    Both([(u8, u8); N]),
+    Both(([u8; N], [u8; N])),
   }
 
   impl EndMaskTest<0> {
@@ -151,33 +178,37 @@ pub mod masks {
     }
   }
   impl<const N: usize> EndMaskTest<N> {
-    pub fn new_both(masks: [(u8, u8); N]) -> EndMaskTest<N> {
+    pub fn new_both(masks: ([u8; N], [u8; N])) -> EndMaskTest<N> {
       Self::Both(masks)
     }
 
-    pub fn find_match(&self, ends: (Option<(usize, u8)>, Option<u8>)) -> Option<(usize, LotOffset)> {
+    pub fn find_match(
+      &self, ends: (Option<(usize, u8)>, Option<u8>),
+    ) -> Option<(usize, LotOffset)> {
       let (l, r) = ends;
       match (l, r, self) {
-        (Some((l_idx, l_byte)), _, EndMaskTest::Either(l_mask, _)) if *l_mask & l_byte == *l_mask => {
+        (Some((l_idx, l_byte)), _, EndMaskTest::Either(l_mask, _))
+          if *l_mask & l_byte == *l_mask =>
+        {
           Some((l_idx, l_mask.high_offset()))
         }
         (Some((l_idx, _)), Some(r_byte), EndMaskTest::Either(_, r_mask))
-        if *r_mask & r_byte == *r_mask =>
-          {
-            Some((l_idx + 1, LotOffset(0)))
-          }
-        (Some((l_idx, l_byte)), Some(r_byte), EndMaskTest::Both(masks)) => masks
-          .iter()
-          .enumerate()
-          .filter_map(|(idx, &(l_mask, r_mask))| {
-            if (l_byte & l_mask) == l_mask && (r_byte & r_mask) == r_mask {
-              Some(l_mask.high_offset())
-            } else {
-              None
-            }
-          })
-          .next()
-          .map(|offset| (l_idx, offset)),
+          if *r_mask & r_byte == *r_mask =>
+        {
+          Some((l_idx + 1, LotOffset(0)))
+        }
+        (Some((l_idx, l_byte)), Some(r_byte), EndMaskTest::Both((l_masks, r_masks))) => {
+          izip!(l_masks, r_masks)
+            .filter_map(|(&l_mask, &r_mask)| {
+              if (l_byte & l_mask) == l_mask && (r_byte & r_mask) == r_mask {
+                Some(l_mask.high_offset())
+              } else {
+                None
+              }
+            })
+            .next()
+            .map(|offset| (l_idx, offset))
+        }
         _ => None,
       }
     }
@@ -358,13 +389,13 @@ where
 
 #[cfg(test)]
 mod tests {
-  use crate::freelist::search::masks::EE2;
-  use crate::freelist::search::{EndMaskTest, SearchPattern};
+  use crate::freelist::search::masks::{EndMaskTest, EE1};
+  use crate::freelist::search::SearchPattern;
 
   #[test]
   pub fn test() {
-    let mask_test = EndMaskTest::new_either(EE2);
-    let v = vec![u8::MAX; 16];
+    let mask_test = EndMaskTest::new_either(EE1);
+    let v = vec![0; 16];
     let midpoint = 8usize;
     let pattern_len = 3;
     let s = SearchPattern::new(&v, midpoint, pattern_len);
