@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, Sub, SubAssign};
 
 macro_rules! id {
 
@@ -63,6 +63,47 @@ macro_rules! id {
       #[inline(always)]
       fn sub_assign(&mut self, rhs: u64) {
         self.0 -= rhs;
+      }
+    }
+
+
+    impl Add<$x> for $x {
+      type Output = $x;
+
+      #[inline(always)]
+      fn add(self, rhs: $x) -> Self::Output {
+        $x(self.0 + rhs.0)
+      }
+    }
+
+    impl Sub<$x> for $x {
+      type Output = $x;
+
+      #[inline(always)]
+      fn sub(self, rhs: $x) -> Self::Output {
+        $x(self.0 - rhs.0)
+      }
+    }
+
+    impl AddAssign<$x> for $x {
+      #[inline(always)]
+      fn add_assign(&mut self, rhs: $x) {
+        self.0 += rhs.0;
+      }
+    }
+
+    impl SubAssign<$x> for $x {
+      #[inline(always)]
+      fn sub_assign(&mut self, rhs: $x) {
+        self.0 -= rhs.0;
+      }
+    }
+
+    impl Div<u64> for $x {
+      type Output = $x;
+      #[inline(always)]
+      fn div(self, rhs: u64) -> Self::Output {
+        $x(self.0 / rhs)
       }
     }
 
@@ -311,5 +352,36 @@ impl From<BucketPageId> for NodePageId {
   fn from(value: BucketPageId) -> Self {
     assert_ne!(0, value.page_id.0);
     NodePageId::new(PageId::of(value.page_id.0))
+  }
+}
+
+/// PageId / 8
+#[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash)]
+pub struct StoreIndex(pub usize);
+
+/// StoreIndex / page_size
+#[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash)]
+pub struct LotIndex(pub usize);
+
+/// StoreIndex % page_size
+#[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash)]
+pub struct OffsetIndex(pub usize);
+
+/// PageId % 8
+#[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash)]
+pub struct LotOffset(pub u8);
+
+impl PageId {
+  #[inline(always)]
+  pub fn store_lot_and_offset(self) -> (StoreIndex, LotOffset) {
+    let page_id = self.0 as usize;
+    (StoreIndex(page_id / 8), LotOffset((page_id % 8) as u8))
+  }
+}
+
+impl StoreIndex {
+  #[inline(always)]
+  pub fn abs_diff(self, other: StoreIndex) -> usize {
+    self.0.abs_diff(other.0)
   }
 }

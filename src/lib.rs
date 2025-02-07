@@ -3,13 +3,11 @@
 use std::cmp::Ordering;
 use std::iter::FusedIterator;
 
-
-
 pub mod bucket;
-pub mod freelist;
 pub mod tx;
 
 pub mod db;
+pub mod freelist;
 
 pub trait BBoltIterators: Iterator {
   fn overlays<J>(self, orig: J) -> OverlayIter<Self, J>
