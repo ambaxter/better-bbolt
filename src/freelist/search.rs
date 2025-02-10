@@ -1,7 +1,8 @@
-use crate::freelist::search::masks::{EndMaskTest, GetLotOffset};
+use crate::freelist::search::masks::{GetLotOffset, NMask, PairMaskTest};
 use bbolt_engine::common::ids::LotOffset;
+use itertools::Itertools;
 use std::iter::{repeat_n, RepeatN};
-use std::ops::Index;
+use std::ops::{Index, RangeBounds};
 
 pub mod masks {
   use bbolt_engine::common::ids::LotOffset;
@@ -227,26 +228,35 @@ pub mod masks {
       0b0000_1111u8,
       0b0001_1111u8,
       0b0011_1111u8,
-      0b1111_1110u8,
+      0b0111_1111u8,
     ],
   );
 
   // TODO: Would this be better as a trait?
   // Something to test later
   #[derive(Clone, Copy)]
-  pub enum EndMaskTest<const N: usize> {
+  pub enum PairMaskTest<const N: usize> {
     Either(EEMask),
     Both(BEMask<N>),
   }
 
-  impl EndMaskTest<0> {
-    pub fn new_either(either: EEMask) -> EndMaskTest<0> {
+  impl PairMaskTest<0> {
+    pub fn new_either(either: EEMask) -> PairMaskTest<0> {
       Self::Either(either)
     }
   }
-  impl<const N: usize> EndMaskTest<N> {
-    pub fn new_both(both: BEMask<N>) -> EndMaskTest<N> {
+  impl<const N: usize> PairMaskTest<N> {
+    pub fn new_both(both: BEMask<N>) -> PairMaskTest<N> {
       Self::Both(both)
+    }
+
+    pub fn match_bytes_at(
+      &self, l_idx: usize, l_byte: u8, r_byte: u8,
+    ) -> Option<(usize, LotOffset)> {
+      match self {
+        PairMaskTest::Either(either) => either.match_bytes_at(l_idx, l_byte, r_byte),
+        PairMaskTest::Both(both) => both.match_bytes_at(l_idx, l_byte, r_byte),
+      }
     }
 
     pub fn match_ends(
@@ -254,56 +264,103 @@ pub mod masks {
     ) -> Option<(usize, LotOffset)> {
       let (l_end, r_end) = ends;
       match self {
-        EndMaskTest::Either(either) => either.match_ends(l_end, r_end),
-        EndMaskTest::Both(both) => both.match_ends(l_end, r_end),
+        PairMaskTest::Either(either) => either.match_ends(l_end, r_end),
+        PairMaskTest::Both(both) => both.match_ends(l_end, r_end),
       }
+    }
+  }
+
+  impl From<EEMask> for PairMaskTest<0> {
+    #[inline]
+    fn from(value: EEMask) -> Self {
+      PairMaskTest::Either(value)
+    }
+  }
+
+  impl<const N: usize> From<BEMask<N>> for PairMaskTest<N> {
+    #[inline]
+    fn from(value: BEMask<N>) -> Self {
+      PairMaskTest::Both(value)
     }
   }
 
   #[cfg(test)]
   mod tests {
     use super::*;
-    use itertools::Itertools;
+    use itertools::iproduct;
 
-    #[test]
-    fn needle_tests() {
-      let midpoint = 10;
-      let v = vec![255; 16];
-      for i in v[..midpoint].iter().enumerate().rev() {
-        println!("{:?}", i);
+    fn test_needle<const N: usize>(n: NMask<N>) {
+      for i in 0..N {
+        assert_eq!(
+          Some((0, LotOffset(i as u8))),
+          n.match_byte_at(0, 255u8 << i)
+        )
       }
-      println!("next");
-      for i in v[midpoint..]
-        .iter()
-        .enumerate()
-        .map(|(idx, d)| (idx + midpoint, d))
-      {
-        println!("{:?}", i);
+      for i in N..8 {
+        assert_eq!(None, n.match_byte_at(0, 255u8 << i))
       }
     }
 
     #[test]
+    fn needle_tests() {
+      test_needle(N1);
+      test_needle(N2);
+      test_needle(N3);
+      test_needle(N4);
+      test_needle(N5);
+      test_needle(N6);
+      test_needle(N7);
+      test_needle(N8);
+    }
+
+    #[test]
     fn ee_tests() {
-      let midpoint = 10;
-      let v = vec![255; 16];
-      for i in v[..midpoint]
-        .iter()
-        .enumerate()
-        .rev()
-        .tuple_windows::<(_, _)>()
-        .map(|((_, r_byte), (l_idx, l_byte))| ((l_idx, l_byte), r_byte))
-      {
-        println!("{:?}", i);
+      for (i, ee) in izip!((1..8).rev(), [EE1, EE2, EE3, EE4, EE5, EE6, EE7].iter()) {
+        assert_eq!(
+          Some((0, LotOffset(i))),
+          ee.match_bytes_at(0, 255u8 << i, 255u8 >> i)
+        );
+        assert_eq!(Some((1, LotOffset(0))), ee.match_bytes_at(0, 0, 255u8 >> i));
+        assert_eq!(None, ee.match_bytes_at(0, 0, 0));
       }
-      println!("next");
-      for i in v[midpoint..]
-        .iter()
-        .enumerate()
-        .tuple_windows::<(_, _)>()
-        .map(|((l_idx, l_byte), (r_idx, r_byte))| ((l_idx + midpoint, l_byte), r_byte))
-      {
-        println!("{:?}", i);
+    }
+
+    fn be_test_count<const N: usize>(expected: u32, mask: BEMask<N>) {
+      for (l, r) in izip!(mask.0, mask.1) {
+        assert_eq!(expected, l.count_ones() + r.count_ones());
       }
+    }
+
+    fn be_test_mask<const N: usize>(mask: BEMask<N>) {
+      for (i, j) in izip!(8 - N..8, (8 - N..8).rev()) {
+        //println!("Some - {:b} - {:b}", 255u8 << i, 255u8 >> j);
+        assert_eq!(
+          Some((0, LotOffset(i as u8))),
+          mask.match_bytes_at(0, 255u8 << i, 255u8 >> j)
+        );
+        //println!("None - {:b} - {:b}", 255u8 >> i, 255u8 << j);
+        assert_eq!(None, mask.match_bytes_at(0, 255u8 >> i, 255u8 << j));
+        //println!("None - {:b} - {:b}", 255u8 << i, 255u8 << j);
+        assert_eq!(None, mask.match_bytes_at(0, 255u8 << i, 255u8 << j));
+      }
+    }
+
+    #[test]
+    fn be_tests() {
+      be_test_count(2, BE2);
+      be_test_count(3, BE3);
+      be_test_count(4, BE4);
+      be_test_count(5, BE5);
+      be_test_count(6, BE6);
+      be_test_count(7, BE7);
+      be_test_count(8, BE8);
+      be_test_mask(BE2);
+      be_test_mask(BE3);
+      be_test_mask(BE4);
+      be_test_mask(BE5);
+      be_test_mask(BE6);
+      be_test_mask(BE7);
+      be_test_mask(BE8);
     }
   }
 }
@@ -355,23 +412,49 @@ impl LenTrait for Vec<u8> {
   }
 }
 
+pub trait RangedIterator {
+  fn iterate_from(
+    &self, midpoint: usize,
+  ) -> impl Iterator<Item = u8> + Sized + ExactSizeIterator + DoubleEndedIterator;
+  fn iterate_to(
+    &self, midpoint: usize,
+  ) -> impl Iterator<Item = u8> + Sized + ExactSizeIterator + DoubleEndedIterator;
+}
+
+impl RangedIterator for Vec<u8> {
+  fn iterate_from(
+    &self, midpoint: usize,
+  ) -> impl Iterator<Item = u8> + Sized + ExactSizeIterator + DoubleEndedIterator {
+    self[midpoint..].iter().copied()
+  }
+
+  fn iterate_to(
+    &self, midpoint: usize,
+  ) -> impl Iterator<Item = u8> + Sized + ExactSizeIterator + DoubleEndedIterator {
+    self[..midpoint].iter().copied()
+  }
+}
+
 #[derive(Clone, Copy)]
 pub struct SearchPattern<'a, T>
 where
   T: ?Sized,
 {
   store: &'a T,
-  midpoint: usize,
+  goal_lot: usize,
 }
 
 impl<'a, T> SearchPattern<'a, T>
 where
-  T: Index<usize, Output = u8> + LenTrait + ?Sized,
+  T: RangedIterator + Index<usize, Output = u8> + LenTrait + ?Sized,
   &'a T: IntoIterator<Item = &'a u8>,
   <&'a T as IntoIterator>::IntoIter: Sized + DoubleEndedIterator + ExactSizeIterator,
 {
-  pub fn new(store: &'a T, midpoint: usize) -> SearchPattern<'a, T> {
-    SearchPattern { store, midpoint }
+  pub fn new(store: &'a T, goal_lot: usize) -> SearchPattern<'a, T> {
+    SearchPattern {
+      store,
+      goal_lot: goal_lot,
+    }
   }
 
   fn bad_shift_index(free_bytes_len: usize, index: u8) -> usize {
@@ -407,29 +490,73 @@ where
     (l, r)
   }
 
-  pub fn needle_search<const N: usize>(&self) -> Option<(usize, LotOffset)> {
-    self.store[0..self.midpoint].iter().enumerate();
+  pub fn needle_search<const N: usize>(&self, nmask: NMask<N>) -> Option<(usize, LotOffset)> {
+    self
+      .store
+      .iterate_from(self.goal_lot)
+      .enumerate()
+      .map(|(idx, byte)| (idx + self.goal_lot, byte))
+      .filter_map(|(idx, byte)| nmask.match_byte_at(idx, byte))
+      .next()
+  }
 
-    unimplemented!()
+  pub fn needle_rsearch<const N: usize>(&self, nmask: NMask<N>) -> Option<(usize, LotOffset)> {
+    self
+      .store
+      .iterate_to(self.goal_lot)
+      .enumerate()
+      .rev()
+      .map(|(idx, byte)| (idx + self.goal_lot, byte))
+      .filter_map(|(idx, byte)| nmask.match_byte_at(idx, byte))
+      .next()
+  }
+
+  pub fn pair_search<const N: usize>(
+    &self, pair_mask_test: PairMaskTest<N>,
+  ) -> Option<(usize, LotOffset)> {
+    self
+      .store
+      .iterate_from(self.goal_lot)
+      .enumerate()
+      .map(|(idx, byte)| (idx + self.goal_lot, byte))
+      .tuple_windows()
+      .map(|(((l_idx, l_byte), (_, r_byte)))| (l_idx, l_byte, r_byte))
+      .filter_map(|(l_idx, l_byte, r_byte)| pair_mask_test.match_bytes_at(l_idx, l_byte, r_byte))
+      .next()
+  }
+
+  pub fn pair_rsearch<const N: usize>(
+    &self, pair_mask_test: PairMaskTest<N>,
+  ) -> Option<(usize, LotOffset)> {
+    self
+      .store
+      .iterate_to(self.goal_lot)
+      .enumerate()
+      .rev()
+      .map(|(idx, byte)| (idx, byte))
+      .tuple_windows()
+      .map(|(((_, r_byte), (l_idx, l_byte)))| (l_idx, l_byte, r_byte))
+      .filter_map(|(l_idx, l_byte, r_byte)| pair_mask_test.match_bytes_at(l_idx, l_byte, r_byte))
+      .next()
   }
 
   pub fn boyer_moore_magiclen_search<const N: usize>(
-    &self, free_bytes_len: usize, mask_test: EndMaskTest<N>,
+    &self, free_bytes_len: usize, mask_test: PairMaskTest<N>,
   ) -> Option<(usize, LotOffset)> {
     if self.store.len() == 0
       || free_bytes_len == 0
       || self.store.len() < free_bytes_len
-      || self.store.len() < self.midpoint
-      || self.store.len() - self.midpoint < free_bytes_len
+      || self.store.len() < self.goal_lot
+      || self.store.len() - self.goal_lot < free_bytes_len
     {
       return None;
     }
 
-    let pattern_len_dec = free_bytes_len - 1;
+    let free_bytes_len_dec = free_bytes_len - 1;
 
     let last_pattern_char = u8::MAX;
 
-    let mut shift = self.midpoint - free_bytes_len;
+    let mut shift = self.goal_lot - free_bytes_len;
 
     let end_index = self.store.len() - free_bytes_len;
 
@@ -440,8 +567,8 @@ where
           if p == self.store.len() {
             break 'outer;
           }
-          shift +=
-            Self::bad_shift_index(free_bytes_len, self.store[shift + pattern_len_dec]).max({
+          shift += Self::bad_shift_index(free_bytes_len, self.store[shift + free_bytes_len_dec])
+            .max({
               let c = self.store[p];
               if c == last_pattern_char {
                 1
@@ -480,21 +607,98 @@ where
 
     None
   }
+
+  pub fn boyer_moore_magiclen_rsearch<const N: usize>(
+    &self, free_bytes_len: usize, mask_test: PairMaskTest<N>,
+  ) -> Option<(usize, LotOffset)> {
+    if self.store.len() == 0
+      || free_bytes_len == 0
+      || self.store.len() < free_bytes_len
+      || self.store.len() < self.goal_lot
+      || self.store.len() - self.goal_lot < free_bytes_len
+    {
+      return None;
+    }
+
+    let free_bytes_len_dec = free_bytes_len - 1;
+
+    let last_pattern_char = u8::MAX;
+
+    let mut shift = self.store.len() - 1;
+
+    let start_index = free_bytes_len_dec;
+
+    'outer: loop {
+      for (i, pc) in Self::repeat_iter(free_bytes_len).enumerate() {
+        if self.store[shift - free_bytes_len_dec + i] != pc {
+          let p = shift + free_bytes_len;
+          if shift < free_bytes_len {
+            break 'outer;
+          }
+          let s = Self::bad_shift_index(free_bytes_len, self.store[shift - free_bytes_len_dec])
+            .max({
+              let c = self.store[shift - free_bytes_len];
+
+              if c == last_pattern_char {
+                1
+              } else {
+                Self::bad_shift_index(free_bytes_len, c) + 1
+              }
+            });
+          if shift < s {
+            break 'outer;
+          }
+          shift -= s;
+          if shift < start_index {
+            break 'outer;
+          }
+          continue 'outer;
+        }
+      }
+      let mut in_run = false;
+      while shift > 0 && self.store[shift - free_bytes_len] == u8::MAX {
+        in_run = true;
+        shift -= 1;
+      }
+      // test to see if the ends match
+      let ends_match = {
+        let mut end_match = mask_test.match_ends(self.get_ends(free_bytes_len, shift));
+        if end_match.is_none() && in_run {
+          end_match = mask_test.match_ends(self.get_ends(free_bytes_len, shift + 1));
+        }
+        end_match
+      };
+      if ends_match.is_some() {
+        return ends_match;
+      } else if shift > 0 {
+        shift -= 1;
+        continue;
+      } else if shift <= start_index {
+        break;
+      }
+
+      shift -= free_bytes_len;
+      if shift < start_index {
+        break;
+      }
+    }
+
+    None
+  }
 }
 
 #[cfg(test)]
 mod tests {
-  use crate::freelist::search::masks::{EndMaskTest, EE1};
+  use crate::freelist::search::masks::{PairMaskTest, EE1};
   use crate::freelist::search::SearchPattern;
 
   #[test]
   pub fn test() {
-    let mask_test = EndMaskTest::new_either(EE1);
     let v = vec![u8::MAX; 16];
     let midpoint = 8usize;
     let free_bytes_len = 3;
     let s = SearchPattern::new(&v, midpoint);
-    let o = s.boyer_moore_magiclen_search(free_bytes_len, mask_test);
+    let o = s.boyer_moore_magiclen_search(free_bytes_len, EE1.into());
     println!("{:?}", o);
   }
 }
