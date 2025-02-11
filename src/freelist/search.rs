@@ -399,15 +399,15 @@ pub trait LenTrait {
   fn len(&self) -> usize;
 }
 
-impl LenTrait for Vec<u8> {
+impl<T> LenTrait for T where T: AsRef<[u8]> {
   #[inline]
   fn is_empty(&self) -> bool {
-    self.is_empty()
+    self.as_ref().is_empty()
   }
 
   #[inline]
   fn len(&self) -> usize {
-    self.len()
+    self.as_ref().len()
   }
 }
 
@@ -420,17 +420,13 @@ pub trait RangedIterator {
   ) -> impl Iterator<Item = u8> + Sized + ExactSizeIterator + DoubleEndedIterator;
 }
 
-impl RangedIterator for Vec<u8> {
-  fn iterate_from(
-    &self, midpoint: usize,
-  ) -> impl Iterator<Item = u8> + Sized + ExactSizeIterator + DoubleEndedIterator {
-    self[midpoint..].iter().copied()
+impl<T> RangedIterator for T where T: AsRef<[u8]> {
+  fn iterate_from(&self, midpoint: usize) -> impl Iterator<Item=u8> + Sized + ExactSizeIterator + DoubleEndedIterator {
+    self.as_ref()[midpoint..].iter().copied()
   }
 
-  fn iterate_to(
-    &self, midpoint: usize,
-  ) -> impl Iterator<Item = u8> + Sized + ExactSizeIterator + DoubleEndedIterator {
-    self[..midpoint].iter().copied()
+  fn iterate_to(&self, midpoint: usize) -> impl Iterator<Item=u8> + Sized + ExactSizeIterator + DoubleEndedIterator {
+    self.as_ref()[..midpoint].iter().copied()
   }
 }
 
@@ -591,16 +587,23 @@ where
         let mut end_match = mask_test.match_ends(self.get_ends(free_bytes_len, shift));
         if end_match.is_none() && in_run {
           end_match = mask_test.match_ends(self.get_ends(free_bytes_len, shift + 1));
-          if end_match.is_some() {
-            shift += 1;
-          }
         }
         end_match
       };
       if ends_match.is_some() {
         return ends_match;
       }
-      shift += 1;
+
+      if shift == end_index {
+        break;
+      }
+
+
+      shift += free_bytes_len;
+
+      if shift > end_index {
+        break;
+      }
       continue;
     }
 
@@ -621,16 +624,15 @@ where
 
     let free_bytes_len_dec = free_bytes_len - 1;
 
-    let last_pattern_char = u8::MAX;
+    let first_pattern_char = u8::MAX;
 
-    let mut shift = self.store.len() - 1;
+    let mut shift = self.goal_lot + free_bytes_len;
 
     let start_index = free_bytes_len_dec;
 
     'outer: loop {
       for (i, pc) in Self::repeat_iter(free_bytes_len).enumerate() {
         if self.store[shift - free_bytes_len_dec + i] != pc {
-          let p = shift + free_bytes_len;
           if shift < free_bytes_len {
             break 'outer;
           }
@@ -638,7 +640,7 @@ where
             .max({
               let c = self.store[shift - free_bytes_len];
 
-              if c == last_pattern_char {
+              if c == first_pattern_char {
                 1
               } else {
                 Self::bad_shift_index(free_bytes_len, c) + 1
@@ -669,12 +671,12 @@ where
       };
       if ends_match.is_some() {
         return ends_match;
-      } else if shift > 0 {
-        shift -= 1;
-        continue;
-      } else if shift <= start_index {
+      }
+
+      if shift <= start_index {
         break;
       }
+
 
       shift -= free_bytes_len;
       if shift < start_index {
@@ -699,5 +701,18 @@ mod tests {
     let s = SearchPattern::new(&v, midpoint);
     let o = s.boyer_moore_magiclen_rsearch(free_bytes_len, BE8.into());
     println!("{:?}", o);
+  }
+
+  #[test]
+  pub fn test2() {
+    let mut v = [0b1111_1110u8, 255, 255, 255, 0b0000_0001u8, 0, 0, 0, 0, 0, 0, 0 ,0 , 0, 0, 0 ];
+    let midpoint = 3;
+    let free_bytes_len = 3;
+    for _ in 0..16 {
+      let s = SearchPattern::new(&v, midpoint);
+      let o = s.boyer_moore_magiclen_rsearch(free_bytes_len, BE8.into());
+      println!("{:?}", o);
+      v.rotate_right(1);
+    }
   }
 }
