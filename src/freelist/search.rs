@@ -287,7 +287,6 @@ pub mod masks {
   #[cfg(test)]
   mod tests {
     use super::*;
-    use itertools::iproduct;
 
     fn test_needle<const N: usize>(n: NMask<N>) {
       for i in 0..N {
@@ -453,7 +452,7 @@ where
   pub fn new(store: &'a T, goal_lot: usize) -> SearchPattern<'a, T> {
     SearchPattern {
       store,
-      goal_lot: goal_lot,
+      goal_lot,
     }
   }
 
@@ -656,7 +655,7 @@ where
         }
       }
       let mut in_run = false;
-      while shift > 0 && self.store[shift - free_bytes_len] == u8::MAX {
+      while shift > 0 && self.store[shift - 1] == u8::MAX {
         in_run = true;
         shift -= 1;
       }
@@ -689,7 +688,7 @@ where
 
 #[cfg(test)]
 mod tests {
-  use crate::freelist::search::masks::{PairMaskTest, EE1};
+  use crate::freelist::search::masks::BE8;
   use crate::freelist::search::SearchPattern;
 
   #[test]
@@ -698,7 +697,7 @@ mod tests {
     let midpoint = 8usize;
     let free_bytes_len = 3;
     let s = SearchPattern::new(&v, midpoint);
-    let o = s.boyer_moore_magiclen_search(free_bytes_len, EE1.into());
+    let o = s.boyer_moore_magiclen_rsearch(free_bytes_len, BE8.into());
     println!("{:?}", o);
   }
 }
