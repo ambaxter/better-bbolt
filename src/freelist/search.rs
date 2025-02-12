@@ -402,7 +402,10 @@ pub trait LenTrait {
   fn len(&self) -> usize;
 }
 
-impl<T> LenTrait for T where T: AsRef<[u8]> {
+impl<T> LenTrait for T
+where
+  T: AsRef<[u8]>,
+{
   #[inline]
   fn is_empty(&self) -> bool {
     self.as_ref().is_empty()
@@ -423,12 +426,19 @@ pub trait RangedIterator {
   ) -> impl Iterator<Item = u8> + Sized + ExactSizeIterator + DoubleEndedIterator;
 }
 
-impl<T> RangedIterator for T where T: AsRef<[u8]> {
-  fn iterate_from(&self, midpoint: usize) -> impl Iterator<Item=u8> + Sized + ExactSizeIterator + DoubleEndedIterator {
+impl<T> RangedIterator for T
+where
+  T: AsRef<[u8]>,
+{
+  fn iterate_from(
+    &self, midpoint: usize,
+  ) -> impl Iterator<Item = u8> + Sized + ExactSizeIterator + DoubleEndedIterator {
     self.as_ref()[midpoint..].iter().copied()
   }
 
-  fn iterate_to(&self, midpoint: usize) -> impl Iterator<Item=u8> + Sized + ExactSizeIterator + DoubleEndedIterator {
+  fn iterate_to(
+    &self, midpoint: usize,
+  ) -> impl Iterator<Item = u8> + Sized + ExactSizeIterator + DoubleEndedIterator {
     self.as_ref()[..midpoint].iter().copied()
   }
 }
@@ -449,10 +459,7 @@ where
   <&'a T as IntoIterator>::IntoIter: Sized + DoubleEndedIterator + ExactSizeIterator,
 {
   pub fn new(store: &'a T, goal_lot: usize) -> SearchPattern<'a, T> {
-    SearchPattern {
-      store,
-      goal_lot,
-    }
+    SearchPattern { store, goal_lot }
   }
 
   fn bad_shift_index(free_bytes_len: usize, index: u8) -> usize {
@@ -605,7 +612,6 @@ where
         break;
       }
 
-
       shift += free_bytes_len;
 
       if shift > end_index {
@@ -686,7 +692,6 @@ where
         break;
       }
 
-
       shift -= free_bytes_len;
       if shift < start_index {
         break;
@@ -714,7 +719,24 @@ mod tests {
 
   #[test]
   pub fn test_fwd() {
-    let mut v = [0b1111_1110u8, 255, 255, 255, 0b0000_0001u8, 0, 0, 0, 0, 0, 0, 0 ,0 , 0, 0, 0 ];
+    let mut v = [
+      0b1111_1110u8,
+      255,
+      255,
+      255,
+      0b0000_0001u8,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+    ];
     let free_bytes_len = 3;
     for midpoint in 0..16 {
       for i in 0..16 {
@@ -728,7 +750,24 @@ mod tests {
 
   #[test]
   pub fn test_rev() {
-    let mut v = [0b1111_1110u8, 255, 255, 255, 0b0000_0001u8, 0, 0, 0, 0, 0, 0, 0 ,0 , 0, 0, 0 ];
+    let mut v = [
+      0b1111_1110u8,
+      255,
+      255,
+      255,
+      0b0000_0001u8,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+    ];
     let free_bytes_len = 3;
     for midpoint in 0..16 {
       for i in 0..16 {

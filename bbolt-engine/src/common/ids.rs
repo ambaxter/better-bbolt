@@ -357,15 +357,7 @@ impl From<BucketPageId> for NodePageId {
 
 /// PageId / 8
 #[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash)]
-pub struct StoreIndex(pub usize);
-
-/// StoreIndex / page_size
-#[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash)]
 pub struct LotIndex(pub usize);
-
-/// StoreIndex % page_size
-#[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash)]
-pub struct OffsetIndex(pub usize);
 
 /// PageId % 8
 #[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash)]
@@ -373,15 +365,15 @@ pub struct LotOffset(pub u8);
 
 impl PageId {
   #[inline(always)]
-  pub fn store_lot_and_offset(self) -> (StoreIndex, LotOffset) {
+  pub fn store_lot_and_offset(self) -> (LotIndex, LotOffset) {
     let page_id = self.0 as usize;
-    (StoreIndex(page_id / 8), LotOffset((page_id % 8) as u8))
+    (LotIndex(page_id / 8), LotOffset((page_id % 8) as u8))
   }
 }
 
-impl StoreIndex {
+impl LotIndex {
   #[inline(always)]
-  pub fn abs_diff(self, other: StoreIndex) -> usize {
+  pub fn abs_diff(self, other: LotIndex) -> usize {
     self.0.abs_diff(other.0)
   }
 }

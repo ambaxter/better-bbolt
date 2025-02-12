@@ -1,4 +1,4 @@
-use bbolt_engine::common::ids::{LotOffset, StoreIndex};
+use bbolt_engine::common::ids::{LotIndex, LotOffset};
 use std::cmp::Ordering;
 
 pub mod freelist;
@@ -6,24 +6,24 @@ pub mod search;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct SearchResult {
-  pub idx: StoreIndex,
+  pub idx: LotIndex,
   pub offset: LotOffset,
 }
 
 impl SearchResult {
-  pub fn new(idx: StoreIndex, offset: LotOffset) -> Self {
+  pub fn new(idx: LotIndex, offset: LotOffset) -> Self {
     SearchResult { idx, offset }
   }
 }
 
 #[derive(Debug, Clone)]
 pub struct SearchStore {
-  pub goal_idx: StoreIndex,
+  pub goal_idx: LotIndex,
   pub best: Option<SearchResult>,
 }
 
 impl SearchStore {
-  fn new(goal_idx: StoreIndex) -> Self {
+  fn new(goal_idx: LotIndex) -> Self {
     SearchStore {
       goal_idx,
       best: None,
