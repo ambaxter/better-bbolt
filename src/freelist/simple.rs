@@ -1,36 +1,46 @@
-use bbolt_engine::common::bitset::BitSet;
-use bbolt_engine::common::ids::{EOFPageId, FreePageId, LotIndex, LotOffset, PageId};
 use crate::freelist::SearchStore;
+use bbolt_engine::common::bitset::BitSet;
+use bbolt_engine::common::ids::{EOFPageId, FreePageId, GetPageId, LotIndex, LotOffset, PageId};
 
-pub struct SimpleFreePageStore {
+pub struct SimpleFreePages {
   page_size: usize,
   eof: EOFPageId,
   store: Vec<u8>,
 }
 
-impl SimpleFreePageStore {
-  pub fn new(page_size: usize, eof: EOFPageId) -> SimpleFreePageStore {
-    SimpleFreePageStore {
+impl SimpleFreePages {
+  pub fn new(page_size: usize, eof: EOFPageId) -> SimpleFreePages {
+    SimpleFreePages {
       page_size,
       eof,
       store: Vec::new(),
     }
   }
 
-  pub fn with_free_pages(page_size: usize, eof: EOFPageId , lot_count: usize) -> SimpleFreePageStore {
+  pub fn with_free_pages(page_size: usize, eof: EOFPageId) -> SimpleFreePages {
+    let lot_count = (eof.page_id().0 - 1) as usize;
     let mut store = vec![u8::MAX; lot_count];
-    SimpleFreePageStore { page_size, eof,  store }
+    SimpleFreePages {
+      page_size,
+      eof,
+      store,
+    }
   }
 
-  pub fn with_claimed_pages(page_size: usize, eof: EOFPageId, lot_count: usize) -> SimpleFreePageStore {
+  pub fn with_claimed_pages(page_size: usize, eof: EOFPageId) -> SimpleFreePages {
+    let lot_count = (eof.page_id().0 - 1) as usize;
     let mut store = vec![u8::MIN; lot_count];
-    SimpleFreePageStore { page_size, eof, store }
+    SimpleFreePages {
+      page_size,
+      eof,
+      store,
+    }
   }
 
   pub fn with_free_page_ids(
-    page_size: usize, eof: EOFPageId, lot_count: usize, page_ids: &[FreePageId],
-  ) -> SimpleFreePageStore {
-    let mut store = SimpleFreePageStore::with_claimed_pages(page_size, eof, lot_count);
+    page_size: usize, eof: EOFPageId, page_ids: &[FreePageId],
+  ) -> SimpleFreePages {
+    let mut store = SimpleFreePages::with_claimed_pages(page_size, eof);
     for id in page_ids {
       store.free(*id);
     }
@@ -38,16 +48,19 @@ impl SimpleFreePageStore {
   }
 
   fn get_location<T: Into<PageId>>(&self, page_id: T) -> (LotIndex, LotOffset) {
-    let id = page_id.into().0;
-    let store_lot = LotIndex((id / 8) as usize);
-    let offset = LotOffset((id % 8) as u8);
-    (store_lot, offset)
+    page_id.into().lot_index_and_offset()
+  }
+
+  pub fn is_free<T: Into<PageId>>(&self, page_id: T) -> bool {
+    let (lot_index, offset) = self.get_location(page_id);
+    assert!(lot_index.0 < self.store.len());
+    self.store[lot_index.0].get(offset.0)
   }
 
   pub fn free<T: Into<FreePageId>>(&mut self, page_id: T) {
-    let (store_lot, offset) = self.get_location(page_id.into());
-    assert!(store_lot.0 < self.store.len());
-    self.store[store_lot.0].set(offset.0);
+    let (lot_index, offset) = self.get_location(page_id);
+    assert!(lot_index.0 < self.store.len());
+    self.store[lot_index.0].set(offset.0);
   }
 
   pub fn claim<T: Into<PageId>>(&mut self, page_id: T) {
@@ -57,7 +70,7 @@ impl SimpleFreePageStore {
   }
 
   pub fn len(&self) -> usize {
-    self.store.len() * self.page_size * 8
+    self.store.len() * 8
   }
 
   pub fn find_near<T: Into<PageId>>(&self, goal_page_id: T, len: usize) -> Option<FreePageId> {

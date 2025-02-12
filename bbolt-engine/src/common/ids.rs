@@ -315,8 +315,21 @@ impl DiskPageId {
   /// Create a DiskPageId
   #[inline(always)]
   pub const fn of(id: u64) -> DiskPageId {
-    assert!(id <= 1);
     DiskPageId::new(PageId::of(id))
+  }
+}
+
+page_id!(
+  /// The Page Id for new territory
+  ExtendedPageId
+);
+
+impl ExtendedPageId {
+  /// Create an ExtendedPageId
+  #[inline(always)]
+  pub const fn of(id: u64) -> ExtendedPageId {
+    assert!(id > 1);
+    ExtendedPageId::new(PageId::of(id))
   }
 }
 
@@ -348,6 +361,10 @@ id_transition!(FreelistPageId, FreePageId);
 id_transition!(NodePageId, FreePageId);
 id_transition!(BucketPageId, FreePageId);
 
+id_transition!(ExtendedPageId, FreelistPageId);
+id_transition!(ExtendedPageId, NodePageId);
+id_transition!(ExtendedPageId, BucketPageId);
+
 impl From<BucketPageId> for NodePageId {
   fn from(value: BucketPageId) -> Self {
     assert_ne!(0, value.page_id.0);
@@ -365,7 +382,7 @@ pub struct LotOffset(pub u8);
 
 impl PageId {
   #[inline(always)]
-  pub fn store_lot_and_offset(self) -> (LotIndex, LotOffset) {
+  pub fn lot_index_and_offset(self) -> (LotIndex, LotOffset) {
     let page_id = self.0 as usize;
     (LotIndex(page_id / 8), LotOffset((page_id % 8) as u8))
   }
