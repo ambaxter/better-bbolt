@@ -1,5 +1,6 @@
 use crate::freelist::search::masks::{GetLotOffset, NMask, PairMaskTest};
-use bbolt_engine::common::ids::LotOffset;
+use crate::freelist::SearchResult;
+use bbolt_engine::common::ids::{LotIndex, LotOffset};
 use itertools::Itertools;
 use std::iter::{repeat_n, RepeatN};
 use std::ops::{Index, RangeBounds};
@@ -131,6 +132,7 @@ pub mod masks {
   pub const EE5: EEMask = EEMask(0b1111_1000u8, 0b0001_1111u8);
   pub const EE6: EEMask = EEMask(0b1111_1100u8, 0b0011_1111u8);
   pub const EE7: EEMask = EEMask(0b1111_1110u8, 0b0111_1111u8);
+  pub const EE8: EEMask = EEMask(0b1111_1111u8, 0b1111_1111u8);
 
   #[derive(Debug, Copy, Clone)]
   pub struct BEMask<const N: usize>(pub [u8; N], [u8; N]);
@@ -234,6 +236,59 @@ pub mod masks {
       0b0111_1111u8,
     ],
   );
+
+  pub const BE9: BEMask<6> = BEMask(
+    [
+      0b1111_1110u8,
+      0b1111_1100u8,
+      0b1111_1000u8,
+      0b1111_0000u8,
+      0b1110_0000u8,
+      0b1100_0000u8,
+    ],
+    [
+      0b0000_0011u8,
+      0b0000_0111u8,
+      0b0000_1111u8,
+      0b0001_1111u8,
+      0b0011_1111u8,
+      0b0111_1111u8,
+    ],
+  );
+
+  pub const BE10: BEMask<5> = BEMask(
+    [
+      0b1111_1110u8,
+      0b1111_1100u8,
+      0b1111_1000u8,
+      0b1111_0000u8,
+      0b1110_0000u8,
+    ],
+    [
+      0b0000_0111u8,
+      0b0000_1111u8,
+      0b0001_1111u8,
+      0b0011_1111u8,
+      0b0111_1111u8,
+    ],
+  );
+
+  pub const BE11: BEMask<4> = BEMask(
+    [0b1111_1110u8, 0b1111_1100u8, 0b1111_1000u8, 0b1111_0000u8],
+    [0b0000_1111u8, 0b0001_1111u8, 0b0011_1111u8, 0b0111_1111u8],
+  );
+
+  pub const BE12: BEMask<3> = BEMask(
+    [0b1111_1110u8, 0b1111_1100u8, 0b1111_1000u8],
+    [0b0001_1111u8, 0b0011_1111u8, 0b0111_1111u8],
+  );
+
+  pub const BE13: BEMask<2> = BEMask(
+    [0b1111_1110u8, 0b1111_1100u8],
+    [0b0011_1111u8, 0b0111_1111u8],
+  );
+
+  pub const BE14: BEMask<1> = BEMask([0b1111_1110u8], [0b0111_1111u8]);
 
   // TODO: Would this be better as a trait?
   // Something to test later
@@ -356,6 +411,12 @@ pub mod masks {
       be_test_count(6, BE6);
       be_test_count(7, BE7);
       be_test_count(8, BE8);
+      be_test_count(9, BE9);
+      be_test_count(10, BE10);
+      be_test_count(11, BE11);
+      be_test_count(12, BE12);
+      be_test_count(13, BE13);
+      be_test_count(14, BE14);
       be_test_mask(BE2);
       be_test_mask(BE3);
       be_test_mask(BE4);
@@ -495,30 +556,32 @@ where
     (l, r)
   }
 
-  pub fn needle_search<const N: usize>(&self, nmask: NMask<N>) -> Option<(usize, LotOffset)> {
+  pub fn needle_search<const N: usize>(&self, nmask: NMask<N>) -> Option<SearchResult> {
     self
       .store
       .iterate_from(self.goal_lot)
       .enumerate()
       .map(|(idx, byte)| (idx + self.goal_lot, byte))
       .filter_map(|(idx, byte)| nmask.match_byte_at(idx, byte))
+      .map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset))
       .next()
   }
 
-  pub fn needle_rsearch<const N: usize>(&self, nmask: NMask<N>) -> Option<(usize, LotOffset)> {
+  pub fn needle_rsearch<const N: usize>(&self, nmask: NMask<N>) -> Option<SearchResult> {
     self
       .store
       .iterate_to(self.goal_lot)
       .enumerate()
       .rev()
-      .map(|(idx, byte)| (idx + self.goal_lot, byte))
+      .map(|(idx, byte)| (idx, byte))
       .filter_map(|(idx, byte)| nmask.match_byte_at(idx, byte))
+      .map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset))
       .next()
   }
 
   pub fn pair_search<const N: usize>(
     &self, pair_mask_test: PairMaskTest<N>,
-  ) -> Option<(usize, LotOffset)> {
+  ) -> Option<SearchResult> {
     self
       .store
       .iterate_from(self.goal_lot)
@@ -527,12 +590,13 @@ where
       .tuple_windows()
       .map(|(((l_idx, l_byte), (_, r_byte)))| (l_idx, l_byte, r_byte))
       .filter_map(|(l_idx, l_byte, r_byte)| pair_mask_test.match_bytes_at(l_idx, l_byte, r_byte))
+      .map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset))
       .next()
   }
 
   pub fn pair_rsearch<const N: usize>(
     &self, pair_mask_test: PairMaskTest<N>,
-  ) -> Option<(usize, LotOffset)> {
+  ) -> Option<SearchResult> {
     self
       .store
       .iterate_to(self.goal_lot)
@@ -542,12 +606,13 @@ where
       .tuple_windows()
       .map(|(((_, r_byte), (l_idx, l_byte)))| (l_idx, l_byte, r_byte))
       .filter_map(|(l_idx, l_byte, r_byte)| pair_mask_test.match_bytes_at(l_idx, l_byte, r_byte))
+      .map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset))
       .next()
   }
 
   pub fn boyer_moore_magiclen_search<const N: usize>(
     &self, free_bytes_len: usize, mask_test: PairMaskTest<N>,
-  ) -> Option<(usize, LotOffset)> {
+  ) -> Option<SearchResult> {
     if self.store.len() == 0
       || free_bytes_len == 0
       || self.store.len() < free_bytes_len
@@ -605,7 +670,7 @@ where
         end_match
       };
       if ends_match.is_some() {
-        return ends_match;
+        return ends_match.map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset));
       }
 
       if shift == end_index {
@@ -625,7 +690,7 @@ where
 
   pub fn boyer_moore_magiclen_rsearch<const N: usize>(
     &self, free_bytes_len: usize, mask_test: PairMaskTest<N>,
-  ) -> Option<(usize, LotOffset)> {
+  ) -> Option<SearchResult> {
     if self.store.len() == 0
       || free_bytes_len == 0
       || self.store.len() < free_bytes_len
@@ -685,7 +750,7 @@ where
         end_match
       };
       if ends_match.is_some() {
-        return ends_match;
+        return ends_match.map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset));
       }
 
       if shift <= start_index {

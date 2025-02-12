@@ -194,6 +194,7 @@ macro_rules! page_id {
     }
 
     impl From<PageId> for $x {
+      #[inline(always)]
       fn from(id: PageId) -> Self {
         Self::new(id)
       }
@@ -320,6 +321,20 @@ impl DiskPageId {
 }
 
 page_id!(
+  /// The Page Id for existing territory
+  AssignedPageId
+);
+
+impl AssignedPageId {
+  /// Create an ExtendedPageId
+  #[inline(always)]
+  pub const fn of(id: u64) -> AssignedPageId {
+    assert!(id > 1);
+    AssignedPageId::new(PageId::of(id))
+  }
+}
+
+page_id!(
   /// The Page Id for new territory
   ExtendedPageId
 );
@@ -357,9 +372,9 @@ macro_rules! id_transition {
   };
 }
 
-id_transition!(FreelistPageId, FreePageId);
-id_transition!(NodePageId, FreePageId);
-id_transition!(BucketPageId, FreePageId);
+id_transition!(AssignedPageId, FreelistPageId);
+id_transition!(AssignedPageId, NodePageId);
+id_transition!(AssignedPageId, BucketPageId);
 
 id_transition!(ExtendedPageId, FreelistPageId);
 id_transition!(ExtendedPageId, NodePageId);

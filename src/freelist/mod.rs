@@ -22,25 +22,27 @@ impl SearchResult {
 
 #[derive(Debug, Clone)]
 pub struct SearchStore {
-  pub goal_idx: LotIndex,
-  pub best: Option<SearchResult>,
+  goal_lot: LotIndex,
+  best: Option<SearchResult>,
 }
 
 impl SearchStore {
-  fn new(goal_idx: LotIndex) -> Self {
+  fn new(goal_lot: LotIndex) -> Self {
     SearchStore {
-      goal_idx,
+      goal_lot,
       best: None,
     }
   }
 
-  fn push(&mut self, new: SearchResult) {
-    self.best = match self.best.take() {
-      None => Some(new),
-      Some(best) => {
+  fn push(&mut self, new: Option<SearchResult>) {
+    self.best = match (self.best.take(), new) {
+      (None, None) => None,
+      (Some(best), None) => Some(best),
+      (None, Some(new)) => Some(new),
+      (Some(best), Some(new)) => {
         match best
-          .mid_dist_to(self.goal_idx)
-          .cmp(&new.mid_dist_to(self.goal_idx))
+          .mid_dist_to(self.goal_lot)
+          .cmp(&new.mid_dist_to(self.goal_lot))
         {
           Ordering::Less => Some(best),
           Ordering::Equal => {
@@ -54,6 +56,10 @@ impl SearchStore {
         }
       }
     };
+  }
+
+  fn get(self) -> Option<SearchResult> {
+    self.best
   }
 }
 
