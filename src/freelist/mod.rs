@@ -1,8 +1,8 @@
-use bbolt_engine::common::ids::{LotIndex, LotOffset};
+use bbolt_engine::common::ids::{FreePageId, LotIndex, LotOffset, PageId};
 use std::cmp::Ordering;
 
-pub mod freelist;
 pub mod search;
+pub mod simple;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct SearchResult {
@@ -13,6 +13,10 @@ pub struct SearchResult {
 impl SearchResult {
   pub fn new(idx: LotIndex, offset: LotOffset) -> Self {
     SearchResult { idx, offset }
+  }
+
+  pub fn mid_dist_to(&self, goal_lot: LotIndex) -> usize {
+    self.idx.abs_diff(goal_lot)
   }
 }
 
@@ -30,28 +34,42 @@ impl SearchStore {
     }
   }
 
-  fn push(&mut self, result: SearchResult) {
-    if self.best.is_none() {
-      self.best = Some(result);
-    } else {
-      let best = self.best.take().unwrap();
-      let best_dist = best.idx.abs_diff(self.goal_idx);
-      let result_dist = result.idx.abs_diff(self.goal_idx);
-      match best_dist.cmp(&result_dist) {
-        Ordering::Less => {
-          self.best = Some(best);
-        }
-        Ordering::Equal => {
-          if best.offset < result.offset {
-            self.best = Some(best);
-          } else {
-            self.best = Some(result);
+  fn push(&mut self, new: SearchResult) {
+    self.best = match self.best.take() {
+      None => Some(new),
+      Some(best) => {
+        match best
+          .mid_dist_to(self.goal_idx)
+          .cmp(&new.mid_dist_to(self.goal_idx))
+        {
+          Ordering::Less => Some(best),
+          Ordering::Equal => {
+            if best.offset < new.offset {
+              Some(best)
+            } else {
+              Some(new)
+            }
           }
-        }
-        Ordering::Greater => {
-          self.best = Some(result);
+          Ordering::Greater => Some(new),
         }
       }
-    }
+    };
   }
+}
+
+pub trait FreelistManager {
+  /// Creates a new Freelist Manager
+  fn new(freelist: &[FreePageId]) -> Self;
+
+  /// Free a page
+  fn free(&mut self, free_page_id: FreePageId);
+
+  /// Assign a free page with `len`
+  fn assign(&mut self, parent: PageId, len: usize) -> Option<FreePageId>;
+
+  /// Number of free pages tracked
+  fn len(&self) -> usize;
+
+  /// Write out all free pages to an array
+  fn write(&self, freelist: &mut [FreePageId]);
 }
