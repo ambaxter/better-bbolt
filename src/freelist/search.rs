@@ -9,6 +9,9 @@ pub mod masks {
   use itertools::izip;
 
   pub trait GetLotOffset {
+    /// On left pair mask checks we need to know which
+    /// bit starts the run. Currently, it's `8 - byte.count_ones()`
+    /// I'm sure someone knows a better way
     fn high_offset(self) -> LotOffset;
   }
 
@@ -551,7 +554,11 @@ where
 
     let last_pattern_char = u8::MAX;
 
-    let mut shift = self.goal_lot - free_bytes_len;
+    let mut shift = if free_bytes_len > self.goal_lot {
+      0
+    } else {
+      self.goal_lot - free_bytes_len
+    };
 
     let end_index = self.store.len() - free_bytes_len;
 
@@ -618,6 +625,8 @@ where
       || self.store.len() < free_bytes_len
       || self.store.len() < self.goal_lot
       || self.store.len() - self.goal_lot < free_bytes_len
+      //TODO: Is this right?
+      || self.store.len() - 1 < self.goal_lot + free_bytes_len
     {
       return None;
     }
@@ -704,15 +713,30 @@ mod tests {
   }
 
   #[test]
-  pub fn test2() {
+  pub fn test_fwd() {
     let mut v = [0b1111_1110u8, 255, 255, 255, 0b0000_0001u8, 0, 0, 0, 0, 0, 0, 0 ,0 , 0, 0, 0 ];
-    let midpoint = 3;
     let free_bytes_len = 3;
-    for _ in 0..16 {
-      let s = SearchPattern::new(&v, midpoint);
-      let o = s.boyer_moore_magiclen_rsearch(free_bytes_len, BE8.into());
-      println!("{:?}", o);
-      v.rotate_right(1);
+    for midpoint in 0..16 {
+      for i in 0..16 {
+        let s = SearchPattern::new(&v, midpoint);
+        let o = s.boyer_moore_magiclen_search(free_bytes_len, BE8.into());
+        println!("m{}-r{}: {:?}", midpoint, i, o);
+        v.rotate_right(1);
+      }
+    }
+  }
+
+  #[test]
+  pub fn test_rev() {
+    let mut v = [0b1111_1110u8, 255, 255, 255, 0b0000_0001u8, 0, 0, 0, 0, 0, 0, 0 ,0 , 0, 0, 0 ];
+    let free_bytes_len = 3;
+    for midpoint in 0..16 {
+      for i in 0..16 {
+        let s = SearchPattern::new(&v, midpoint);
+        let o = s.boyer_moore_magiclen_rsearch(free_bytes_len, BE8.into());
+        println!("m{}-r{}: {:?}", midpoint, i, o);
+        v.rotate_right(1);
+      }
     }
   }
 }
