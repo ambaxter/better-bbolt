@@ -1,6 +1,7 @@
 use bbolt_engine::common::ids::{FreePageId, LotIndex, LotOffset, PageId};
 use std::cmp::Ordering;
 
+pub mod masks;
 pub mod search;
 pub mod simple;
 

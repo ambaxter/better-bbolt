@@ -1,4 +1,4 @@
-use crate::freelist::search::masks::*;
+use crate::freelist::masks::*;
 use crate::freelist::search::SearchPattern;
 use crate::freelist::{SearchResult, SearchStore};
 use bbolt_engine::common::bitset::BitSet;
@@ -40,6 +40,15 @@ impl SimpleFreePages {
     let mut store = SimpleFreePages::with_claimed_pages(page_size, eof);
     for id in page_ids {
       store.free(*id);
+    }
+    store
+  }
+
+  #[cfg(test)]
+  pub fn with_free_ids(page_size: usize, eof: EOFPageId, page_ids: &[u64]) -> SimpleFreePages {
+    let mut store = SimpleFreePages::with_claimed_pages(page_size, eof);
+    for id in page_ids.iter().map(|id| PageId::of(*id)) {
+      store.free(id);
     }
     store
   }
@@ -279,9 +288,7 @@ mod tests {
 
   #[test]
   fn test() {
-    let mut s = SimpleFreePages::with_claimed_pages(4096, EOFPageId::of(4096));
-    s.free(PageId::of(12));
-    s.free(PageId::of(14));
-    println!("{:?}", s.find_near(PageId::of(124), 1));
+    let mut s = SimpleFreePages::with_free_ids(4096, EOFPageId::of(4097), &[12, 13, 14]);
+    println!("{:?}", s.find_near(PageId::of(124), 64));
   }
 }
