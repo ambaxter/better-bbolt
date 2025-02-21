@@ -8,8 +8,8 @@ default-members = ["bbolt-engine", "."]
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
-rust-version = "1.76"
+edition = "2024"
+rust-version = "1.85"
 
 [package]
 name = "better-bbolt"
@@ -48,7 +48,7 @@ fnv_rs = "0.4.3"
 rayon = "1.10.0"
 crossbeam-channel = "0.5.14"
 dashmap = "6.1.0"
-fake = { version = "3.0.1", features = ["derive"] }
+fake = { version = "4.0.0", features = ["derive"] }
 hashbrown = "0.15.2"
 fs-err = "3.0.0"
 page_size = "0.6.0"

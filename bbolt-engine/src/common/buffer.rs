@@ -1,6 +1,6 @@
 use crate::common::buffer_pool::PoolCommand;
 use crate::common::page::PageHeader;
-use aligners::{alignment, AlignedBytes};
+use aligners::{AlignedBytes, alignment};
 use crossbeam_channel::Sender;
 use parking_lot::Mutex;
 use std::ops::{Deref, DerefMut};

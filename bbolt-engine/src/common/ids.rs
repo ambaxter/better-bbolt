@@ -320,65 +320,57 @@ impl DiskPageId {
   }
 }
 
-page_id!(
-  /// The Page Id for existing territory
-  AssignedPageId
-);
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub enum AssignedPageId {
+  Free(PageId),
+  Allocate(PageId),
+}
 
 impl AssignedPageId {
-  /// Create an ExtendedPageId
-  #[inline(always)]
-  pub const fn of(id: u64) -> AssignedPageId {
-    assert!(id > 1);
-    AssignedPageId::new(PageId::of(id))
+  pub fn free(lot_index: LotIndex, lot_offset: LotOffset) -> AssignedPageId {
+    let page_id = (lot_index.0 as u64 * 8) + lot_offset.0 as u64;
+    AssignedPageId::Free(PageId::of(page_id))
+  }
+
+  pub fn allocate(lot_index: LotIndex, lot_offset: LotOffset) -> AssignedPageId {
+    let page_id = (lot_index.0 as u64 * 8) + lot_offset.0 as u64;
+    AssignedPageId::Allocate(PageId::of(page_id))
+  }
+
+  pub fn needs_allocation(&self) -> bool {
+    match self {
+      AssignedPageId::Free(_) => false,
+      AssignedPageId::Allocate(_) => true,
+    }
   }
 }
 
-page_id!(
-  /// The Page Id for new territory
-  ExtendedPageId
-);
-
-impl ExtendedPageId {
-  /// Create an ExtendedPageId
-  #[inline(always)]
-  pub const fn of(id: u64) -> ExtendedPageId {
-    assert!(id > 1);
-    ExtendedPageId::new(PageId::of(id))
+impl GetPageId for AssignedPageId {
+  fn page_id(&self) -> PageId {
+    match self {
+      AssignedPageId::Free(page_id) => *page_id,
+      AssignedPageId::Allocate(page_id) => *page_id,
+    }
   }
 }
 
-macro_rules! id_transition {
-  (
-    $from:ident,$to:ident
-  ) => {
-    impl From<$from> for $to {
-      #[inline(always)]
-      fn from(from: $from) -> Self {
-        Self {
-          page_id: from.page_id,
-        }
-      }
-    }
-
-    impl From<$to> for $from {
-      #[inline(always)]
-      fn from(from: $to) -> Self {
-        Self {
-          page_id: from.page_id,
-        }
-      }
-    }
-  };
+impl From<AssignedPageId> for BucketPageId {
+  fn from(value: AssignedPageId) -> Self {
+    BucketPageId::new(value.page_id())
+  }
 }
 
-id_transition!(AssignedPageId, FreelistPageId);
-id_transition!(AssignedPageId, NodePageId);
-id_transition!(AssignedPageId, BucketPageId);
+impl From<AssignedPageId> for FreelistPageId {
+  fn from(value: AssignedPageId) -> Self {
+    FreelistPageId::new(value.page_id())
+  }
+}
 
-id_transition!(ExtendedPageId, FreelistPageId);
-id_transition!(ExtendedPageId, NodePageId);
-id_transition!(ExtendedPageId, BucketPageId);
+impl From<AssignedPageId> for NodePageId {
+  fn from(value: AssignedPageId) -> Self {
+    NodePageId::new(value.page_id())
+  }
+}
 
 impl From<BucketPageId> for NodePageId {
   fn from(value: BucketPageId) -> Self {

@@ -5,29 +5,84 @@ pub mod masks;
 pub mod search;
 pub mod simple;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub struct SearchResult {
-  pub idx: LotIndex,
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MaskDirective {
+  Left(u8),
+  Right(u8),
+  Pair(u8, u8),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MatchLocation {
+  pub index: LotIndex,
   pub offset: LotOffset,
 }
 
-impl SearchResult {
-  pub fn new(idx: LotIndex, offset: LotOffset) -> Self {
-    SearchResult { idx, offset }
+impl MatchLocation {
+  #[inline]
+  pub fn new(index: usize, offset: LotOffset) -> Self {
+    MatchLocation {
+      index: LotIndex(index),
+      offset,
+    }
   }
 
+  #[inline]
   pub fn mid_dist_to(&self, goal_lot: LotIndex) -> usize {
-    self.idx.abs_diff(goal_lot)
+    self.index.abs_diff(goal_lot)
+  }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MatchResult {
+  match_location: MatchLocation,
+  mask_directive: MaskDirective,
+  run_length: usize,
+}
+
+impl MatchResult {
+  #[inline]
+  pub fn left(index: usize, offset: LotOffset, l_mask: u8) -> MatchResult {
+    MatchResult {
+      match_location: MatchLocation::new(index, offset),
+      mask_directive: MaskDirective::Left(l_mask),
+      run_length: 0,
+    }
+  }
+
+  #[inline]
+  pub fn right(index: usize, offset: LotOffset, r_mask: u8) -> MatchResult {
+    MatchResult {
+      match_location: MatchLocation::new(index, offset),
+      mask_directive: MaskDirective::Right(r_mask),
+      run_length: 0,
+    }
+  }
+
+  #[inline]
+  pub fn pair(index: usize, offset: LotOffset, l_mask: u8, r_mask: u8) -> MatchResult {
+    MatchResult {
+      match_location: MatchLocation::new(index, offset),
+      mask_directive: MaskDirective::Pair(l_mask, r_mask),
+      run_length: 0,
+    }
+  }
+
+  #[inline]
+  pub fn with_length(mut self, run_length: usize) -> Self {
+    self.run_length = run_length;
+    self
   }
 }
 
 #[derive(Debug, Clone)]
 pub struct SearchStore {
   goal_lot: LotIndex,
-  best: Option<SearchResult>,
+  best: Option<MatchResult>,
 }
 
 impl SearchStore {
+  #[inline]
   fn new(goal_lot: LotIndex) -> Self {
     SearchStore {
       goal_lot,
@@ -35,19 +90,20 @@ impl SearchStore {
     }
   }
 
-  fn push(&mut self, new: Option<SearchResult>) {
+  fn push(&mut self, new: Option<MatchResult>) {
     self.best = match (self.best.take(), new) {
       (None, None) => None,
       (Some(best), None) => Some(best),
       (None, Some(new)) => Some(new),
       (Some(best), Some(new)) => {
         match best
+          .match_location
           .mid_dist_to(self.goal_lot)
-          .cmp(&new.mid_dist_to(self.goal_lot))
+          .cmp(&new.match_location.mid_dist_to(self.goal_lot))
         {
           Ordering::Less => Some(best),
           Ordering::Equal => {
-            if best.offset < new.offset {
+            if best.match_location.offset < new.match_location.offset {
               Some(best)
             } else {
               Some(new)
@@ -59,7 +115,7 @@ impl SearchStore {
     };
   }
 
-  fn get(self) -> Option<SearchResult> {
+  fn get(self) -> Option<MatchResult> {
     self.best
   }
 }

@@ -2,7 +2,7 @@ use crate::backend::{PagingBackend, ReadHandle, WriteHandle};
 use crate::common::buffer::PageBuffer;
 use crate::common::ids::PageId;
 use crate::common::page::PageHeader;
-use aligners::{alignment, AlignedBytes};
+use aligners::{AlignedBytes, alignment};
 use bytemuck::bytes_of_mut;
 use parking_lot::{RwLockReadGuard, RwLockUpgradableReadGuard};
 use std::marker::PhantomData;

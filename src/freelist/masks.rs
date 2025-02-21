@@ -1,3 +1,4 @@
+use crate::freelist::MatchResult;
 use bbolt_engine::common::ids::LotOffset;
 use itertools::izip;
 
@@ -21,14 +22,14 @@ impl GetLotOffset for u8 {
 pub struct NMask<const N: usize>(pub [u8; N]);
 
 impl<const N: usize> NMask<N> {
-  pub fn match_byte_at(&self, idx: usize, byte: u8) -> Option<(usize, LotOffset)> {
+  pub fn match_byte_at(&self, index: usize, byte: u8) -> Option<MatchResult> {
     self
       .0
       .iter()
       .enumerate()
-      .filter_map(|(mask_idx, &mask)| {
+      .filter_map(|(mask_index, &mask)| {
         if (byte & mask) == mask {
-          Some((idx, LotOffset(mask_idx as u8)))
+          Some(MatchResult::left(index, LotOffset(mask_index as u8), mask))
         } else {
           None
         }
@@ -89,24 +90,22 @@ pub const N8: NMask<1> = NMask([0b1111_1111u8]);
 pub struct EEMask(u8, u8);
 
 impl EEMask {
-  pub fn match_bytes_at(&self, l_idx: usize, l_byte: u8, r_byte: u8) -> Option<(usize, LotOffset)> {
+  pub fn match_bytes_at(&self, l_index: usize, l_byte: u8, r_byte: u8) -> Option<MatchResult> {
     if self.0 & l_byte == self.0 {
-      Some((l_idx, self.0.high_offset()))
+      Some(MatchResult::left(l_index, self.0.high_offset(), l_byte))
     } else if self.1 & r_byte == self.1 {
-      Some((l_idx + 1, LotOffset(0)))
+      Some(MatchResult::right(l_index + 1, LotOffset(0), r_byte))
     } else {
       None
     }
   }
-  pub fn match_ends(
-    &self, l_end: Option<(usize, u8)>, r_end: Option<u8>,
-  ) -> Option<(usize, LotOffset)> {
+  pub fn match_ends(&self, l_end: Option<(usize, u8)>, r_end: Option<u8>) -> Option<MatchResult> {
     match (l_end, r_end) {
-      (Some((l_idx, l_byte)), _) if self.0 & l_byte == self.0 => {
-        Some((l_idx, self.0.high_offset()))
+      (Some((l_index, l_byte)), _) if self.0 & l_byte == self.0 => {
+        Some(MatchResult::left(l_index, self.0.high_offset(), l_byte))
       }
-      (Some((l_idx, _)), Some(r_byte)) if self.1 & r_byte == self.1 => {
-        Some((l_idx + 1, LotOffset(0)))
+      (Some((l_index, _)), Some(r_byte)) if self.1 & r_byte == self.1 => {
+        Some(MatchResult::right(l_index + 1, LotOffset(0), r_byte))
       }
       // Note: (None, Some) will never happen. If the left side is None that means we've reached
       // the beginning of the file and the first 2 pages of the database are always meta pages.
@@ -128,24 +127,26 @@ pub const EE8: EEMask = EEMask(0b1111_1111u8, 0b1111_1111u8);
 pub struct BEMask<const N: usize>(pub [u8; N], [u8; N]);
 
 impl<const N: usize> BEMask<N> {
-  pub fn match_bytes_at(&self, l_idx: usize, l_byte: u8, r_byte: u8) -> Option<(usize, LotOffset)> {
+  pub fn match_bytes_at(&self, l_index: usize, l_byte: u8, r_byte: u8) -> Option<MatchResult> {
     izip!(self.0, self.1)
       .filter_map(|(l_mask, r_mask)| {
         if (l_byte & l_mask) == l_mask && (r_byte & r_mask) == r_mask {
-          Some(l_mask.high_offset())
+          Some(MatchResult::pair(
+            l_index,
+            l_mask.high_offset(),
+            l_mask,
+            r_mask,
+          ))
         } else {
           None
         }
       })
       .next()
-      .map(|offset| (l_idx, offset))
   }
 
-  pub fn match_ends(
-    &self, l_end: Option<(usize, u8)>, r_end: Option<u8>,
-  ) -> Option<(usize, LotOffset)> {
+  pub fn match_ends(&self, l_end: Option<(usize, u8)>, r_end: Option<u8>) -> Option<MatchResult> {
     match (l_end, r_end) {
-      (Some((l_idx, l_byte)), Some(r_byte)) => self.match_bytes_at(l_idx, l_byte, r_byte),
+      (Some((l_index, l_byte)), Some(r_byte)) => self.match_bytes_at(l_index, l_byte, r_byte),
       _ => None,
     }
   }
@@ -278,63 +279,49 @@ pub const BE13: BEMask<2> = BEMask(
 
 pub const BE14: BEMask<1> = BEMask([0b1111_1110u8], [0b0111_1111u8]);
 
-// TODO: Would this be better as a trait?
-// Something to test later
-#[derive(Clone, Copy)]
-pub enum PairMaskTest<const N: usize> {
-  Either(EEMask),
-  Both(BEMask<N>),
+pub trait PairMaskTest {
+  fn match_bytes_at(&self, l_index: usize, l_byte: u8, r_byte: u8) -> Option<MatchResult>;
+
+  fn match_ends(&self, ends: (Option<(usize, u8)>, Option<u8>)) -> Option<MatchResult>;
 }
 
-impl PairMaskTest<0> {
-  pub fn new_either(either: EEMask) -> PairMaskTest<0> {
-    Self::Either(either)
-  }
-}
-impl<const N: usize> PairMaskTest<N> {
-  pub fn new_both(both: BEMask<N>) -> PairMaskTest<N> {
-    Self::Both(both)
+impl PairMaskTest for EEMask {
+  #[inline]
+  fn match_bytes_at(&self, l_index: usize, l_byte: u8, r_byte: u8) -> Option<MatchResult> {
+    self.match_bytes_at(l_index, l_byte, r_byte)
   }
 
-  pub fn match_bytes_at(&self, l_idx: usize, l_byte: u8, r_byte: u8) -> Option<(usize, LotOffset)> {
-    match self {
-      PairMaskTest::Either(either) => either.match_bytes_at(l_idx, l_byte, r_byte),
-      PairMaskTest::Both(both) => both.match_bytes_at(l_idx, l_byte, r_byte),
-    }
-  }
-
-  pub fn match_ends(&self, ends: (Option<(usize, u8)>, Option<u8>)) -> Option<(usize, LotOffset)> {
+  #[inline]
+  fn match_ends(&self, ends: (Option<(usize, u8)>, Option<u8>)) -> Option<MatchResult> {
     let (l_end, r_end) = ends;
-    match self {
-      PairMaskTest::Either(either) => either.match_ends(l_end, r_end),
-      PairMaskTest::Both(both) => both.match_ends(l_end, r_end),
-    }
+    self.match_ends(l_end, r_end)
   }
 }
 
-impl From<EEMask> for PairMaskTest<0> {
+impl<const N: usize> PairMaskTest for BEMask<N> {
   #[inline]
-  fn from(value: EEMask) -> Self {
-    PairMaskTest::Either(value)
+  fn match_bytes_at(&self, l_index: usize, l_byte: u8, r_byte: u8) -> Option<MatchResult> {
+    self.match_bytes_at(l_index, l_byte, r_byte)
   }
-}
 
-impl<const N: usize> From<BEMask<N>> for PairMaskTest<N> {
   #[inline]
-  fn from(value: BEMask<N>) -> Self {
-    PairMaskTest::Both(value)
+  fn match_ends(&self, ends: (Option<(usize, u8)>, Option<u8>)) -> Option<MatchResult> {
+    let (l_end, r_end) = ends;
+    self.match_ends(l_end, r_end)
   }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::freelist::MatchLocation;
 
   fn test_needle<const N: usize>(n: NMask<N>) {
     for i in 0..N {
+      // TODO: How do we test the mask, also?
       assert_eq!(
-        Some((0, LotOffset(i as u8))),
-        n.match_byte_at(0, 255u8 << i)
+        Some(MatchLocation::new(0, LotOffset(i as u8))),
+        n.match_byte_at(0, 255u8 << i).map(|m| m.match_location)
       )
     }
     for i in N..8 {
@@ -358,10 +345,13 @@ mod tests {
   fn ee_tests() {
     for (i, ee) in izip!((1..8).rev(), [EE1, EE2, EE3, EE4, EE5, EE6, EE7].iter()) {
       assert_eq!(
-        Some((0, LotOffset(i))),
+        Some(MatchResult::left(0, LotOffset(i), 255u8 << i)),
         ee.match_bytes_at(0, 255u8 << i, 255u8 >> i)
       );
-      assert_eq!(Some((1, LotOffset(0))), ee.match_bytes_at(0, 0, 255u8 >> i));
+      assert_eq!(
+        Some(MatchResult::right(1, LotOffset(0), 255u8 >> i)),
+        ee.match_bytes_at(0, 0, 255u8 >> i)
+      );
       assert_eq!(None, ee.match_bytes_at(0, 0, 0));
     }
   }
@@ -376,7 +366,13 @@ mod tests {
     for (i, j) in izip!(8 - N..8, (8 - N..8).rev()) {
       //println!("Some - {:b} - {:b}", 255u8 << i, 255u8 >> j);
       assert_eq!(
-        Some((0, LotOffset(i as u8))),
+        //Some((0, LotOffset(i as u8))),
+        Some(MatchResult::pair(
+          0,
+          LotOffset(i as u8),
+          255u8 << i,
+          255u8 >> j
+        )),
         mask.match_bytes_at(0, 255u8 << i, 255u8 >> j)
       );
       //println!("None - {:b} - {:b}", 255u8 >> i, 255u8 << j);

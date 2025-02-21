@@ -98,7 +98,7 @@ mod test {
   use crate::common::ids::PageId;
   use crate::common::page::{PageFlag, PageHeader};
   use crate::pages::meta::{Meta, MetaPage};
-  use aligners::{alignment, AlignedBytes};
+  use aligners::{AlignedBytes, alignment};
 
   #[test]
   pub fn test_meta_page() {

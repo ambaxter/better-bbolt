@@ -1,8 +1,8 @@
 use crate::freelist::masks::{NMask, PairMaskTest};
-use crate::freelist::SearchResult;
+use crate::freelist::{MatchLocation, MatchResult};
 use bbolt_engine::common::ids::{LotIndex, LotOffset};
 use itertools::Itertools;
-use std::iter::{repeat_n, RepeatN};
+use std::iter::{RepeatN, repeat_n};
 use std::ops::{Index, RangeBounds};
 /*
 
@@ -100,11 +100,7 @@ where
   }
 
   fn bad_shift_index(free_bytes_len: usize, index: u8) -> usize {
-    if index == u8::MAX {
-      0
-    } else {
-      free_bytes_len
-    }
+    if index == u8::MAX { 0 } else { free_bytes_len }
   }
 
   fn repeat_iter(free_bytes_len: usize) -> RepeatN<u8> {
@@ -116,79 +112,86 @@ where
     u8::MAX
   }
 
-  fn get_ends(&self, free_bytes_len: usize, shift_idx: usize) -> (Option<(usize, u8)>, Option<u8>) {
-    let r_idx = shift_idx + free_bytes_len;
-    let r = if r_idx <= self.store.len() - 1 {
-      Some(self.store[r_idx])
+  fn get_ends(
+    &self, free_bytes_len: usize, shift_index: usize,
+  ) -> (Option<(usize, u8)>, Option<u8>) {
+    let r_index = shift_index + free_bytes_len;
+    let r = if r_index <= self.store.len() - 1 {
+      Some(self.store[r_index])
     } else {
       None
     };
-    let l = if shift_idx > 0 {
-      let l_idx = shift_idx - 1;
-      Some((l_idx, self.store[l_idx]))
+    let l = if shift_index > 0 {
+      let l_index = shift_index - 1;
+      Some((l_index, self.store[l_index]))
     } else {
       None
     };
     (l, r)
   }
 
-  pub fn needle_search<const N: usize>(&self, nmask: NMask<N>) -> Option<SearchResult> {
+  pub fn needle_search<const N: usize>(&self, nmask: NMask<N>) -> Option<MatchResult> {
     self
       .store
       .iterate_from(self.goal_lot)
       .enumerate()
-      .map(|(idx, byte)| (idx + self.goal_lot, byte))
-      .filter_map(|(idx, byte)| nmask.match_byte_at(idx, byte))
-      .map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset))
+      .map(|(index, byte)| (index + self.goal_lot, byte))
+      .filter_map(|(index, byte)| nmask.match_byte_at(index, byte))
       .next()
   }
 
-  pub fn needle_rsearch<const N: usize>(&self, nmask: NMask<N>) -> Option<SearchResult> {
+  pub fn needle_rsearch<const N: usize>(&self, nmask: NMask<N>) -> Option<MatchResult> {
     self
       .store
       .iterate_to(self.goal_lot)
       .enumerate()
       .rev()
-      .map(|(idx, byte)| (idx, byte))
-      .filter_map(|(idx, byte)| nmask.match_byte_at(idx, byte))
-      .map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset))
+      .map(|(index, byte)| (index, byte))
+      .filter_map(|(index, byte)| nmask.match_byte_at(index, byte))
       .next()
   }
 
-  pub fn pair_search<const N: usize>(
-    &self, pair_mask_test: PairMaskTest<N>,
-  ) -> Option<SearchResult> {
+  pub fn pair_search<P>(&self, pair_mask_test: P) -> Option<MatchResult>
+  where
+    P: PairMaskTest,
+  {
     self
       .store
       .iterate_from(self.goal_lot)
       .enumerate()
-      .map(|(idx, byte)| (idx + self.goal_lot, byte))
+      .map(|(index, byte)| (index + self.goal_lot, byte))
       .tuple_windows()
-      .map(|(((l_idx, l_byte), (_, r_byte)))| (l_idx, l_byte, r_byte))
-      .filter_map(|(l_idx, l_byte, r_byte)| pair_mask_test.match_bytes_at(l_idx, l_byte, r_byte))
-      .map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset))
+      .map(|(((l_index, l_byte), (_, r_byte)))| (l_index, l_byte, r_byte))
+      .filter_map(|(l_index, l_byte, r_byte)| {
+        pair_mask_test.match_bytes_at(l_index, l_byte, r_byte)
+      })
       .next()
   }
 
-  pub fn pair_rsearch<const N: usize>(
-    &self, pair_mask_test: PairMaskTest<N>,
-  ) -> Option<SearchResult> {
+  pub fn pair_rsearch<P>(&self, pair_mask_test: P) -> Option<MatchResult>
+  where
+    P: PairMaskTest,
+  {
     self
       .store
       .iterate_to(self.goal_lot)
       .enumerate()
       .rev()
-      .map(|(idx, byte)| (idx, byte))
+      .map(|(index, byte)| (index, byte))
       .tuple_windows()
-      .map(|(((_, r_byte), (l_idx, l_byte)))| (l_idx, l_byte, r_byte))
-      .filter_map(|(l_idx, l_byte, r_byte)| pair_mask_test.match_bytes_at(l_idx, l_byte, r_byte))
-      .map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset))
+      .map(|(((_, r_byte), (l_index, l_byte)))| (l_index, l_byte, r_byte))
+      .filter_map(|(l_index, l_byte, r_byte)| {
+        pair_mask_test.match_bytes_at(l_index, l_byte, r_byte)
+      })
       .next()
   }
 
-  pub fn boyer_moore_magiclen_search<const N: usize>(
-    &self, free_bytes_len: usize, mask_test: PairMaskTest<N>,
-  ) -> Option<SearchResult> {
+  pub fn boyer_moore_magiclen_search<P>(
+    &self, free_bytes_len: usize, mask_test: P,
+  ) -> Option<MatchResult>
+  where
+    P: PairMaskTest,
+  {
     if self.store.len() == 0
       || free_bytes_len == 0
       || self.store.len() < free_bytes_len
@@ -246,7 +249,7 @@ where
         end_match
       };
       if ends_match.is_some() {
-        return ends_match.map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset));
+        return ends_match.map(|match_result| match_result.with_length(free_bytes_len));
       }
 
       if shift == end_index {
@@ -264,9 +267,12 @@ where
     None
   }
 
-  pub fn boyer_moore_magiclen_rsearch<const N: usize>(
-    &self, free_bytes_len: usize, mask_test: PairMaskTest<N>,
-  ) -> Option<SearchResult> {
+  pub fn boyer_moore_magiclen_rsearch<P>(
+    &self, free_bytes_len: usize, mask_test: P,
+  ) -> Option<MatchResult>
+  where
+    P: PairMaskTest,
+  {
     if self.store.len() == 0
       || free_bytes_len == 0
       || self.store.len() < free_bytes_len
@@ -326,7 +332,7 @@ where
         end_match
       };
       if ends_match.is_some() {
-        return ends_match.map(|(idx, offset)| SearchResult::new(LotIndex(idx), offset));
+        return ends_match.map(|match_result| match_result.with_length(free_bytes_len));
       }
 
       if shift <= start_index {
@@ -354,7 +360,7 @@ mod tests {
     let midpoint = 8usize;
     let free_bytes_len = 3;
     let s = SearchPattern::new(&v, midpoint);
-    let o = s.boyer_moore_magiclen_rsearch(free_bytes_len, BE8.into());
+    let o = s.boyer_moore_magiclen_rsearch(free_bytes_len, BE8);
     println!("{:?}", o);
   }
 
@@ -382,7 +388,7 @@ mod tests {
     for midpoint in 0..16 {
       for i in 0..16 {
         let s = SearchPattern::new(&v, midpoint);
-        let o = s.boyer_moore_magiclen_search(free_bytes_len, BE8.into());
+        let o = s.boyer_moore_magiclen_search(free_bytes_len, BE8);
         println!("m{}-r{}: {:?}", midpoint, i, o);
         v.rotate_right(1);
       }
@@ -413,7 +419,7 @@ mod tests {
     for midpoint in 0..16 {
       for i in 0..16 {
         let s = SearchPattern::new(&v, midpoint);
-        let o = s.boyer_moore_magiclen_rsearch(free_bytes_len, BE8.into());
+        let o = s.boyer_moore_magiclen_rsearch(free_bytes_len, BE8);
         println!("m{}-r{}: {:?}", midpoint, i, o);
         v.rotate_right(1);
       }

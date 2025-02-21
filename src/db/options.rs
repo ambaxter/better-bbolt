@@ -1,5 +1,5 @@
 use bon::__::IsSet;
-use bon::{bon, builder, Builder};
+use bon::{Builder, bon, builder};
 use size::Size;
 use std::fs::OpenOptions;
 use std::io;
