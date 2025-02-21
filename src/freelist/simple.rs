@@ -278,10 +278,10 @@ impl SimpleFreePages {
     for r in results {
       search_store.push(r);
     }
-    search_store.get()
+    search_store.take()
   }
 
-  pub fn assign(&mut self, goal_page_id: PageId, len: usize) -> () {}
+  pub fn assign(mut self, goal_page_id: PageId, len: usize) -> () {}
 }
 
 #[cfg(test)]

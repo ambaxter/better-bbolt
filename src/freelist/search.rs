@@ -146,15 +146,12 @@ where
       .iterate_to(self.goal_lot)
       .enumerate()
       .rev()
-      .map(|(index, byte)| (index, byte))
+      //.map(|(index, byte)| (index, byte))
       .filter_map(|(index, byte)| nmask.match_byte_at(index, byte))
       .next()
   }
 
-  pub fn pair_search<P>(&self, pair_mask_test: P) -> Option<MatchResult>
-  where
-    P: PairMaskTest,
-  {
+  pub fn pair_search(&self, pair_mask_test: impl PairMaskTest) -> Option<MatchResult> {
     self
       .store
       .iterate_from(self.goal_lot)
@@ -168,16 +165,13 @@ where
       .next()
   }
 
-  pub fn pair_rsearch<P>(&self, pair_mask_test: P) -> Option<MatchResult>
-  where
-    P: PairMaskTest,
-  {
+  pub fn pair_rsearch(&self, pair_mask_test: impl PairMaskTest) -> Option<MatchResult> {
     self
       .store
       .iterate_to(self.goal_lot)
       .enumerate()
       .rev()
-      .map(|(index, byte)| (index, byte))
+      //.map(|(index, byte)| (index, byte))
       .tuple_windows()
       .map(|(((_, r_byte), (l_index, l_byte)))| (l_index, l_byte, r_byte))
       .filter_map(|(l_index, l_byte, r_byte)| {
@@ -186,12 +180,9 @@ where
       .next()
   }
 
-  pub fn boyer_moore_magiclen_search<P>(
-    &self, free_bytes_len: usize, mask_test: P,
-  ) -> Option<MatchResult>
-  where
-    P: PairMaskTest,
-  {
+  pub fn boyer_moore_magiclen_search(
+    &self, free_bytes_len: usize, mask_test: impl PairMaskTest,
+  ) -> Option<MatchResult> {
     if self.store.len() == 0
       || free_bytes_len == 0
       || self.store.len() < free_bytes_len
@@ -267,12 +258,9 @@ where
     None
   }
 
-  pub fn boyer_moore_magiclen_rsearch<P>(
-    &self, free_bytes_len: usize, mask_test: P,
-  ) -> Option<MatchResult>
-  where
-    P: PairMaskTest,
-  {
+  pub fn boyer_moore_magiclen_rsearch(
+    &self, free_bytes_len: usize, mask_test: impl PairMaskTest,
+  ) -> Option<MatchResult> {
     if self.store.len() == 0
       || free_bytes_len == 0
       || self.store.len() < free_bytes_len

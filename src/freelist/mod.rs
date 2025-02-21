@@ -115,7 +115,7 @@ impl SearchStore {
     };
   }
 
-  fn get(self) -> Option<MatchResult> {
+  fn take(self) -> Option<MatchResult> {
     self.best
   }
 }
