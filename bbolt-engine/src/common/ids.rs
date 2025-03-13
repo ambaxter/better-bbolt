@@ -320,39 +320,7 @@ impl DiskPageId {
   }
 }
 
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum AssignedPageId {
-  Free(PageId),
-  Allocate(PageId),
-}
-
-impl AssignedPageId {
-  pub fn free(lot_index: LotIndex, lot_offset: LotOffset) -> AssignedPageId {
-    let page_id = (lot_index.0 as u64 * 8) + lot_offset.0 as u64;
-    AssignedPageId::Free(PageId::of(page_id))
-  }
-
-  pub fn allocate(lot_index: LotIndex, lot_offset: LotOffset) -> AssignedPageId {
-    let page_id = (lot_index.0 as u64 * 8) + lot_offset.0 as u64;
-    AssignedPageId::Allocate(PageId::of(page_id))
-  }
-
-  pub fn needs_allocation(&self) -> bool {
-    match self {
-      AssignedPageId::Free(_) => false,
-      AssignedPageId::Allocate(_) => true,
-    }
-  }
-}
-
-impl GetPageId for AssignedPageId {
-  fn page_id(&self) -> PageId {
-    match self {
-      AssignedPageId::Free(page_id) => *page_id,
-      AssignedPageId::Allocate(page_id) => *page_id,
-    }
-  }
-}
+page_id!(AssignedPageId);
 
 impl From<AssignedPageId> for BucketPageId {
   fn from(value: AssignedPageId) -> Self {

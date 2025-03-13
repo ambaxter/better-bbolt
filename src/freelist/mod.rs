@@ -1,4 +1,4 @@
-use bbolt_engine::common::ids::{FreePageId, LotIndex, LotOffset, PageId};
+use bbolt_engine::common::ids::{AssignedPageId, FreePageId, LotIndex, LotOffset, PageId};
 use std::cmp::Ordering;
 
 pub mod masks;
@@ -30,6 +30,14 @@ impl MatchLocation {
   #[inline]
   pub fn mid_dist_to(&self, goal_lot: LotIndex) -> usize {
     self.index.abs_diff(goal_lot)
+  }
+}
+
+impl From<MatchLocation> for AssignedPageId {
+  fn from(value: MatchLocation) -> Self {
+    AssignedPageId::new(PageId::of(
+      (value.index.0 as u64 * 8) + (value.offset.0 as u64),
+    ))
   }
 }
 

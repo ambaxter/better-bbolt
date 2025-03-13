@@ -13,6 +13,8 @@ pub mod common;
 pub mod cursor;
 pub mod index;
 
+pub mod io;
+
 #[cfg(test)]
 mod tests {
   use super::*;

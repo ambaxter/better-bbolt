@@ -1,8 +1,10 @@
 use crate::freelist::masks::*;
 use crate::freelist::search::SearchPattern;
-use crate::freelist::{MatchLocation, MatchResult, SearchStore};
+use crate::freelist::{MaskDirective, MatchLocation, MatchResult, SearchStore};
 use bbolt_engine::common::bitset::BitSet;
-use bbolt_engine::common::ids::{EOFPageId, FreePageId, GetPageId, LotIndex, LotOffset, PageId};
+use bbolt_engine::common::ids::{
+  AssignedPageId, EOFPageId, FreePageId, GetPageId, LotIndex, LotOffset, PageId,
+};
 
 pub struct SimpleFreePages {
   page_size: usize,
@@ -61,23 +63,19 @@ impl SimpleFreePages {
   pub fn is_free<T: Into<PageId>>(&self, page_id: T) -> bool {
     let (lot_index, offset) = self.get_location(page_id);
     assert!(lot_index.0 < self.store.len());
-    self.store[lot_index.0].get(offset.0)
+    self.store[lot_index.0].get_bit(offset.0)
   }
 
   pub fn free<T: Into<PageId>>(&mut self, page_id: T) {
     let (lot_index, offset) = self.get_location(page_id);
     assert!(lot_index.0 < self.store.len());
-    self.store[lot_index.0].set(offset.0);
+    self.store[lot_index.0].set_bit(offset.0);
   }
 
   pub fn claim<T: Into<PageId>>(&mut self, page_id: T) {
     let (store_lot, offset) = self.get_location(page_id);
     assert!(store_lot.0 < self.store.len());
-    self.store[store_lot.0].unset(offset.0);
-  }
-
-  pub fn len(&self) -> usize {
-    self.store.len() * 8
+    self.store[store_lot.0].clear_bit(offset.0);
   }
 
   pub fn find_near<T: Into<PageId>>(&self, goal_page_id: T, len: usize) -> Option<MatchResult> {
@@ -281,7 +279,49 @@ impl SimpleFreePages {
     search_store.take()
   }
 
-  pub fn assign(mut self, goal_page_id: PageId, len: usize) -> () {}
+  pub fn assign(&mut self, m_result: MatchResult) -> AssignedPageId {
+    let l_index = m_result.match_location.index.0;
+    if m_result.run_length == 0 {
+      match m_result.mask_directive {
+        MaskDirective::Left(l_mask) => {
+          self.store[l_index].clear_mask(l_mask);
+        }
+        MaskDirective::Right(_) => unreachable!(),
+        MaskDirective::Pair(l_mask, r_mask) => {
+          self.store[l_index].clear_mask(l_mask);
+          self.store[l_index + 1].clear_mask(r_mask);
+        }
+      }
+    } else {
+      match m_result.mask_directive {
+        MaskDirective::Left(l_mask) => {
+          self.store[l_index].clear_mask(l_mask);
+          let run_index = l_index + 1;
+          for i in &mut self.store[run_index..run_index + m_result.run_length] {
+            i.clear_mask(u8::MAX);
+          }
+        }
+        MaskDirective::Right(r_mask) => {
+          let run_index = l_index;
+          let r_index = run_index + m_result.run_length;
+          for i in &mut self.store[run_index..r_index] {
+            i.clear_mask(u8::MAX);
+          }
+          self.store[r_index].clear_mask(r_mask);
+        }
+        MaskDirective::Pair(l_mask, r_mask) => {
+          self.store[l_index].clear_mask(l_mask);
+          let run_index = l_index + 1;
+          let r_index = run_index + m_result.run_length;
+          for i in &mut self.store[run_index..r_index] {
+            i.clear_mask(u8::MAX);
+          }
+          self.store[r_index].clear_mask(r_mask);
+        }
+      }
+    }
+    m_result.match_location.into()
+  }
 }
 
 #[cfg(test)]

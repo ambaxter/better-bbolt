@@ -2,9 +2,10 @@
 resolver = "2"
 members = [
     "bbolt-engine",
+    "bbolt-nub",
     "."
 ]
-default-members = ["bbolt-engine", "."]
+default-members = ["bbolt-engine", "bbolt-nub", "."]
 
 [workspace.package]
 version = "0.1.0"
@@ -28,34 +29,63 @@ parking_lot.workspace = true
 lz4_flex.workspace = true
 smallvec.workspace = true
 bbolt-engine.workspace = true
+bbolt-nub.workspace = true
 futures = { version = "0.3.31", features = ["thread-pool"] }
 
 [workspace.dependencies]
+# going away!
 aligners = { version = "0.0.10", default-features = false }
 # Until the aligners miri fix is in crates.io depend on the git main branch
 # Swap 0.0.10 for the git version to run the miri test
 #aligners = {git = "https://github.com/V0ldek/aligners.git", default-features = false }
+
+# Data Structures
 parking_lot = "0.12.3"
-memmap2 = "0.9.4"
-fs4 = { version = "0.12.0", features = ["sync", "fs-err3"] }
-bytemuck = { version = "1.20", features = ["derive"] }
-bitflags = "2.6.0"
-itertools = "0.14.0"
-once_cell = "1.20.2"
+bytemuck = { version = "1.22", features = ["derive"] }
+once_cell = "1.21"
 size = "0.5.0"
-delegate = "0.13.1"
-fnv_rs = "0.4.3"
-rayon = "1.10.0"
-crossbeam-channel = "0.5.14"
+smallvec = { version = "1.13.2", features = ["const_generics"] }
+triomphe = "0.1.14"
 dashmap = "6.1.0"
-fake = { version = "4.0.0", features = ["derive"] }
 hashbrown = "0.15.2"
-fs-err = "3.0.0"
 page_size = "0.6.0"
 moka = { version = "0.12.8", features = ["sync"] }
-getset = "0.1.3"
-bon = { version = "3.3", features = ["implied-bounds"] }
 bumpalo = "3.16.0"
+
+# Algorithms
+fnv_rs = "0.4.3"
 lz4_flex = "0.11.3"
-smallvec = { version = "1.13.2", features = ["const_generics"] }
+
+# Idiomatics
+itertools = "0.14.0"
+delegate = "0.13.1"
+getset = "0.1.5"
+enum_dispatch = "0.3.13"
+
+# Unsafe handling
+uninit = "0.6.2"
+
+# I/O
+memmap2 = "0.9.4"
+fs4 = { version = "0.13.0", features = ["sync", "fs-err3"] }
+bitflags = "2.6.0"
+
+# Multi-threading
+rayon = "1.10.0"
+crossbeam-channel = "0.5.14"
+
+# CLI
+bon = { version = "3.3", features = ["implied-bounds"] }
+
+# Logging/Error
+tracing = "0.1.41"
+error-stack = "0.5.0"
+thiserror = "2"
+fs-err = "3.0.0"
+
+# Testing
+fake = { version = "4.0.0", features = ["derive"] }
+
+# bbolt internal libraries
 bbolt-engine = {path = "bbolt-engine" }
+bbolt-nub = {path = "bbolt-nub" }
