@@ -1,7 +1,7 @@
+use crate::common::page::PageFlag;
 use bytemuck::{Pod, Zeroable};
 use std::fmt::Debug;
 use std::ops::{Add, Deref};
-
 // TODO: Clean this up once I'm done making sure everything is as it needs to be!
 
 pub trait DbId {
@@ -58,12 +58,14 @@ db_rsrc_id!(TxId);
 #[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Pod, Zeroable)]
 pub struct DbPageId(u64);
 
-pub trait DbPageType: Debug + Copy + Deref<Target = DbPageId> {}
+pub trait DbPageType: Debug + Copy + Deref<Target = DbPageId> {
+  fn page_type_mask(&self) -> PageFlag;
+}
 
 macro_rules! db_page_id {
     (
     $(#[$meta:meta])*
-    $x:ident
+    $x:ident,$flag:stmt
   ) => {
     $(#[$meta])*
     #[repr(C)]
@@ -77,13 +79,18 @@ macro_rules! db_page_id {
       }
     }
 
-      impl DbPageType for $x {}
+      impl DbPageType for $x {
+      #[inline(always)]
+        fn page_type_mask(&self) -> PageFlag {
+          $flag
+        }
+    }
   }
 }
 
-db_page_id!(MetaPageId);
-db_page_id!(NodePageId);
-db_page_id!(FreelistPageId);
+db_page_id!(MetaPageId, PageFlag::META);
+db_page_id!(NodePageId, PageFlag::NODE_TYPE_MASK);
+db_page_id!(FreelistPageId, PageFlag::FREELIST);
 
 pub trait OverflowablePage: DbPageType + Add<u32> {}
 macro_rules! overflowable_page_id {

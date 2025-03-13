@@ -1,4 +1,4 @@
-use crate::common::id::DbPageId;
+use crate::common::id::{DbPageId, DiskPageId, EOFPageId};
 use crate::common::page::PageFlag;
 use thiserror::Error;
 
@@ -8,4 +8,12 @@ pub enum PageError {
   UnexpectedDbPageId(DbPageId, DbPageId),
   #[error("Expected PageFlag matching mask `{0:#x}`. Found '{1:#x}")]
   InvalidPageFlag(PageFlag, PageFlag),
+}
+
+#[derive(Debug, Error)]
+pub enum DiskReadError {
+  #[error("UnexpectedEOF: Read to `{0:?}`. EOF at '{1:?}.")]
+  UnexpectedEOF(DiskPageId, EOFPageId),
+  #[error("ReadError: Read at `{0:?}`.")]
+  ReadError(DiskPageId),
 }

@@ -1,33 +1,8 @@
 use crate::common::errors::PageError;
-use crate::common::id::{DbPageId, DbPageType, FreelistPageId, MetaPageId, NodePageId};
+use crate::common::id::{DbPageId, DbPageType};
 use error_stack::{Report, Result};
 use std::borrow::Cow;
 use std::fmt::Debug;
-
-pub trait FastCheckPageFlag: DbPageType {
-  fn page_flag_mask() -> PageFlag;
-}
-
-impl FastCheckPageFlag for MetaPageId {
-  #[inline(always)]
-  fn page_flag_mask() -> PageFlag {
-    PageFlag::META
-  }
-}
-
-impl FastCheckPageFlag for FreelistPageId {
-  #[inline(always)]
-  fn page_flag_mask() -> PageFlag {
-    PageFlag::FREELIST
-  }
-}
-
-impl FastCheckPageFlag for NodePageId {
-  #[inline(always)]
-  fn page_flag_mask() -> PageFlag {
-    PageFlag::NODE_TYPE_MASK
-  }
-}
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -149,8 +124,8 @@ impl PageHeader {
     }
   }
 
-  pub fn fast_check<P: FastCheckPageFlag>(&self, id: P) -> Result<(), PageError> {
-    self.fast_check_inner(*id.deref(), P::page_flag_mask())
+  pub fn fast_check<D: DbPageType>(&self, id: D) -> Result<(), PageError> {
+    self.fast_check_inner(*id.deref(), id.page_type_mask())
   }
 
   fn fast_check_inner(&self, id: DbPageId, flag_mask: PageFlag) -> Result<(), PageError> {
