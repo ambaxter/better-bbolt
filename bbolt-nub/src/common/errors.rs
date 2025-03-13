@@ -1,6 +1,6 @@
-use thiserror::Error;
 use crate::common::id::DbPageId;
 use crate::common::page::PageFlag;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum PageError {

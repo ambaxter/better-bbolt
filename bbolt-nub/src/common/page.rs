@@ -1,26 +1,29 @@
+use crate::common::errors::PageError;
 use crate::common::id::{DbPageId, DbPageType, FreelistPageId, MetaPageId, NodePageId};
+use error_stack::{Report, Result};
 use std::borrow::Cow;
 use std::fmt::Debug;
-use error_stack::{Result, Report};
-use crate::common::errors::PageError;
 
 pub trait FastCheckPageFlag: DbPageType {
   fn page_flag_mask() -> PageFlag;
 }
 
 impl FastCheckPageFlag for MetaPageId {
+  #[inline(always)]
   fn page_flag_mask() -> PageFlag {
     PageFlag::META
   }
 }
 
 impl FastCheckPageFlag for FreelistPageId {
+  #[inline(always)]
   fn page_flag_mask() -> PageFlag {
     PageFlag::FREELIST
   }
 }
 
 impl FastCheckPageFlag for NodePageId {
+  #[inline(always)]
   fn page_flag_mask() -> PageFlag {
     PageFlag::NODE_TYPE_MASK
   }
@@ -147,12 +150,21 @@ impl PageHeader {
   }
 
   pub fn fast_check<P: FastCheckPageFlag>(&self, id: P) -> Result<(), PageError> {
-    if *id != self.id {
-      Err(Report::new(PageError::UnexpectedDbPageId(self.id, *id)))
-    } else if P::page_flag_mask() & self.flags == PageFlag::empty() {
-      Err(Report::new(PageError::InvalidPageFlag(P::page_flag_mask(), self.flags)))
+    self.fast_check_inner(*id.deref(), P::page_flag_mask())
+  }
+
+  fn fast_check_inner(&self, id: DbPageId, flag_mask: PageFlag) -> Result<(), PageError> {
+    if self.id() != id {
+      Err(Report::new(PageError::UnexpectedDbPageId(id, self.id)))
     } else {
-      Ok(())
+      let m = flag_mask & self.flags;
+      if m == PageFlag::empty() || m.bits().count_ones() > 1 {
+        Err(Report::new(PageError::InvalidPageFlag(
+          flag_mask, self.flags,
+        )))
+      } else {
+        Ok(())
+      }
     }
   }
 
