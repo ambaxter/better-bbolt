@@ -3,27 +3,24 @@ use crate::common::id::DiskPageId;
 use crate::common::page_bytes::{Page, PageBytes};
 use error_stack::Result;
 
+pub mod disk_cache;
+
+//AsRef<[u8]>
+
+
+
 pub trait ReadPageData {
-  type ReadPageOut<'a>: PageBytes
-  where
-    Self: 'a;
-  fn read_page_data<'a>(
-    &'a self, disk_page_id: DiskPageId,
-  ) -> Result<Self::ReadPageOut<'a>, DiskReadError>;
+  type RootDataBytes: PageBytes;
+
+  type DataBytes: PageBytes;
+
+  fn read_root_page(
+    &self, disk_page_id: DiskPageId,
+  ) -> Result<Page<Self::RootDataBytes>, DiskReadError>;
+
+  fn read_page(&self, disk_page_id: DiskPageId) -> Result<Self::DataBytes, DiskReadError>;
 }
 
-pub trait ReadContigPage: ReadPageData {
-  fn read_contig_page<'a>(
-    &'a self, disk_page_id: DiskPageId,
-  ) -> Result<Page<Self::ReadPageOut<'a>>, DiskReadError>;
-}
+pub trait ReadContigData: ReadPageData {}
 
-pub trait ReadNonContigPage: ReadPageData {
-  type RootPageOut<'a>: PageBytes
-  where
-    Self: 'a;
-
-  fn read_root_page<'a>(
-    &'a self, disk_page_id: DiskPageId,
-  ) -> Result<Page<Self::RootPageOut<'a>>, DiskReadError>;
-}
+pub trait ReadNonContigData: ReadPageData {}

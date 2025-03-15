@@ -59,6 +59,12 @@ pub struct SharedBuffer {
 impl Deref for SharedBuffer {
   type Target = [u8];
   fn deref(&self) -> &Self::Target {
+    self.as_ref()
+  }
+}
+
+impl AsRef<[u8]> for SharedBuffer {
+  fn as_ref(&self) -> &[u8] {
     self
       .inner
       .as_ref()

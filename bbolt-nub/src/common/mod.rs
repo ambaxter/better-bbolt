@@ -5,3 +5,4 @@ pub mod buffer_pool;
 pub mod errors;
 
 pub mod page;
+pub mod bucket;

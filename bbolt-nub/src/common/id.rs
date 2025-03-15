@@ -58,7 +58,7 @@ db_rsrc_id!(TxId);
 #[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Pod, Zeroable)]
 pub struct DbPageId(u64);
 
-pub trait DbPageType: Debug + Copy + Deref<Target = DbPageId> {
+pub trait DbPageType: Debug + Copy + Clone + Deref<Target = DbPageId> {
   fn page_type_mask(&self) -> PageFlag;
 }
 
@@ -89,6 +89,7 @@ macro_rules! db_page_id {
 }
 
 db_page_id!(MetaPageId, PageFlag::META);
+db_page_id!(BucketPageId, PageFlag::NODE_TYPE_MASK);
 db_page_id!(NodePageId, PageFlag::NODE_TYPE_MASK);
 db_page_id!(FreelistPageId, PageFlag::FREELIST);
 
@@ -109,10 +110,12 @@ macro_rules! overflowable_page_id {
   };
 }
 
+overflowable_page_id!(BucketPageId);
 overflowable_page_id!(NodePageId);
 overflowable_page_id!(FreelistPageId);
 
 pub trait TranslatablePage: DbPageType {}
 
+impl TranslatablePage for BucketPageId {}
 impl TranslatablePage for NodePageId {}
 impl TranslatablePage for FreelistPageId {}
