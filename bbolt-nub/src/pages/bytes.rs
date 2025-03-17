@@ -169,7 +169,9 @@ impl<'a, T: PageBytes, R: ReadPageData> Iterator for LazySliceIter<'a, T, R> {
         let next_page_idx = idx / page_size;
         let page_overflow = self.slice.page.root.page_header().get_overflow();
         let db_page_id = self.slice.page.root.page_header().db_page_id();
-        if next_page_idx <= self.slice.page.root.page_header().get_overflow() as usize {
+
+        unimplemented!()
+        /*if next_page_idx <= self.slice.page.root.page_header().get_overflow() as usize {
           match db_page_id {
             // Now we are at the point of needing to figure out how
             // this we translate page ids to disk page ids
@@ -177,7 +179,7 @@ impl<'a, T: PageBytes, R: ReadPageData> Iterator for LazySliceIter<'a, T, R> {
             DbPageTypes::Freelist(id) => id + page_overflow,
             _ => unreachable!(),
           }
-        }
+        }*/
       }
     }
     None
