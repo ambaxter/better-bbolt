@@ -1,4 +1,4 @@
-use crate::common::page::PageFlag;
+use crate::common::page::{PageFlag, PageHeader};
 use bytemuck::{Pod, Zeroable};
 use std::fmt::Debug;
 use std::ops::{Add, Deref};
@@ -92,6 +92,27 @@ db_page_id!(MetaPageId, PageFlag::META);
 db_page_id!(BucketPageId, PageFlag::NODE_TYPE_MASK);
 db_page_id!(NodePageId, PageFlag::NODE_TYPE_MASK);
 db_page_id!(FreelistPageId, PageFlag::FREELIST);
+
+#[derive(Debug, Copy, Clone)]
+pub enum DbPageTypes {
+  Meta(MetaPageId),
+  Node(NodePageId),
+  Freelist(FreelistPageId),
+}
+
+impl From<(DbPageId, PageFlag)> for DbPageTypes {
+  fn from(value: (DbPageId, PageFlag)) -> Self {
+    let (page_id, flag) = value;
+    if flag & PageFlag::META == PageFlag::META {
+      return DbPageTypes::Meta(MetaPageId(page_id));
+    } else if flag & PageFlag::FREELIST == PageFlag::FREELIST {
+      return DbPageTypes::Freelist(FreelistPageId(page_id));
+    } else if flag & PageFlag::NODE_TYPE_MASK != PageFlag::empty() {
+      return DbPageTypes::Node(NodePageId(page_id));
+    }
+    unreachable!("Invalid node mask")
+  }
+}
 
 pub trait OverflowablePage: DbPageType + Add<u32> {}
 macro_rules! overflowable_page_id {

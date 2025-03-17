@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::io;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
-use triomphe::{Arc, HeaderSlice, UniqueArc};
+use triomphe::{Arc, ArcBorrow, HeaderSlice, UniqueArc};
 use uninit::extension_traits::AsOut;
 use uninit::read::ReadIntoUninit;
 
@@ -83,6 +83,24 @@ impl Drop for SharedBuffer {
         pool.push(inner);
       }
     }
+  }
+}
+
+pub struct SharedBufferRef<'a> {
+  inner: &'a SharedBuffer,
+}
+
+impl<'a> Deref for SharedBufferRef<'a> {
+  type Target = [u8];
+
+  fn deref(&self) -> &Self::Target {
+    self.inner.deref()
+  }
+}
+
+impl<'a> AsRef<[u8]> for SharedBufferRef<'a> {
+  fn as_ref(&self) -> &[u8] {
+    self.inner.as_ref()
   }
 }
 

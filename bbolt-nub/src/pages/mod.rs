@@ -1,21 +1,22 @@
-use std::ops::Deref;
 use crate::common::errors::PageError;
 use crate::common::id::DbPageType;
 use crate::common::page::PageHeader;
-use crate::common::page_bytes::PageBytes;
+use crate::io::ReadPageData;
+pub(crate) use crate::pages::bytes::PageBytes;
+use std::ops::{Deref, RangeBounds};
+
+pub mod bytes;
 
 pub mod freelist;
 pub mod meta;
 pub mod node;
 
-
 pub trait HasHeader: Clone {
   fn page_header(&self) -> &PageHeader;
 }
 
-
 #[derive(Clone)]
-pub struct Page<T: PageBytes> {
+pub struct Page<T> {
   buffer: T,
 }
 

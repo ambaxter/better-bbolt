@@ -1,7 +1,7 @@
-use bytemuck::{Pod, Zeroable};
 use crate::common::bucket::BucketHeader;
 use crate::common::id::{EOFPageId, FreelistPageId, TxId};
 use crate::pages::HasHeader;
+use bytemuck::{Pod, Zeroable};
 
 /// `Meta` represents the on-file layout of a database's metadata
 ///

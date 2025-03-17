@@ -1,6 +1,6 @@
+use crate::common::id::BucketPageId;
 use bytemuck::{Pod, Zeroable};
 use getset::CopyGetters;
-use crate::common::id::BucketPageId;
 
 /// `BucketHeader` represents the on-file layout of a bucket header.
 /// This is stored as the "value" of a bucket key. If the bucket is small enough,
