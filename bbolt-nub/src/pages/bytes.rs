@@ -1,15 +1,20 @@
-use crate::common::id::DbPageTypes;
-use crate::io::ReadPageData;
+use crate::io::ReadData;
 use crate::pages::{HasHeader, Page};
+use delegate::delegate;
 use std::ops::{Range, RangeBounds};
-use std::process::id;
 use triomphe::Arc;
 
-pub trait IntoCopiedIterator {
-  fn into_cloned_iter(self) -> impl Iterator<Item = u8>;
+pub trait HasRootPage {
+  fn root_page(&self) -> &[u8];
 }
 
-trait ByteSlice<'a>: Ord + PartialEq<&'a [u8]> + PartialOrd<&'a [u8]> + IntoCopiedIterator {
+pub trait IntoCopiedIterator {
+  fn into_cloned_iter(self) -> impl Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator;
+}
+
+pub trait ByteSlice<'a>:
+  Ord + PartialEq<&'a [u8]> + PartialOrd<&'a [u8]> + IntoCopiedIterator
+{
   fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self;
 }
 
@@ -53,13 +58,21 @@ where
 }
 
 #[derive(Clone)]
-pub struct LazyPage<T: PageBytes, R: ReadPageData> {
+pub struct LazyPage<T: PageBytes, R: ReadData> {
   root: Page<T>,
   io: Arc<R>,
 }
 
+impl<T: PageBytes, R: ReadData> HasRootPage for LazyPage<T, R> {
+  delegate! {
+      to &self.root {
+          fn root_page(&self) -> &[u8];
+      }
+  }
+}
+
 #[derive(Clone)]
-pub struct LazySlice<'a, T: PageBytes, R: ReadPageData> {
+pub struct LazySlice<'a, T: PageBytes, R: ReadData> {
   page: &'a LazyPage<T, R>,
   range: Range<usize>,
 }
@@ -73,7 +86,7 @@ enum LazyBytes<'a, T: PageBytes> {
 impl<'a, T: PageBytes> AsRef<[u8]> for LazyBytes<'a, T> {
   fn as_ref(&self) -> &[u8] {
     match self {
-      LazyBytes::Root(root) => root.as_ref(),
+      LazyBytes::Root(root) => root.root_page(),
       LazyBytes::DataBytes {
         page,
         overflow_index: _,
@@ -91,7 +104,7 @@ struct LazyIter<'a, T: PageBytes> {
 impl<'a, T: PageBytes> LazyIter<'a, T> {
   fn next_pos(&self) -> usize {
     let page_offset = match &self.bytes {
-      LazyBytes::Root(page) => page.len() * 0,
+      LazyBytes::Root(page) => page.root_page().len() * 0,
       LazyBytes::DataBytes {
         page,
         overflow_index,
@@ -102,7 +115,7 @@ impl<'a, T: PageBytes> LazyIter<'a, T> {
 
   fn back_pos(&self) -> usize {
     let page_offset = match &self.bytes {
-      LazyBytes::Root(page) => page.len() * 0,
+      LazyBytes::Root(page) => page.root_page().len() * 0,
       LazyBytes::DataBytes {
         page,
         overflow_index,
@@ -150,14 +163,14 @@ impl<'a, T: PageBytes> ExactSizeIterator for LazyIter<'a, T> {
   }
 }
 
-pub struct LazySliceIter<'a, T: PageBytes, R: ReadPageData> {
+pub struct LazySliceIter<'a, T: PageBytes, R: ReadData> {
   slice: LazySlice<'a, T, R>,
   range: Range<usize>,
   next: LazyIter<'a, T>,
   back: LazyIter<'a, T>,
 }
 
-impl<'a, T: PageBytes, R: ReadPageData> Iterator for LazySliceIter<'a, T, R> {
+impl<'a, T: PageBytes, R: ReadData> Iterator for LazySliceIter<'a, T, R> {
   type Item = u8;
 
   fn next(&mut self) -> Option<Self::Item> {

@@ -1,7 +1,10 @@
 use crate::common::bucket::BucketHeader;
 use crate::common::id::{EOFPageId, FreelistPageId, TxId};
-use crate::pages::HasHeader;
+use crate::common::page::PageHeader;
+use crate::pages::bytes::HasRootPage;
+use crate::pages::{HasHeader, Page, PageBytes};
 use bytemuck::{Pod, Zeroable};
+use delegate::delegate;
 
 /// `Meta` represents the on-file layout of a database's metadata
 ///
@@ -30,4 +33,25 @@ pub struct Meta {
 
 pub trait HasMeta: HasHeader {
   fn meta(&self) -> &Meta;
+}
+
+#[derive(Clone)]
+pub struct MetaPage<T: PageBytes> {
+  page: Page<T>,
+}
+
+impl<T: PageBytes> HasRootPage for MetaPage<T> {
+  delegate! {
+      to &self.page {
+          fn root_page(&self) -> &[u8];
+      }
+  }
+}
+
+impl<T: PageBytes> HasHeader for MetaPage<T> {
+  delegate! {
+      to &self.page {
+          fn page_header(&self) -> &PageHeader;
+      }
+  }
 }
