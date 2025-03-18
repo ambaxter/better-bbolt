@@ -8,6 +8,8 @@ pub enum PageError {
   UnexpectedDbPageId(DbPageId, DbPageId),
   #[error("Expected PageFlag matching mask `{0:#x}`. Found '{1:#x}")]
   InvalidPageFlag(PageFlag, PageFlag),
+  #[error("Page overflow unsupported for {0:?}. Flags '{1:#x}")]
+  UnsupportedPageFlagOverflow(DbPageId, PageFlag),
 }
 
 #[derive(Debug, Error)]

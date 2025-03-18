@@ -124,27 +124,6 @@ impl From<BucketPageId> for NodePageId {
   }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum DbPageTypes {
-  Meta(MetaPageId),
-  Node(NodePageId),
-  Freelist(FreelistPageId),
-}
-
-impl From<(DbPageId, PageFlag)> for DbPageTypes {
-  fn from(value: (DbPageId, PageFlag)) -> Self {
-    let (page_id, flag) = value;
-    if flag & PageFlag::META == PageFlag::META {
-      return DbPageTypes::Meta(MetaPageId(page_id));
-    } else if flag & PageFlag::FREELIST == PageFlag::FREELIST {
-      return DbPageTypes::Freelist(FreelistPageId(page_id));
-    } else if flag & PageFlag::NODE_TYPE_MASK != PageFlag::empty() {
-      return DbPageTypes::Node(NodePageId(page_id));
-    }
-    unreachable!("Invalid node mask")
-  }
-}
-
 pub trait OverflowablePage: DbPageType + Add<u32> {}
 macro_rules! overflowable_page_id {
   (
@@ -153,6 +132,8 @@ macro_rules! overflowable_page_id {
   ) => {
     impl Add<u32> for $x {
       type Output = Self;
+
+      #[inline]
       fn add(self, rhs: u32) -> Self {
         Self(DbPageId(self.0.0 + rhs as u64))
       }
@@ -162,9 +143,14 @@ macro_rules! overflowable_page_id {
   };
 }
 
-overflowable_page_id!(BucketPageId);
 overflowable_page_id!(NodePageId);
 overflowable_page_id!(FreelistPageId);
+
+#[derive(Debug, Copy, Clone)]
+pub enum OverflowPageId {
+  Freelist(FreelistPageId),
+  Node(NodePageId),
+}
 
 pub trait TranslatablePage: DbPageType {}
 

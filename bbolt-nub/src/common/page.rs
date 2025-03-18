@@ -1,5 +1,5 @@
 use crate::common::errors::PageError;
-use crate::common::id::{DbPageId, DbPageType, DbPageTypes};
+use crate::common::id::{DbPageId, DbPageType, FreelistPageId, NodePageId, OverflowPageId};
 use error_stack::{Report, Result};
 use std::borrow::Cow;
 use std::fmt::Debug;
@@ -143,8 +143,14 @@ impl PageHeader {
     }
   }
 
-  pub fn db_page_id(&self) -> DbPageTypes {
-    (self.id, self.flags).into()
+  pub fn overflow_page_id(&self) -> Option<OverflowPageId> {
+    if self.is_node() {
+      Some(OverflowPageId::Node(NodePageId(self.id)))
+    } else if self.is_freelist() {
+      Some(OverflowPageId::Freelist(FreelistPageId(self.id)))
+    } else {
+      None
+    }
   }
 
   /// page_type returns a human-readable page type string used for debugging.

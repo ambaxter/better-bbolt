@@ -1,6 +1,9 @@
-use crate::io::ReadData;
+use crate::common::errors::DiskReadError;
+use crate::common::id::OverflowPageId;
+use crate::io::{ReadData, ReadOverflow};
 use crate::pages::{HasHeader, Page};
 use delegate::delegate;
+use error_stack::Result;
 use std::ops::{Range, RangeBounds};
 use triomphe::Arc;
 
@@ -58,12 +61,12 @@ where
 }
 
 #[derive(Clone)]
-pub struct LazyPage<T: PageBytes, R: ReadData> {
-  root: Page<T>,
+pub struct LazyPage<R: ReadOverflow> {
+  root: Page<R::Output>,
   io: Arc<R>,
 }
 
-impl<T: PageBytes, R: ReadData> HasRootPage for LazyPage<T, R> {
+impl<R: ReadOverflow> HasRootPage for LazyPage<R> {
   delegate! {
       to &self.root {
           fn root_page(&self) -> &[u8];
@@ -72,18 +75,32 @@ impl<T: PageBytes, R: ReadData> HasRootPage for LazyPage<T, R> {
 }
 
 #[derive(Clone)]
-pub struct LazySlice<'a, T: PageBytes, R: ReadData> {
-  page: &'a LazyPage<T, R>,
+pub struct LazySlice<'a, R: ReadOverflow> {
+  page: &'a LazyPage<R>,
   range: Range<usize>,
 }
 
 #[derive(Clone)]
-enum LazyBytes<'a, T: PageBytes> {
-  Root(&'a Page<T>),
+enum LazyBytes<T: PageBytes> {
+  // TODO: I tried to handle root as a reference to the parent page,
+  // but it ended up not working due to lifetime shenanigans
+  Root(Page<T>),
   DataBytes { page: T, overflow_index: u32 },
 }
 
-impl<'a, T: PageBytes> AsRef<[u8]> for LazyBytes<'a, T> {
+impl<T: PageBytes> LazyBytes<T> {
+  fn page_index(&self) -> u32 {
+    match &self {
+      LazyBytes::Root(_) => 0,
+      LazyBytes::DataBytes {
+        page: _page,
+        overflow_index,
+      } => *overflow_index,
+    }
+  }
+}
+
+impl<T: PageBytes> AsRef<[u8]> for LazyBytes<T> {
   fn as_ref(&self) -> &[u8] {
     match self {
       LazyBytes::Root(root) => root.root_page(),
@@ -96,15 +113,15 @@ impl<'a, T: PageBytes> AsRef<[u8]> for LazyBytes<'a, T> {
 }
 
 #[derive(Clone)]
-struct LazyIter<'a, T: PageBytes> {
-  bytes: LazyBytes<'a, T>,
+struct LazyIter<T: PageBytes> {
+  bytes: LazyBytes<T>,
   range: Range<usize>,
 }
 
-impl<'a, T: PageBytes> LazyIter<'a, T> {
+impl<T: PageBytes> LazyIter<T> {
   fn next_pos(&self) -> usize {
     let page_offset = match &self.bytes {
-      LazyBytes::Root(page) => page.root_page().len() * 0,
+      LazyBytes::Root(_) => 0,
       LazyBytes::DataBytes {
         page,
         overflow_index,
@@ -115,7 +132,7 @@ impl<'a, T: PageBytes> LazyIter<'a, T> {
 
   fn back_pos(&self) -> usize {
     let page_offset = match &self.bytes {
-      LazyBytes::Root(page) => page.root_page().len() * 0,
+      LazyBytes::Root(_) => 0,
       LazyBytes::DataBytes {
         page,
         overflow_index,
@@ -124,18 +141,13 @@ impl<'a, T: PageBytes> LazyIter<'a, T> {
     page_offset + self.range.end
   }
 
+  #[inline]
   fn page_index(&self) -> u32 {
-    match &self.bytes {
-      LazyBytes::Root(_) => 0,
-      LazyBytes::DataBytes {
-        page: _page,
-        overflow_index,
-      } => *overflow_index,
-    }
+    self.bytes.page_index()
   }
 }
 
-impl<'a, T: PageBytes> Iterator for LazyIter<'a, T> {
+impl<T: PageBytes> Iterator for LazyIter<T> {
   type Item = u8;
 
   fn next(&mut self) -> Option<Self::Item> {
@@ -147,7 +159,7 @@ impl<'a, T: PageBytes> Iterator for LazyIter<'a, T> {
   }
 }
 
-impl<'a, T: PageBytes> DoubleEndedIterator for LazyIter<'a, T> {
+impl<'a, T: PageBytes> DoubleEndedIterator for LazyIter<T> {
   fn next_back(&mut self) -> Option<Self::Item> {
     self
       .range
@@ -157,44 +169,115 @@ impl<'a, T: PageBytes> DoubleEndedIterator for LazyIter<'a, T> {
   }
 }
 
-impl<'a, T: PageBytes> ExactSizeIterator for LazyIter<'a, T> {
+impl<T: PageBytes> ExactSizeIterator for LazyIter<T> {
   fn len(&self) -> usize {
     self.range.len()
   }
 }
 
-pub struct LazySliceIter<'a, T: PageBytes, R: ReadData> {
-  slice: LazySlice<'a, T, R>,
+pub struct LazySliceIter<'a, R: ReadOverflow> {
+  slice: LazySlice<'a, R>,
   range: Range<usize>,
-  next: LazyIter<'a, T>,
-  back: LazyIter<'a, T>,
+  next: LazyIter<R::Output>,
+  back: LazyIter<R::Output>,
 }
 
-impl<'a, T: PageBytes, R: ReadData> Iterator for LazySliceIter<'a, T, R> {
-  type Item = u8;
+impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
+  fn read_overflow(&self, idx: usize) -> Result<LazyBytes<R::Output>, DiskReadError> {
+    let page_size = self.slice.page.root.root_page().len();
+    let page_idx = (idx / page_size) as u32;
+    let header = self.slice.page.root.page_header();
+    let page_overflow = header.get_overflow();
+    let page_id = header.overflow_page_id().expect("overflow page id");
+    assert!(page_idx <= page_overflow);
+    match page_id {
+      OverflowPageId::Freelist(page_id) => {
+        self.slice.page.io.read_freelist_overflow(page_id, page_idx)
+      }
+      OverflowPageId::Node(page_id) => self.slice.page.io.read_node_overflow(page_id, page_idx),
+    }
+    .map(|page| LazyBytes::DataBytes {
+      page,
+      overflow_index: page_idx,
+    })
+  }
+  fn next_overflow(&self, idx: usize) -> Result<LazyIter<R::Output>, DiskReadError> {
+    self.read_overflow(idx).map(|bytes| {
+      let page_size = bytes.as_ref().len();
+      let next_page_idx = bytes.page_index();
+      let back_page_idx = (self.range.end / page_size) as u32;
+      let len = if back_page_idx == next_page_idx {
+        self.range.end % page_size
+      } else {
+        page_size
+      };
+      LazyIter {
+        bytes,
+        range: 0..len,
+      }
+    })
+  }
+
+  fn back_overflow(&self, idx: usize) -> Result<LazyIter<R::Output>, DiskReadError> {
+    self.read_overflow(idx).map(|bytes| {
+      let page_size = bytes.as_ref().len();
+      let back_page_idx = bytes.page_index();
+      let next_page_idx = (self.range.start / page_size) as u32;
+      let start = if back_page_idx == next_page_idx {
+        self.range.start % page_size
+      } else {
+        0
+      };
+      LazyIter {
+        bytes,
+        range: start..page_size,
+      }
+    })
+  }
+}
+
+impl<'a, R: ReadOverflow> Iterator for LazySliceIter<'a, R> {
+  type Item = Result<u8, DiskReadError>;
 
   fn next(&mut self) -> Option<Self::Item> {
     if let Some(idx) = self.range.next() {
-      if let Some(next) = self.next.next() {
-        return Some(next);
+      return if let Some(next) = self.next.next() {
+        Some(Ok(next))
       } else {
-        let page_size = self.next.bytes.as_ref().len();
-        let next_page_idx = idx / page_size;
-        let page_overflow = self.slice.page.root.page_header().get_overflow();
-        let db_page_id = self.slice.page.root.page_header().db_page_id();
-
-        unimplemented!()
-        /*if next_page_idx <= self.slice.page.root.page_header().get_overflow() as usize {
-          match db_page_id {
-            // Now we are at the point of needing to figure out how
-            // this we translate page ids to disk page ids
-            DbPageTypes::Node(id) => id + page_overflow,
-            DbPageTypes::Freelist(id) => id + page_overflow,
-            _ => unreachable!(),
+        match self.next_overflow(idx) {
+          Ok(next) => {
+            self.next = next;
+            self.next.next().map(|next| Ok(next))
           }
-        }*/
-      }
+          Err(err) => Some(Err(err)),
+        }
+      };
     }
     None
+  }
+}
+
+impl<'a, R: ReadOverflow> DoubleEndedIterator for LazySliceIter<'a, R> {
+  fn next_back(&mut self) -> Option<Self::Item> {
+    if let Some(idx) = self.range.next_back() {
+      return if let Some(next) = self.back.next_back() {
+        Some(Ok(next))
+      } else {
+        match self.back_overflow(idx) {
+          Ok(back) => {
+            self.back = back;
+            self.back.next_back().map(|next| Ok(next))
+          }
+          Err(err) => Some(Err(err)),
+        }
+      };
+    }
+    None
+  }
+}
+
+impl<'a, R: ReadOverflow> ExactSizeIterator for LazySliceIter<'a, R> {
+  fn len(&self) -> usize {
+    self.range.len()
   }
 }
