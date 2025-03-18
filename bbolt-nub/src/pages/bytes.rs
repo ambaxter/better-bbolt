@@ -1,9 +1,9 @@
-use crate::common::errors::DiskReadError;
+use crate::common::errors::{DiskReadError, PageError};
 use crate::common::id::OverflowPageId;
 use crate::io::{ReadData, ReadOverflow};
 use crate::pages::{HasHeader, Page};
 use delegate::delegate;
-use error_stack::Result;
+use error_stack::{Result, ResultExt};
 use std::ops::{Range, RangeBounds};
 use triomphe::Arc;
 
@@ -183,25 +183,36 @@ pub struct LazySliceIter<'a, R: ReadOverflow> {
 }
 
 impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
-  fn read_overflow_page(&self, idx: usize) -> Result<LazyBytes<R::Output>, DiskReadError> {
+  fn read_overflow_page(&self, idx: usize) -> Result<LazyBytes<R::Output>, PageError> {
     let page_size = self.slice.page.root.root_page().len();
-    let page_idx = (idx / page_size) as u32;
+    let overflow_index = (idx / page_size) as u32;
     let header = self.slice.page.root.page_header();
     let page_overflow = header.get_overflow();
     let page_id = header.overflow_page_id().expect("overflow page id");
-    assert!(page_idx <= page_overflow);
-    match page_id {
-      OverflowPageId::Freelist(page_id) => {
-        self.slice.page.io.read_freelist_overflow(page_id, page_idx)
+    assert!(overflow_index <= page_overflow);
+    if overflow_index == 0 {
+      Ok(LazyBytes::Root(self.slice.page.root.clone()))
+    } else {
+      match page_id {
+        OverflowPageId::Freelist(page_id) => self
+          .slice
+          .page
+          .io
+          .read_freelist_overflow(page_id, overflow_index),
+        OverflowPageId::Node(page_id) => self
+          .slice
+          .page
+          .io
+          .read_node_overflow(page_id, overflow_index),
       }
-      OverflowPageId::Node(page_id) => self.slice.page.io.read_node_overflow(page_id, page_idx),
+      .map(|page| LazyBytes::DataBytes {
+        page,
+        overflow_index,
+      })
+      .change_context(PageError::OverflowReadError(page_id, overflow_index))
     }
-    .map(|page| LazyBytes::DataBytes {
-      page,
-      overflow_index: page_idx,
-    })
   }
-  fn next_overflow_page(&self, idx: usize) -> Result<LazyIter<R::Output>, DiskReadError> {
+  fn next_overflow_page(&self, idx: usize) -> Result<LazyIter<R::Output>, PageError> {
     self.read_overflow_page(idx).map(|bytes| {
       let page_size = bytes.as_ref().len();
       let next_page_idx = bytes.page_index();
@@ -218,7 +229,7 @@ impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
     })
   }
 
-  fn next_back_overflow_page(&self, idx: usize) -> Result<LazyIter<R::Output>, DiskReadError> {
+  fn next_back_overflow_page(&self, idx: usize) -> Result<LazyIter<R::Output>, PageError> {
     self.read_overflow_page(idx).map(|bytes| {
       let page_size = bytes.as_ref().len();
       let back_page_idx = bytes.page_index();

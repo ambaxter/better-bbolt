@@ -1,4 +1,4 @@
-use crate::common::id::{DbPageId, DiskPageId, EOFPageId};
+use crate::common::id::{DbPageId, DiskPageId, EOFPageId, OverflowPageId};
 use crate::common::page::PageFlag;
 use thiserror::Error;
 
@@ -8,8 +8,8 @@ pub enum PageError {
   UnexpectedDbPageId(DbPageId, DbPageId),
   #[error("Expected PageFlag matching mask `{0:#x}`. Found '{1:#x}")]
   InvalidPageFlag(PageFlag, PageFlag),
-  #[error("Page overflow unsupported for {0:?}. Flags '{1:#x}")]
-  UnsupportedPageFlagOverflow(DbPageId, PageFlag),
+  #[error("Error while loading page {0:?} overflow {1} ")]
+  OverflowReadError(OverflowPageId, u32),
 }
 
 #[derive(Debug, Error)]
