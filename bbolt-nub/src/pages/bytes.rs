@@ -183,7 +183,7 @@ pub struct LazySliceIter<'a, R: ReadOverflow> {
 }
 
 impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
-  fn read_overflow(&self, idx: usize) -> Result<LazyBytes<R::Output>, DiskReadError> {
+  fn read_overflow_page(&self, idx: usize) -> Result<LazyBytes<R::Output>, DiskReadError> {
     let page_size = self.slice.page.root.root_page().len();
     let page_idx = (idx / page_size) as u32;
     let header = self.slice.page.root.page_header();
@@ -201,8 +201,8 @@ impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
       overflow_index: page_idx,
     })
   }
-  fn next_overflow(&self, idx: usize) -> Result<LazyIter<R::Output>, DiskReadError> {
-    self.read_overflow(idx).map(|bytes| {
+  fn next_overflow_page(&self, idx: usize) -> Result<LazyIter<R::Output>, DiskReadError> {
+    self.read_overflow_page(idx).map(|bytes| {
       let page_size = bytes.as_ref().len();
       let next_page_idx = bytes.page_index();
       let back_page_idx = (self.range.end / page_size) as u32;
@@ -218,8 +218,8 @@ impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
     })
   }
 
-  fn back_overflow(&self, idx: usize) -> Result<LazyIter<R::Output>, DiskReadError> {
-    self.read_overflow(idx).map(|bytes| {
+  fn next_back_overflow_page(&self, idx: usize) -> Result<LazyIter<R::Output>, DiskReadError> {
+    self.read_overflow_page(idx).map(|bytes| {
       let page_size = bytes.as_ref().len();
       let back_page_idx = bytes.page_index();
       let next_page_idx = (self.range.start / page_size) as u32;
@@ -237,20 +237,18 @@ impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
 }
 
 impl<'a, R: ReadOverflow> Iterator for LazySliceIter<'a, R> {
-  type Item = Result<u8, DiskReadError>;
+  type Item = u8;
 
   fn next(&mut self) -> Option<Self::Item> {
     if let Some(idx) = self.range.next() {
       return if let Some(next) = self.next.next() {
-        Some(Ok(next))
+        Some(next)
       } else {
-        match self.next_overflow(idx) {
-          Ok(next) => {
-            self.next = next;
-            self.next.next().map(|next| Ok(next))
-          }
-          Err(err) => Some(Err(err)),
-        }
+        let next = self
+          .next_overflow_page(idx)
+          .expect("next overflow read error");
+        self.next = next;
+        self.next.next()
       };
     }
     None
@@ -261,15 +259,13 @@ impl<'a, R: ReadOverflow> DoubleEndedIterator for LazySliceIter<'a, R> {
   fn next_back(&mut self) -> Option<Self::Item> {
     if let Some(idx) = self.range.next_back() {
       return if let Some(next) = self.back.next_back() {
-        Some(Ok(next))
+        Some(next)
       } else {
-        match self.back_overflow(idx) {
-          Ok(back) => {
-            self.back = back;
-            self.back.next_back().map(|next| Ok(next))
-          }
-          Err(err) => Some(Err(err)),
-        }
+        let back = self
+          .next_back_overflow_page(idx)
+          .expect("back overflow read error");
+        self.back = back;
+        self.back.next_back()
       };
     }
     None
@@ -277,6 +273,7 @@ impl<'a, R: ReadOverflow> DoubleEndedIterator for LazySliceIter<'a, R> {
 }
 
 impl<'a, R: ReadOverflow> ExactSizeIterator for LazySliceIter<'a, R> {
+  #[inline]
   fn len(&self) -> usize {
     self.range.len()
   }
