@@ -1,7 +1,7 @@
 use crate::common::bucket::BucketHeader;
 use crate::common::id::{EOFPageId, FreelistPageId, TxId};
 use crate::common::page::PageHeader;
-use crate::pages::bytes::HasRootPage;
+use crate::pages::bytes::{HasRootPage, TxPage};
 use crate::pages::{HasHeader, Page, PageBytes};
 use bytemuck::{Pod, Zeroable};
 use delegate::delegate;
@@ -36,11 +36,14 @@ pub trait HasMeta: HasHeader {
 }
 
 #[derive(Clone)]
-pub struct MetaPage<T: PageBytes> {
+pub struct MetaPage<T> {
   page: Page<T>,
 }
 
-impl<T: PageBytes> HasRootPage for MetaPage<T> {
+impl<'tx, T> HasRootPage for MetaPage<T>
+where
+  T: TxPage<'tx>,
+{
   delegate! {
       to &self.page {
           fn root_page(&self) -> &[u8];
@@ -48,7 +51,10 @@ impl<T: PageBytes> HasRootPage for MetaPage<T> {
   }
 }
 
-impl<T: PageBytes> HasHeader for MetaPage<T> {
+impl<'tx, T> HasHeader for MetaPage<T>
+where
+  T: TxPage<'tx>,
+{
   delegate! {
       to &self.page {
           fn page_header(&self) -> &PageHeader;

@@ -1,6 +1,6 @@
 use crate::common::id::FreelistPageId;
 use crate::common::page::PageHeader;
-use crate::pages::bytes::HasRootPage;
+use crate::pages::bytes::{HasRootPage, TxPage};
 use crate::pages::{HasHeader, Page, PageBytes};
 use delegate::delegate;
 use std::iter::RepeatN;
@@ -12,11 +12,14 @@ pub trait HasFreelist: HasHeader {
 }
 
 #[derive(Clone)]
-pub struct FreelistPage<T: PageBytes> {
+pub struct FreelistPage<T> {
   page: Page<T>,
 }
 
-impl<T: PageBytes> HasRootPage for FreelistPage<T> {
+impl<'tx, T> HasRootPage for FreelistPage<T>
+where
+  T: TxPage<'tx>,
+{
   delegate! {
       to &self.page {
           fn root_page(&self) -> &[u8];
@@ -24,7 +27,10 @@ impl<T: PageBytes> HasRootPage for FreelistPage<T> {
   }
 }
 
-impl<T: PageBytes> HasHeader for FreelistPage<T> {
+impl<'tx, T> HasHeader for FreelistPage<T>
+where
+  T: TxPage<'tx>,
+{
   delegate! {
       to &self.page {
           fn page_header(&self) -> &PageHeader;
@@ -32,7 +38,10 @@ impl<T: PageBytes> HasHeader for FreelistPage<T> {
   }
 }
 
-impl<T: PageBytes> HasFreelist for FreelistPage<T> {
+impl<'tx, T> HasFreelist for FreelistPage<T>
+where
+  T: TxPage<'tx>,
+{
   type FreelistIter = RepeatN<FreelistPageId>;
 
   fn freelist_iter(&self) -> Self::FreelistIter {

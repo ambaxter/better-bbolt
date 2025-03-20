@@ -1,15 +1,18 @@
 use crate::common::page::PageHeader;
-use crate::pages::bytes::HasRootPage;
+use crate::pages::HasHeader;
+use crate::pages::bytes::{HasRootPage, TxPage};
 use crate::pages::node::NodePage;
-use crate::pages::{HasHeader, PageBytes};
 use delegate::delegate;
 
 #[derive(Clone)]
-pub struct BranchPage<T: PageBytes> {
+pub struct BranchPage<T> {
   page: NodePage<T>,
 }
 
-impl<T: PageBytes> HasRootPage for BranchPage<T> {
+impl<'tx, T> HasRootPage for BranchPage<T>
+where
+  T: TxPage<'tx>,
+{
   delegate! {
       to &self.page {
       fn root_page(&self) -> &[u8];
@@ -17,7 +20,10 @@ impl<T: PageBytes> HasRootPage for BranchPage<T> {
   }
 }
 
-impl<T: PageBytes> HasHeader for BranchPage<T> {
+impl<'tx, T> HasHeader for BranchPage<T>
+where
+  T: TxPage<'tx>,
+{
   delegate! {
       to &self.page {
           fn page_header(&self) -> &PageHeader;
