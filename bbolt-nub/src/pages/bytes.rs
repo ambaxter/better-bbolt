@@ -1,6 +1,9 @@
+use crate::common::errors::PageError;
+use crate::common::id::OverflowPageId;
 use crate::io::{ReadData, ReadOverflow};
-use crate::pages::Page;
+use crate::pages::{HasHeader, Page};
 use delegate::delegate;
+use error_stack::ResultExt;
 use std::ops::{Index, Range, RangeBounds};
 use triomphe::Arc;
 
@@ -75,9 +78,9 @@ pub struct LazyPage<T, R> {
   io: Arc<R>,
 }
 
-impl<'tx, R> HasRootPage for LazyPage<R::Output<'tx>, R>
+impl<'tx, R> HasRootPage for LazyPage<R::Output, R>
 where
-  R: ReadOverflow,
+  R: ReadOverflow<'tx>,
 {
   delegate! {
       to &self.root {
@@ -176,19 +179,18 @@ where
   }
 }
 
-/*
-
-
-
-pub struct LazySliceIter<'a, R: ReadOverflow> {
-  slice: LazySlice<'a, R>,
+pub struct LazySliceIter<T, R> {
+  slice: LazySlice<T, R>,
   range: Range<usize>,
-  next: LazyIter<R::Output>,
-  back: LazyIter<R::Output>,
+  next: LazyPageIter<T>,
+  back: LazyPageIter<T>,
 }
 
-impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
-  fn read_overflow_page(&self, idx: usize) -> Result<LazyBytes<R::Output>, PageError> {
+impl<'tx, R> LazySliceIter<R::Output, R>
+where
+  R: ReadOverflow<'tx>,
+{
+  fn read_overflow_page(&self, idx: usize) -> crate::Result<LazyPageBytes<R::Output>, PageError> {
     let page_size = self.slice.page.root.root_page().len();
     let overflow_index = (idx / page_size) as u32;
     let header = self.slice.page.root.page_header();
@@ -196,7 +198,10 @@ impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
     let page_id = header.overflow_page_id().expect("overflow page id");
     assert!(overflow_index <= page_overflow);
     if overflow_index == 0 {
-      Ok(LazyBytes::Root(self.slice.page.root.clone()))
+      Ok(LazyPageBytes {
+        bytes: self.slice.page.root.buffer.clone(),
+        overflow_index,
+      })
     } else {
       match page_id {
         OverflowPageId::Freelist(page_id) => self
@@ -210,14 +215,15 @@ impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
           .io
           .read_node_overflow(page_id, overflow_index),
       }
-      .map(|page| LazyBytes::DataBytes {
-        page,
+      .map(|bytes| LazyPageBytes {
+        bytes,
         overflow_index,
       })
       .change_context(PageError::OverflowReadError(page_id, overflow_index))
     }
   }
-  fn next_overflow_page(&self, idx: usize) -> Result<LazyIter<R::Output>, PageError> {
+
+  fn next_overflow_page(&self, idx: usize) -> crate::Result<LazyPageIter<R::Output>, PageError> {
     self.read_overflow_page(idx).map(|bytes| {
       let page_size = bytes.as_ref().len();
       let next_page_idx = bytes.page_index();
@@ -227,14 +233,16 @@ impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
       } else {
         page_size
       };
-      LazyIter {
+      LazyPageIter {
         bytes,
         range: 0..len,
       }
     })
   }
 
-  fn next_back_overflow_page(&self, idx: usize) -> Result<LazyIter<R::Output>, PageError> {
+  fn next_back_overflow_page(
+    &self, idx: usize,
+  ) -> crate::Result<LazyPageIter<R::Output>, PageError> {
     self.read_overflow_page(idx).map(|bytes| {
       let page_size = bytes.as_ref().len();
       let back_page_idx = bytes.page_index();
@@ -244,7 +252,7 @@ impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
       } else {
         0
       };
-      LazyIter {
+      LazyPageIter {
         bytes,
         range: start..page_size,
       }
@@ -252,7 +260,10 @@ impl<'a, R: ReadOverflow> LazySliceIter<'a, R> {
   }
 }
 
-impl<'a, R: ReadOverflow> Iterator for LazySliceIter<'a, R> {
+impl<'tx, R> Iterator for LazySliceIter<R::Output, R>
+where
+  R: ReadOverflow<'tx>,
+{
   type Item = u8;
 
   fn next(&mut self) -> Option<Self::Item> {
@@ -271,7 +282,10 @@ impl<'a, R: ReadOverflow> Iterator for LazySliceIter<'a, R> {
   }
 }
 
-impl<'a, R: ReadOverflow> DoubleEndedIterator for LazySliceIter<'a, R> {
+impl<'tx, R> DoubleEndedIterator for LazySliceIter<R::Output, R>
+where
+  R: ReadOverflow<'tx>,
+{
   fn next_back(&mut self) -> Option<Self::Item> {
     if let Some(idx) = self.range.next_back() {
       return if let Some(next) = self.back.next_back() {
@@ -288,10 +302,12 @@ impl<'a, R: ReadOverflow> DoubleEndedIterator for LazySliceIter<'a, R> {
   }
 }
 
-impl<'a, R: ReadOverflow> ExactSizeIterator for LazySliceIter<'a, R> {
+impl<'tx, R> ExactSizeIterator for LazySliceIter<R::Output, R>
+where
+  R: ReadOverflow<'tx>,
+{
   #[inline]
   fn len(&self) -> usize {
     self.range.len()
   }
 }
-*/
