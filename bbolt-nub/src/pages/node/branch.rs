@@ -1,12 +1,11 @@
 use crate::common::page::PageHeader;
-use crate::pages::HasHeader;
 use crate::pages::bytes::{HasRootPage, TxPage};
-use crate::pages::node::NodePage;
+use crate::pages::{HasHeader, Page};
 use delegate::delegate;
 
 #[derive(Clone)]
 pub struct BranchPage<T> {
-  page: NodePage<T>,
+  page: Page<T>,
 }
 
 impl<'tx, T> HasRootPage for BranchPage<T>

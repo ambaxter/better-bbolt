@@ -1,7 +1,7 @@
 use crate::common::id::FreelistPageId;
 use crate::common::page::PageHeader;
 use crate::pages::bytes::{HasRootPage, TxPage};
-use crate::pages::{HasHeader, Page, PageBytes};
+use crate::pages::{HasHeader, Page};
 use delegate::delegate;
 use std::iter::RepeatN;
 

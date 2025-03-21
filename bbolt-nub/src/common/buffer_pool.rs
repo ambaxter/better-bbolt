@@ -1,12 +1,16 @@
+use crate::pages::bytes::{TxPage, TxPageSlice};
 use parking_lot::Mutex;
 use size::Size;
+use std::cmp::Ordering;
+use std::collections::Bound;
 use std::fmt::Debug;
 use std::io;
 use std::mem::MaybeUninit;
-use std::ops::Deref;
-use triomphe::{Arc, ArcBorrow, HeaderSlice, UniqueArc};
+use std::ops::{Deref, Range, RangeBounds};
+use triomphe::{Arc, HeaderSlice, UniqueArc};
 use uninit::extension_traits::AsOut;
 use uninit::read::ReadIntoUninit;
+use crate::pages::txpage::IntoCopiedIterator;
 
 pub type PoolMaybeUninitBuffer = HeaderSlice<Option<BufferPool>, [MaybeUninit<u8>]>;
 pub type PoolBuffer = HeaderSlice<Option<BufferPool>, [u8]>;
@@ -36,7 +40,7 @@ impl UniqueBuffer {
     }
   }
 
-  pub fn read_exact_and_share<R: ReadIntoUninit>(self, r: &mut R) -> io::Result<Arc<PoolBuffer>> {
+  pub fn read_exact_and_share<R: ReadIntoUninit>(self, r: &mut R) -> io::Result<SharedBuffer> {
     let unique = match self {
       UniqueBuffer::Uninit(mut uninit) => {
         r.read_into_uninit_exact(uninit.slice.as_out())?;
@@ -47,7 +51,11 @@ impl UniqueBuffer {
         init
       }
     };
-    Ok(unique.shareable())
+    let shared = unique.shareable();
+
+    Ok(SharedBuffer {
+      inner: Some(shared),
+    })
   }
 }
 
@@ -86,21 +94,95 @@ impl Drop for SharedBuffer {
   }
 }
 
-pub struct SharedBufferRef<'a> {
-  inner: &'a SharedBuffer,
-}
+impl<'tx> TxPage<'tx> for SharedBuffer {
+  type TxSlice = SharedBufferSlice;
 
-impl<'a> Deref for SharedBufferRef<'a> {
-  type Target = [u8];
-
-  fn deref(&self) -> &Self::Target {
-    self.inner.deref()
+  //TODO: Test!
+  fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
+    let start = match range.start_bound().cloned() {
+      Bound::Included(included) => included,
+      Bound::Excluded(excluded) => excluded + 1,
+      Bound::Unbounded => 0,
+    };
+    let end = match range.end_bound().cloned() {
+      Bound::Included(included) => self.len() - (self.len() - included) + 1,
+      Bound::Excluded(excluded) => self.len() - (self.len() - excluded),
+      Bound::Unbounded => self.len(),
+    };
+    SharedBufferSlice {
+      inner: self.clone(),
+      range: start..end,
+    }
   }
 }
 
-impl<'a> AsRef<[u8]> for SharedBufferRef<'a> {
+#[derive(Clone)]
+pub struct SharedBufferSlice {
+  inner: SharedBuffer,
+  range: Range<usize>,
+}
+
+impl AsRef<[u8]> for SharedBufferSlice {
   fn as_ref(&self) -> &[u8] {
-    self.inner.as_ref()
+    &self.inner.as_ref()[self.range.start..self.range.end]
+  }
+}
+
+impl Ord for SharedBufferSlice {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.as_ref().cmp(other.as_ref())
+  }
+}
+
+impl Eq for SharedBufferSlice {}
+
+impl PartialEq<Self> for SharedBufferSlice {
+  fn eq(&self, other: &Self) -> bool {
+    self.as_ref().eq(other.as_ref())
+  }
+}
+
+impl PartialOrd<Self> for SharedBufferSlice {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self.as_ref().partial_cmp(other.as_ref())
+  }
+}
+
+impl PartialEq<[u8]> for SharedBufferSlice {
+  fn eq(&self, other: &[u8]) -> bool {
+    self.as_ref().eq(other)
+  }
+}
+
+impl PartialOrd<[u8]> for SharedBufferSlice {
+  fn partial_cmp(&self, other: &[u8]) -> Option<Ordering> {
+    self.as_ref().partial_cmp(other)
+  }
+}
+
+impl IntoCopiedIterator for SharedBufferSlice {
+  fn iter_copied(&self) -> impl Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator {
+    self.as_ref().iter().copied()
+  }
+}
+
+impl<'tx> TxPageSlice<'tx> for SharedBufferSlice {
+  // TODO: Test!!
+  fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self {
+    let start = match range.start_bound().cloned() {
+      Bound::Included(included) => self.range.start + included,
+      Bound::Excluded(excluded) => self.range.start + excluded + 1,
+      Bound::Unbounded => self.range.start,
+    };
+    let end = match range.end_bound().cloned() {
+      Bound::Included(included) => self.range.end - (self.range.end - included) + 1,
+      Bound::Excluded(excluded) => self.range.end - (self.range.end - excluded),
+      Bound::Unbounded => self.range.end,
+    };
+    SharedBufferSlice {
+      inner: self.inner.clone(),
+      range: start..end,
+    }
   }
 }
 
@@ -166,7 +248,7 @@ impl BufferPool {
     let reserve_size = init_size.bytes() as usize / page_size;
     let mut pool = Vec::with_capacity(reserve_size);
     for _ in 0..reserve_size {
-      pool.push(BufferPool::create_new(page_size));
+      pool.push(BufferPool::new_unbound(page_size));
     }
     let inner = BufferPoolInner {
       init_size,
@@ -180,8 +262,16 @@ impl BufferPool {
     }
   }
 
-  pub fn create_new(len: usize) -> UniqueBuffer {
+  pub fn new_unbound(len: usize) -> UniqueBuffer {
     UniqueArc::from_header_and_uninit_slice(None, len).into()
+  }
+
+  pub fn pop_with_len(&self, len: usize) -> UniqueBuffer {
+    if len == self.inner.page_size {
+      self.pop()
+    } else {
+      BufferPool::new_unbound(len)
+    }
   }
 
   // TODO: Can we put this on a different thread?
@@ -189,9 +279,9 @@ impl BufferPool {
     self.inner.push(buffer);
   }
 
-  fn pop(&self) -> UniqueBuffer {
+  pub fn pop(&self) -> UniqueBuffer {
     let pool_entry = self.inner.pop();
-    let mut buffer = pool_entry.unwrap_or_else(|| BufferPool::create_new(self.inner.page_size));
+    let mut buffer = pool_entry.unwrap_or_else(|| BufferPool::new_unbound(self.inner.page_size));
     buffer.set_header(Some(self.clone()));
     buffer
   }
@@ -204,9 +294,18 @@ mod test {
 
   #[test]
   fn test() {
-    let pool = BufferPool::create_new(4096);
+    let pool = BufferPool::new_unbound(4096);
     let mut empty = vec![0u8; 4096];
     let pool = pool.read_exact_and_share(&mut empty.as_slice()).unwrap();
-    assert!(pool.slice.as_ptr().cast::<PageHeader>().is_aligned());
+    assert!(
+      pool
+        .inner
+        .as_ref()
+        .unwrap()
+        .slice
+        .as_ptr()
+        .cast::<PageHeader>()
+        .is_aligned()
+    );
   }
 }

@@ -1,78 +1,54 @@
 use crate::common::errors::PageError;
 use crate::common::id::OverflowPageId;
 use crate::common::page::PageHeader;
-use crate::io::{ReadData, ReadOverflow};
+use crate::io::{NonContigReader, ReadData};
 use crate::pages::{HasHeader, Page};
 use delegate::delegate;
 use error_stack::ResultExt;
 use std::ops::{Index, Range, RangeBounds};
 use triomphe::Arc;
+use crate::pages::txpage::IntoCopiedIterator;
 
 pub trait HasRootPage {
   fn root_page(&self) -> &[u8];
 }
 
-pub trait IntoCopiedIterator {
-  fn into_copied_iter(self) -> impl Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator;
+pub trait TxPageSlice<'tx>: Ord + PartialEq<[u8]> + PartialOrd<[u8]> + IntoCopiedIterator {
+
+  type SubSlice<'a>: TxPageSlice<'tx>;
+
+  fn subslice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::SubSlice<'a>;
 }
 
-pub trait ByteSlice<'a>:
-  Ord + PartialEq<&'a [u8]> + PartialOrd<&'a [u8]> + IntoCopiedIterator
-{
-  fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self;
-}
-
-impl<'a> IntoCopiedIterator for &'a [u8] {
-  fn into_copied_iter(self) -> impl Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator {
-    self.iter().cloned()
-  }
-}
-
-impl<'a> ByteSlice<'a> for &'a [u8] {
-  fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self {
-    &self[(range.start_bound().cloned(), range.end_bound().cloned())]
-  }
-}
-
-pub trait TxPageSlice<'tx>:
-  Ord + for<'a> PartialEq<&'a [u8]> + for<'a> PartialOrd<&'a [u8]> + IntoCopiedIterator
-{
-  fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self;
-}
-
-pub trait TxPage<'tx>: Clone + AsRef<[u8]> {
+// TODO: [u8] wrapper because we have to
+pub trait TxPage<'tx>: AsRef<[u8]> + Clone {
   type TxSlice: TxPageSlice<'tx>;
 
   fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice;
 }
 
-pub trait PageBytes: Clone + AsRef<[u8]> {
-  type Subslice<'s>: ByteSlice<'s>
-  where
-    Self: 's;
+impl<'a, 'tx: 'a> TxPage<'tx> for &'a [u8] {
+  type TxSlice = &'a [u8];
 
-  fn subslice<'s, R: RangeBounds<usize>>(&'s self, range: R) -> Self::Subslice<'s>
-  where
-    Self: 's;
+  fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
+    todo!()
+  }
 }
+/*
+impl<'tx> TxPage<'tx> for SharedBuffer {
+  type TxSlice = SharedBufferSlice;
 
-impl<T> PageBytes for T
-where
-  T: AsRef<[u8]> + Clone,
-{
-  type Subslice<'s>
-    = &'s [u8]
-  where
-    Self: 's;
-
-  fn subslice<'s, R: RangeBounds<usize>>(&'s self, range: R) -> Self::Subslice<'s>
-  where
-    Self: 's,
-  {
-    &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())]
+  fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
+    todo!()
   }
 }
 
+impl<'tx> TxPageSlice for SharedBufferSlice {
+  fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self {
+
+  }
+}
+*/
 pub struct LazyPage<T, R> {
   root: Page<T>,
   io: Arc<R>,
@@ -90,9 +66,9 @@ where
   }
 }
 
-impl<'tx, R> HasRootPage for LazyPage<R::Output, R>
+impl<'tx, R> HasRootPage for LazyPage<R::PageData, R>
 where
-  R: ReadOverflow<'tx>,
+  R: NonContigReader<'tx>,
 {
   delegate! {
       to &self.root {
@@ -101,9 +77,9 @@ where
   }
 }
 
-impl<'tx, R> HasHeader for LazyPage<R::Output, R>
+impl<'tx, R> HasHeader for LazyPage<R::PageData, R>
 where
-  R: ReadOverflow<'tx>,
+  R: NonContigReader<'tx>,
 {
   delegate! {
       to &self.root {
@@ -153,19 +129,19 @@ where
 }
 
 #[derive(Clone)]
-struct LazyPageIter<T> {
+struct LazyPageBytesIter<T> {
   bytes: LazyPageBytes<T>,
   range: Range<usize>,
 }
 
-impl<T> LazyPageIter<T> {
+impl<T> LazyPageBytesIter<T> {
   #[inline]
   fn page_index(&self) -> u32 {
     self.bytes.page_index()
   }
 }
 
-impl<'tx, T> Iterator for LazyPageIter<T>
+impl<'tx, T> Iterator for LazyPageBytesIter<T>
 where
   T: TxPage<'tx>,
 {
@@ -180,7 +156,7 @@ where
   }
 }
 
-impl<'tx, T> DoubleEndedIterator for LazyPageIter<T>
+impl<'tx, T> DoubleEndedIterator for LazyPageBytesIter<T>
 where
   T: TxPage<'tx>,
 {
@@ -193,7 +169,7 @@ where
   }
 }
 
-impl<'tx, T> ExactSizeIterator for LazyPageIter<T>
+impl<'tx, T> ExactSizeIterator for LazyPageBytesIter<T>
 where
   T: TxPage<'tx>,
 {
@@ -205,15 +181,15 @@ where
 pub struct LazySliceIter<'a, T, R> {
   slice: &'a LazySlice<T, R>,
   range: Range<usize>,
-  next: LazyPageIter<T>,
-  back: LazyPageIter<T>,
+  next: LazyPageBytesIter<T>,
+  back: LazyPageBytesIter<T>,
 }
 
-impl<'a, 'tx, R> LazySliceIter<'a, R::Output, R>
+impl<'a, 'tx, R> LazySliceIter<'a, R::PageData, R>
 where
-  R: ReadOverflow<'tx>,
+  R: NonContigReader<'tx>,
 {
-  fn read_overflow_page(&self, idx: usize) -> crate::Result<LazyPageBytes<R::Output>, PageError> {
+  fn read_overflow_page(&self, idx: usize) -> crate::Result<LazyPageBytes<R::PageData>, PageError> {
     let page_size = self.slice.page.root_page().len();
     let overflow_index = (idx / page_size) as u32;
     let header = self.slice.page.page_header();
@@ -246,7 +222,9 @@ where
     }
   }
 
-  fn next_overflow_page(&self, idx: usize) -> crate::Result<LazyPageIter<R::Output>, PageError> {
+  fn next_overflow_page(
+    &self, idx: usize,
+  ) -> crate::Result<LazyPageBytesIter<R::PageData>, PageError> {
     self.read_overflow_page(idx).map(|bytes| {
       let page_size = bytes.as_ref().len();
       let next_page_idx = bytes.page_index();
@@ -256,7 +234,7 @@ where
       } else {
         page_size
       };
-      LazyPageIter {
+      LazyPageBytesIter {
         bytes,
         range: 0..len,
       }
@@ -265,7 +243,7 @@ where
 
   fn next_back_overflow_page(
     &self, idx: usize,
-  ) -> crate::Result<LazyPageIter<R::Output>, PageError> {
+  ) -> crate::Result<LazyPageBytesIter<R::PageData>, PageError> {
     self.read_overflow_page(idx).map(|bytes| {
       let page_size = bytes.as_ref().len();
       let back_page_idx = bytes.page_index();
@@ -275,7 +253,7 @@ where
       } else {
         0
       };
-      LazyPageIter {
+      LazyPageBytesIter {
         bytes,
         range: start..page_size,
       }
@@ -283,9 +261,9 @@ where
   }
 }
 
-impl<'a, 'tx, R> Iterator for LazySliceIter<'a, R::Output, R>
+impl<'a, 'tx, R> Iterator for LazySliceIter<'a, R::PageData, R>
 where
-  R: ReadOverflow<'tx>,
+  R: NonContigReader<'tx>,
 {
   type Item = u8;
 
@@ -305,9 +283,9 @@ where
   }
 }
 
-impl<'a, 'tx, R> DoubleEndedIterator for LazySliceIter<'a, R::Output, R>
+impl<'a, 'tx, R> DoubleEndedIterator for LazySliceIter<'a, R::PageData, R>
 where
-  R: ReadOverflow<'tx>,
+  R: NonContigReader<'tx>,
 {
   fn next_back(&mut self) -> Option<Self::Item> {
     if let Some(idx) = self.range.next_back() {
@@ -325,9 +303,9 @@ where
   }
 }
 
-impl<'a, 'tx, R> ExactSizeIterator for LazySliceIter<'a, R::Output, R>
+impl<'a, 'tx, R> ExactSizeIterator for LazySliceIter<'a, R::PageData, R>
 where
-  R: ReadOverflow<'tx>,
+  R: NonContigReader<'tx>,
 {
   #[inline]
   fn len(&self) -> usize {

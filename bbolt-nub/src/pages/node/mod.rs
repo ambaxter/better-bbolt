@@ -1,89 +1,77 @@
+use crate::api::bytes::TxSlice;
 use crate::common::id::NodePageId;
 use crate::common::page::PageHeader;
-use crate::pages::bytes::{ByteSlice, HasRootPage, TxPage};
-use crate::pages::{HasHeader, Page, PageBytes};
-use delegate::delegate;
+use crate::pages::bytes::{HasRootPage, TxPage};
+use crate::pages::HasHeader;
 use std::ops::Deref;
 
 pub mod branch;
 pub mod leaf;
 
-pub trait HasNode: HasHeader {
-  type SliceType<'a>: ByteSlice<'a>
-  where
-    Self: 'a;
+pub trait HasNode<'tx>: HasHeader {
+  type SliceType: TxSlice<'tx>;
   fn search(&self, v: &[u8]) -> Option<usize>;
-  fn key<'a>(&'a self, index: usize) -> Option<Self::SliceType<'a>>;
+  fn key(&self, index: usize) -> Option<Self::SliceType>;
 }
 
-pub trait HasBranch: HasNode {
+pub trait HasBranch<'tx>: HasNode<'tx> {
   fn node(&self, index: usize) -> Option<NodePageId>;
 }
 
-pub trait HasLeaf: HasNode {
-  fn value<'a>(&'a self, index: usize) -> Option<Self::SliceType<'a>>;
-}
-
-//TODO: Probably superfluous. Doesn't actually contain any functionality
-#[derive(Clone)]
-struct NodePage<T> {
-  page: Page<T>,
-}
-
-impl<'tx, T> HasRootPage for NodePage<T>
-where
-  T: TxPage<'tx>,
-{
-  delegate! {
-      to &self.page {
-          fn root_page(&self) -> &[u8];
-      }
-  }
-}
-
-impl<'tx, T> HasHeader for NodePage<T>
-where
-  T: TxPage<'tx>,
-{
-  delegate! {
-      to &self.page {
-          fn page_header(&self) -> &PageHeader;
-      }
-  }
+pub trait HasLeaf<'tx>: HasNode<'tx> {
+  fn value(&self, index: usize) -> Option<Self::SliceType>;
 }
 
 #[derive(Clone)]
-pub enum NodeType<B, L>
-where
-  B: HasBranch,
-  L: HasLeaf,
-{
+pub enum NodePage<B, L> {
   Branch(B),
   Leaf(L),
 }
 
-impl<B, L> HasRootPage for NodeType<B, L>
+impl<B, L> HasRootPage for NodePage<B, L>
 where
-  B: HasBranch,
-  L: HasLeaf,
+  B: HasRootPage,
+  L: HasRootPage,
 {
   fn root_page(&self) -> &[u8] {
     match self {
-      NodeType::Branch(b) => b.root_page(),
-      NodeType::Leaf(l) => l.root_page(),
+      NodePage::Branch(b) => b.root_page(),
+      NodePage::Leaf(l) => l.root_page(),
     }
   }
 }
 
-impl<B, L> HasHeader for NodeType<B, L>
+impl<B, L> HasHeader for NodePage<B, L>
 where
-  B: HasBranch,
-  L: HasLeaf,
+  B: HasHeader,
+  L: HasHeader,
 {
   fn page_header(&self) -> &PageHeader {
     match self {
-      NodeType::Branch(b) => b.page_header(),
-      NodeType::Leaf(l) => l.page_header(),
+      NodePage::Branch(b) => b.page_header(),
+      NodePage::Leaf(l) => l.page_header(),
+    }
+  }
+}
+
+impl<'tx, B, L> HasNode<'tx> for NodePage<B, L>
+where
+  B: HasNode<'tx>,
+  L: HasNode<'tx, SliceType = B::SliceType>,
+{
+  type SliceType = B::SliceType;
+
+  fn search(&self, v: &[u8]) -> Option<usize> {
+    match &self {
+      NodePage::Branch(branch) => branch.search(v),
+      NodePage::Leaf(leaf) => leaf.search(v),
+    }
+  }
+
+  fn key(&self, index: usize) -> Option<Self::SliceType> {
+    match &self {
+      NodePage::Branch(branch) => branch.key(index),
+      NodePage::Leaf(leaf) => leaf.key(index),
     }
   }
 }

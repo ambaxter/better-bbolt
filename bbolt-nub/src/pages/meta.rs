@@ -2,7 +2,7 @@ use crate::common::bucket::BucketHeader;
 use crate::common::id::{EOFPageId, FreelistPageId, TxId};
 use crate::common::page::PageHeader;
 use crate::pages::bytes::{HasRootPage, TxPage};
-use crate::pages::{HasHeader, Page, PageBytes};
+use crate::pages::{HasHeader, Page};
 use bytemuck::{Pod, Zeroable};
 use delegate::delegate;
 

@@ -152,17 +152,14 @@ pub enum OverflowPageId {
   Node(NodePageId),
 }
 
-pub trait TranslatablePage: DbPageType {}
-
-impl TranslatablePage for BucketPageId {}
-impl TranslatablePage for NodePageId {}
-impl TranslatablePage for FreelistPageId {}
-
 pub trait DiskPageTranslator: Debug + Clone {
   fn meta(&self) -> DiskPageId;
   fn freelist(&self, page_id: FreelistPageId) -> DiskPageId;
   fn node(&self, page_id: NodePageId) -> DiskPageId;
 }
+
+pub trait SupportsContigPages {}
+pub trait SupportsNonContigPages {}
 
 #[derive(Debug, Clone)]
 pub struct DirectPageTranslator {
@@ -191,6 +188,9 @@ impl DiskPageTranslator for DirectPageTranslator {
     DiskPageId(page_id.0.0)
   }
 }
+
+impl SupportsContigPages for DirectPageTranslator {}
+impl SupportsNonContigPages for DirectPageTranslator {}
 
 #[derive(Debug, Clone)]
 pub struct StableFreeSpaceTranslator {
@@ -246,6 +246,8 @@ impl DiskPageTranslator for StableFreeSpaceTranslator {
     DiskPageId(node_disk_id)
   }
 }
+
+impl SupportsNonContigPages for StableFreeSpaceTranslator {}
 
 #[cfg(test)]
 mod tests {
