@@ -1,4 +1,3 @@
-use parking_lot::{RwLock, RwLockReadGuard};
 use crate::common::buffer_pool::SharedBuffer;
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, FreelistPageId, MetaPageId, NodePageId};
@@ -7,6 +6,7 @@ use crate::pages::Page;
 use crate::pages::bytes::TxPage;
 use crate::pages::freelist::FreelistPage;
 use crate::pages::meta::MetaPage;
+use parking_lot::{RwLock, RwLockReadGuard};
 
 pub mod disk_cache;
 pub mod memmap;
@@ -19,15 +19,20 @@ pub trait ReadPage<'tx>: Sized {
 }
 
 pub trait ReadContigPage<'tx>: ReadPage<'tx> {
-  fn read_contig_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::PageData, DiskReadError>;
+  fn read_contig_page(
+    &self, disk_page_id: DiskPageId,
+  ) -> crate::Result<Self::PageData, DiskReadError>;
 }
 
 pub struct PageReaderWrap<'tx, T, R> {
   reader: RwLockReadGuard<'tx, R>,
-  translator: T
+  translator: T,
 }
 
-impl<'tx, T, R> PageReaderWrap<'tx, T, R> where R: ReadPage<'tx> {
+impl<'tx, T, R> PageReaderWrap<'tx, T, R>
+where
+  R: ReadPage<'tx>,
+{
   fn read(&self) -> crate::Result<R::PageData, DiskReadError> {
     self.reader.read_page(DiskPageId(0))
   }
@@ -39,13 +44,15 @@ struct DummyReader;
 impl<'tx> ReadPage<'tx> for DummyReader {
   type PageData = SharedBuffer;
 
-  fn read_page(&self, disk_page_id: DiskPageId) -> error_stack::Result<Self::PageData, DiskReadError> {
+  fn read_page(
+    &self, disk_page_id: DiskPageId,
+  ) -> error_stack::Result<Self::PageData, DiskReadError> {
     todo!()
   }
 }
 
-pub struct BaseWrapper<R: for<'tx> ReadPage<'tx> >{
-  f: RwLock<R>
+pub struct BaseWrapper<R: for<'tx> ReadPage<'tx>> {
+  f: RwLock<R>,
 }
 
 impl<R: for<'tx> ReadPage<'tx>> BaseWrapper<R> {
@@ -57,8 +64,10 @@ impl<R: for<'tx> ReadPage<'tx>> BaseWrapper<R> {
   }
 }
 
-fn t(){
-  let t = BaseWrapper::<DummyReader>{f: RwLock::new(DummyReader)};
+fn t() {
+  let t = BaseWrapper::<DummyReader> {
+    f: RwLock::new(DummyReader),
+  };
   let m = t.fork();
   assert_eq!(true, m.read().is_ok())
 }

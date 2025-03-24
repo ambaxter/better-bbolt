@@ -7,7 +7,10 @@ use bytemuck::bytes_of_mut;
 use error_stack::ResultExt;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 
-pub struct BaseReader<R> where R: Read + Seek {
+pub struct BaseReader<R>
+where
+  R: Read + Seek,
+{
   reader: BufReader<R>,
   buffer_pool: BufferPool,
   page_size: usize,

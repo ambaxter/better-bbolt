@@ -1,4 +1,5 @@
 use crate::pages::bytes::{TxPage, TxPageSlice};
+use crate::pages::kvdata::IntoCopiedIterator;
 use parking_lot::Mutex;
 use size::Size;
 use std::cmp::Ordering;
@@ -10,7 +11,6 @@ use std::ops::{Deref, Range, RangeBounds};
 use triomphe::{Arc, HeaderSlice, UniqueArc};
 use uninit::extension_traits::AsOut;
 use uninit::read::ReadIntoUninit;
-use crate::pages::txpage::IntoCopiedIterator;
 
 pub type PoolMaybeUninitBuffer = HeaderSlice<Option<BufferPool>, [MaybeUninit<u8>]>;
 pub type PoolBuffer = HeaderSlice<Option<BufferPool>, [u8]>;

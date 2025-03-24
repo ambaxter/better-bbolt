@@ -1,8 +1,8 @@
 use crate::api::bytes::TxSlice;
 use crate::common::id::NodePageId;
 use crate::common::page::PageHeader;
-use crate::pages::bytes::{HasRootPage, TxPage};
 use crate::pages::HasHeader;
+use crate::pages::bytes::{HasRootPage, TxPage};
 use std::ops::Deref;
 
 pub mod branch;
