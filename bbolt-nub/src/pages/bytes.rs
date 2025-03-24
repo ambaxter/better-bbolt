@@ -14,10 +14,9 @@ pub trait HasRootPage {
   fn root_page(&self) -> &[u8];
 }
 
-pub trait TxPageSlice<'tx>: Ord + PartialEq<[u8]> + PartialOrd<[u8]> + IntoCopiedIterator {
+pub trait TxPageSlice<'tx>: Ord + PartialEq<[u8]> + PartialOrd<[u8]> + IntoCopiedIterator<'tx> {
   fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self;
 }
-
 
 // TODO: [u8] wrapper because we have to?
 pub trait TxPage<'tx>: AsRef<[u8]> + Clone {
@@ -25,7 +24,6 @@ pub trait TxPage<'tx>: AsRef<[u8]> + Clone {
 
   fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice;
 }
-
 
 pub struct LazyPage<T, R> {
   root: Page<T>,
