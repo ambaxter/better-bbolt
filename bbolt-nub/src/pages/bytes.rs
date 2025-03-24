@@ -14,7 +14,9 @@ pub trait HasRootPage {
   fn root_page(&self) -> &[u8];
 }
 
-pub trait TxPageSlice<'tx>: Ord + PartialEq<[u8]> + PartialOrd<[u8]> + IntoCopiedIterator<'tx> {
+pub trait TxPageSlice<'tx>:
+  Ord + PartialEq<[u8]> + PartialOrd<[u8]> + IntoCopiedIterator<'tx>
+{
   fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self;
 }
 
@@ -137,6 +139,11 @@ where
         range: start..page_size,
       }
     })
+  }
+
+  #[inline]
+  pub fn len(&self) -> usize {
+    self.range.len()
   }
 }
 
@@ -313,5 +320,34 @@ where
   #[inline]
   fn len(&self) -> usize {
     self.range.len()
+  }
+}
+
+impl<'tx, R> PartialEq for LazySlice<R::PageData, R>
+where
+  R: NonContigReader<'tx> + 'tx,
+{
+  fn eq(&self, other: &Self) -> bool {
+    self.iter_copied().eq(other.iter_copied())
+  }
+}
+
+impl<'tx, R> Eq for LazySlice<R::PageData, R> where R: NonContigReader<'tx> + 'tx {}
+
+impl<'tx, R> PartialOrd for LazySlice<R::PageData, R>
+where
+  R: NonContigReader<'tx> + 'tx,
+{
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    self.iter_copied().partial_cmp(other.iter_copied())
+  }
+}
+
+impl<'tx, R> Ord for LazySlice<R::PageData, R>
+where
+  R: NonContigReader<'tx> + 'tx,
+{
+  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    self.iter_copied().cmp(other.iter_copied())
   }
 }

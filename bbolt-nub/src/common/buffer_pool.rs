@@ -1,4 +1,5 @@
 use crate::pages::bytes::{TxPage, TxPageSlice};
+use crate::pages::kvdata::IntoCopiedIterator;
 use parking_lot::Mutex;
 use size::Size;
 use std::cmp::Ordering;
@@ -11,7 +12,6 @@ use std::ops::{Deref, Range, RangeBounds};
 use triomphe::{Arc, HeaderSlice, UniqueArc};
 use uninit::extension_traits::AsOut;
 use uninit::read::ReadIntoUninit;
-use crate::pages::kvdata::IntoCopiedIterator;
 
 pub type PoolMaybeUninitBuffer = HeaderSlice<Option<BufferPool>, [MaybeUninit<u8>]>;
 pub type PoolBuffer = HeaderSlice<Option<BufferPool>, [u8]>;
@@ -162,8 +162,15 @@ impl PartialOrd<[u8]> for SharedBufferSlice {
 }
 
 impl<'tx> IntoCopiedIterator<'tx> for SharedBufferSlice {
-  type CopiedIter<'a> = Copied<std::slice::Iter<'a, u8>> where Self: 'a, 'tx: 'a;
-  fn iter_copied<'a>(&'a self) -> Self::CopiedIter<'a> where 'tx: 'a {
+  type CopiedIter<'a>
+    = Copied<std::slice::Iter<'a, u8>>
+  where
+    Self: 'a,
+    'tx: 'a;
+  fn iter_copied<'a>(&'a self) -> Self::CopiedIter<'a>
+  where
+    'tx: 'a,
+  {
     self.as_ref().iter().copied()
   }
 }
