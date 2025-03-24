@@ -49,8 +49,8 @@ triomphe = "0.1.14"
 dashmap = "6.1.0"
 hashbrown = "0.15.2"
 page_size = "0.6.0"
-moka = { version = "0.12.8", features = ["sync"] }
-bumpalo = "3.16.0"
+moka = { version = "0.12", features = ["sync"] }
+bumpalo = "3.17.0"
 
 # Algorithms
 fnv_rs = "0.4.3"
@@ -58,7 +58,7 @@ lz4_flex = "0.11.3"
 
 # Idiomatics
 itertools = "0.14.0"
-delegate = "0.13.1"
+delegate = "0.13"
 getset = "0.1.5"
 enum_dispatch = "0.3.13"
 
@@ -66,25 +66,25 @@ enum_dispatch = "0.3.13"
 uninit = "0.6.2"
 
 # I/O
-memmap2 = "0.9.4"
-fs4 = { version = "0.13.0", features = ["sync", "fs-err3"] }
-bitflags = "2.6.0"
+memmap2 = "0.9.5"
+fs4 = { version = "0.13", features = ["sync", "fs-err3"] }
+bitflags = "2.9.0"
 
 # Multi-threading
 rayon = "1.10.0"
 crossbeam-channel = "0.5.14"
 
 # CLI
-bon = { version = "3.3", features = ["implied-bounds"] }
+bon = { version = "3.5", features = ["implied-bounds"] }
 
 # Logging/Error
 tracing = "0.1.41"
 error-stack = "0.5.0"
 thiserror = "2"
-fs-err = "3.0.0"
+fs-err = "3.1.0"
 
 # Testing
-fake = { version = "4.0.0", features = ["derive"] }
+fake = { version = "4.2.0", features = ["derive"] }
 
 # bbolt internal libraries
 bbolt-engine = {path = "bbolt-engine" }
