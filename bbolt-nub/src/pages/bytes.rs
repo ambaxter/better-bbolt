@@ -1,8 +1,8 @@
 use crate::common::errors::PageError;
 use crate::common::id::OverflowPageId;
 use crate::common::page::PageHeader;
+use crate::io::pages::{IntoCopiedIterator, SubRange};
 use crate::io::{NonContigReader, ReadData};
-use crate::pages::impls::{IntoCopiedIterator, SubRange};
 use crate::pages::{HasHeader, Page};
 use delegate::delegate;
 use error_stack::ResultExt;

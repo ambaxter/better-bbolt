@@ -1,7 +1,7 @@
+use crate::io::pages::IntoCopiedIterator;
+use crate::io::pages::shared_page::SharedBufferSlice;
 use crate::io::{NonContigReader, ReadData};
 use crate::pages::bytes::{LazySlice, LazySliceIter};
-use crate::pages::impls::IntoCopiedIterator;
-use crate::pages::impls::shared_page::SharedBufferSlice;
 use std::cmp::Ordering;
 use std::collections::Bound;
 use std::iter::Copied;

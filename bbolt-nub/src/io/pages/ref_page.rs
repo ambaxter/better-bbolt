@@ -1,4 +1,4 @@
-use crate::pages::impls::{IntoCopiedIterator, KvDataType, SubSlice};
+use crate::io::pages::{IntoCopiedIterator, KvDataType, SubSlice};
 use std::iter::Copied;
 use std::ops::RangeBounds;
 

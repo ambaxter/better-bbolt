@@ -1,6 +1,6 @@
+use crate::io::pages::SubRange;
+use crate::io::pages::shared_page::{SharedBuffer, SharedBufferSlice};
 use crate::pages::bytes::{TxPage, TxPageSlice};
-use crate::pages::impls::SubRange;
-use crate::pages::impls::shared_page::{SharedBuffer, SharedBufferSlice};
 use parking_lot::Mutex;
 use size::Size;
 use std::cmp::Ordering;

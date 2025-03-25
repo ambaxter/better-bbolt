@@ -1,6 +1,6 @@
 use crate::io::NonContigReader;
+use crate::io::pages::{IntoCopiedIterator, KvDataType, SubRange, SubSlice};
 use crate::pages::bytes::{LazyPage, LazySlice, LazySliceIter};
-use crate::pages::impls::{IntoCopiedIterator, KvDataType, SubRange, SubSlice};
 use std::ops::RangeBounds;
 
 impl<'tx, RD> SubSlice<'tx> for LazyPage<RD::PageData, RD>

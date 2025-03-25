@@ -8,7 +8,6 @@ use std::ops::{Deref, RangeBounds};
 pub mod bytes;
 
 pub mod freelist;
-pub mod impls;
 pub mod meta;
 pub mod node;
 

@@ -1,5 +1,5 @@
 use crate::common::buffer_pool::PoolBuffer;
-use crate::pages::impls::{IntoCopiedIterator, SubRange, SubSlice};
+use crate::io::pages::{IntoCopiedIterator, SubRange, SubSlice};
 use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};

@@ -4,13 +4,15 @@ use crate::io::reader::BaseReader;
 use crate::pages::Page;
 use crate::pages::bytes::TxPage;
 use crate::pages::freelist::FreelistPage;
-use crate::pages::impls::shared_page::SharedBuffer;
 use crate::pages::meta::MetaPage;
+use pages::shared_page::SharedBuffer;
 use parking_lot::{RwLock, RwLockReadGuard};
 
 pub mod disk_cache;
 pub mod memmap;
 pub mod reader;
+
+pub mod pages;
 
 pub trait ReadPage<'tx>: Sized {
   type PageData: TxPage<'tx>;
