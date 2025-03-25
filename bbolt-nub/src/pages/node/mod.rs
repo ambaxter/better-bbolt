@@ -1,16 +1,15 @@
 use crate::api::bytes::TxSlice;
 use crate::common::id::NodePageId;
 use crate::common::page::PageHeader;
-use crate::io::pages::{HasHeader, HasRootPage};
-use std::ops::Deref;
+use crate::io::pages::{HasHeader, HasRootPage, SubSlice, TxPage};
+use std::ops::{Deref, RangeBounds};
 
 pub mod branch;
 pub mod leaf;
 
-pub trait HasNode<'tx>: HasHeader {
-  type SliceType: TxSlice<'tx>;
+pub trait HasNode<'tx>: TxPage<'tx> {
   fn search(&self, v: &[u8]) -> Option<usize>;
-  fn key(&self, index: usize) -> Option<Self::SliceType>;
+  fn key(&self, index: usize) -> Option<Self::OutputSlice>;
 }
 
 pub trait HasBranch<'tx>: HasNode<'tx> {
@@ -18,7 +17,7 @@ pub trait HasBranch<'tx>: HasNode<'tx> {
 }
 
 pub trait HasLeaf<'tx>: HasNode<'tx> {
-  fn value(&self, index: usize) -> Option<Self::SliceType>;
+  fn value(&self, index: usize) -> Option<Self::OutputSlice>;
 }
 
 #[derive(Clone)]
@@ -40,12 +39,29 @@ where
   }
 }
 
+impl<'tx, B, L> SubSlice<'tx> for NodePage<B, L>
+where
+  B: HasNode<'tx>,
+  L: HasNode<'tx, OutputSlice=B::OutputSlice>,
+{
+  type OutputSlice = B::OutputSlice;
+
+  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice {
+    match self {
+      NodePage::Branch(b) => b.sub_slice(range),
+      NodePage::Leaf(l) => l.sub_slice(range),
+    }
+  }
+}
+
+impl<'tx, B, L> TxPage<'tx> for NodePage<B, L> where B: HasNode<'tx>, L: HasNode<'tx, OutputSlice=B::OutputSlice>, {}
+
+
 impl<'tx, B, L> HasNode<'tx> for NodePage<B, L>
 where
   B: HasNode<'tx>,
-  L: HasNode<'tx, SliceType = B::SliceType>,
+  L: HasNode<'tx, OutputSlice = B::OutputSlice>,
 {
-  type SliceType = B::SliceType;
 
   fn search(&self, v: &[u8]) -> Option<usize> {
     match &self {
@@ -54,7 +70,7 @@ where
     }
   }
 
-  fn key(&self, index: usize) -> Option<Self::SliceType> {
+  fn key(&self, index: usize) -> Option<Self::OutputSlice> {
     match &self {
       NodePage::Branch(branch) => branch.key(index),
       NodePage::Leaf(leaf) => leaf.key(index),
