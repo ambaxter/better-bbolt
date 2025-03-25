@@ -1,5 +1,5 @@
 use crate::common::buffer_pool::PoolBuffer;
-use crate::io::pages::{IntoCopiedIterator, SubRange, SubSlice};
+use crate::io::pages::{HasRootPage, IntoCopiedIterator, KvDataType, SubRange, SubSlice, TxPage};
 use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
@@ -109,18 +109,48 @@ impl<'tx> IntoCopiedIterator<'tx> for SharedBufferSlice {
   }
 }
 
-impl<'tx> SubSlice<'tx> for SharedBuffer {
-  type Output = SharedBufferSlice;
+impl<'tx> KvDataType<'tx> for SharedBufferSlice {
+  fn partial_eq(&self, other: &[u8]) -> bool {
+    self.iter_copied().eq(other.iter_copied())
+  }
 
-  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::Output {
+  fn lt(&self, other: &[u8]) -> bool {
+    self.iter_copied().lt(other.iter_copied())
+  }
+
+  fn le(&self, other: &[u8]) -> bool {
+    self.iter_copied().le(other.iter_copied())
+  }
+
+  fn gt(&self, other: &[u8]) -> bool {
+    self.iter_copied().gt(other.iter_copied())
+  }
+
+  fn ge(&self, other: &[u8]) -> bool {
+    self.iter_copied().ge(other.iter_copied())
+  }
+}
+
+impl<'tx> SubSlice<'tx> for SharedBuffer {
+  type OutputSlice = SharedBufferSlice;
+
+  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice {
     SharedBufferSlice::new(self.clone(), range)
   }
 }
 
 impl<'tx> SubSlice<'tx> for SharedBufferSlice {
-  type Output = SharedBufferSlice;
+  type OutputSlice = SharedBufferSlice;
 
-  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::Output {
+  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice {
     SharedBufferSlice::new(self.inner.clone(), self.range.sub_range(range))
   }
 }
+
+impl HasRootPage for SharedBuffer {
+  fn root_page(&self) -> &[u8] {
+    self.as_ref()
+  }
+}
+
+impl<'tx> TxPage<'tx> for SharedBuffer {}

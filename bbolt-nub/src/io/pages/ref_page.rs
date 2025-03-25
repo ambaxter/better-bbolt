@@ -1,10 +1,10 @@
-use crate::io::pages::{IntoCopiedIterator, KvDataType, SubSlice};
+use crate::io::pages::{HasRootPage, IntoCopiedIterator, KvDataType, SubSlice, TxPage};
 use std::iter::Copied;
 use std::ops::RangeBounds;
 
 impl<'tx> SubSlice<'tx> for &'tx [u8] {
-  type Output = &'tx [u8];
-  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::Output {
+  type OutputSlice = &'tx [u8];
+  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice {
     &self[(range.start_bound().cloned(), range.end_bound().cloned())]
   }
 }
@@ -50,3 +50,10 @@ impl<'a> KvDataType<'a> for &'a [u8] {
   }
 
 }
+impl<'tx> HasRootPage for &'tx [u8] {
+  fn root_page(&self) -> &[u8] {
+    self
+  }
+}
+
+impl<'tx> TxPage<'tx> for &'tx [u8] {}

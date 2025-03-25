@@ -18,7 +18,7 @@ pub trait HasHeader: HasRootPage + Clone {
 
 #[derive(Clone)]
 pub struct Page<T> {
-  buffer: T,
+  pub(crate) buffer: T,
 }
 
 impl<'tx, T> Page<T>

@@ -1,5 +1,7 @@
 use std::collections::Bound;
 use std::ops::{Range, RangeBounds};
+use crate::common::errors::PageError;
+use crate::common::id::DbPageType;
 
 pub mod kvdata;
 pub mod lazy_page;
@@ -35,10 +37,22 @@ impl SubRange for Range<usize> {
   }
 }
 
-pub trait SubSlice<'tx> {
-  type Output: 'tx;
 
-  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::Output;
+pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx>{
+  fn partial_eq(&self, other: &[u8]) -> bool;
+
+  fn lt(&self, other: &[u8]) -> bool;
+  fn le(&self, other: &[u8]) -> bool;
+
+  fn gt(&self, other: &[u8]) -> bool;
+  fn ge(&self, other: &[u8]) -> bool;
+
+}
+
+pub trait SubSlice<'tx> {
+  type OutputSlice: KvDataType<'tx>;
+
+  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice;
 }
 
 pub trait IntoCopiedIterator<'tx> {
@@ -51,16 +65,6 @@ pub trait IntoCopiedIterator<'tx> {
     'tx: 'a;
 }
 
-pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx> + SubSlice<'tx, Output = Self> {
-  fn partial_eq(&self, other: &[u8]) -> bool;
-
-  fn lt(&self, other: &[u8]) -> bool;
-  fn le(&self, other: &[u8]) -> bool;
-
-  fn gt(&self, other: &[u8]) -> bool;
-  fn ge(&self, other: &[u8]) -> bool;
-
-}
 
 pub trait HasRootPage {
   fn root_page(&self) -> &[u8];
@@ -68,6 +72,17 @@ pub trait HasRootPage {
 
 pub trait TxPage<'tx>: HasRootPage + SubSlice<'tx> + Clone {
 
+}
+
+#[derive(Clone)]
+pub struct Page<T> {
+  pub(crate) buffer: T
+}
+
+impl<T> HasRootPage for Page<T> where T: HasRootPage {
+  fn root_page(&self) -> &[u8] {
+    self.buffer.root_page()
+  }
 }
 
 #[cfg(test)]
