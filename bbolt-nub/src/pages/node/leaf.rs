@@ -1,7 +1,8 @@
 use crate::common::page::PageHeader;
-use crate::pages::bytes::{HasRootPage, TxPage};
+use crate::pages::bytes::{ TxPage};
 use crate::pages::{HasHeader, Page};
 use delegate::delegate;
+use crate::io::pages::HasRootPage;
 
 #[derive(Clone)]
 pub struct LeafPage<T> {

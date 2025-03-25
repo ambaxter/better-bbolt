@@ -51,7 +51,7 @@ pub trait IntoCopiedIterator<'tx> {
     'tx: 'a;
 }
 
-pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx> {
+pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx> + SubSlice<'tx, Output = Self> {
   fn partial_eq(&self, other: &[u8]) -> bool;
 
   fn lt(&self, other: &[u8]) -> bool;
@@ -60,7 +60,14 @@ pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx> {
   fn gt(&self, other: &[u8]) -> bool;
   fn ge(&self, other: &[u8]) -> bool;
 
-  fn slice_index<R: RangeBounds<usize>>(&self, range: R) -> Self;
+}
+
+pub trait HasRootPage {
+  fn root_page(&self) -> &[u8];
+}
+
+pub trait TxPage<'tx>: HasRootPage + SubSlice<'tx> + Clone {
+
 }
 
 #[cfg(test)]

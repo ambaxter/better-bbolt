@@ -2,8 +2,9 @@ use crate::common::errors::PageError;
 use crate::common::id::DbPageType;
 use crate::common::page::PageHeader;
 use crate::io::ReadData;
-use crate::pages::bytes::{HasRootPage, TxPage};
+use crate::pages::bytes::{TxPage};
 use std::ops::{Deref, RangeBounds};
+use crate::io::pages::HasRootPage;
 
 pub mod bytes;
 

@@ -1,7 +1,7 @@
 use crate::common::errors::PageError;
 use crate::common::id::OverflowPageId;
 use crate::common::page::PageHeader;
-use crate::io::pages::{IntoCopiedIterator, SubRange};
+use crate::io::pages::{HasRootPage, IntoCopiedIterator, SubRange};
 use crate::io::{NonContigReader, ReadData};
 use crate::pages::{HasHeader, Page};
 use delegate::delegate;
@@ -9,9 +9,7 @@ use error_stack::ResultExt;
 use std::ops::{Deref, Index, Range, RangeBounds};
 use triomphe::Arc;
 
-pub trait HasRootPage {
-  fn root_page(&self) -> &[u8];
-}
+
 
 pub trait TxPageSlice<'tx>:
   Ord + PartialEq<[u8]> + PartialOrd<[u8]> + IntoCopiedIterator<'tx>

@@ -68,7 +68,4 @@ where
     self.iter_copied().ge(other.iter_copied())
   }
 
-  fn slice_index<R: RangeBounds<usize>>(&self, range: R) -> Self {
-    todo!()
-  }
 }

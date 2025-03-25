@@ -1,10 +1,11 @@
 use crate::common::bucket::BucketHeader;
 use crate::common::id::{EOFPageId, FreelistPageId, TxId};
 use crate::common::page::PageHeader;
-use crate::pages::bytes::{HasRootPage, TxPage};
+use crate::pages::bytes::{TxPage};
 use crate::pages::{HasHeader, Page};
 use bytemuck::{Pod, Zeroable};
 use delegate::delegate;
+use crate::io::pages::HasRootPage;
 
 /// `Meta` represents the on-file layout of a database's metadata
 ///

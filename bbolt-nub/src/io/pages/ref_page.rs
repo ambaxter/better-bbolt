@@ -49,8 +49,4 @@ impl<'a> KvDataType<'a> for &'a [u8] {
     PartialOrd::ge(*self, other)
   }
 
-  fn slice_index<R: RangeBounds<usize>>(&self, range: R) -> Self {
-    let (start, end) = (range.start_bound().cloned(), range.end_bound().cloned());
-    &self[(start, end)]
-  }
 }
