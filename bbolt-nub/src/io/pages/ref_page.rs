@@ -1,10 +1,23 @@
-use crate::io::pages::{HasRootPage, IntoCopiedIterator, KvDataType, SubSlice, TxPage};
+use crate::io::pages::{
+  HasRootPage, IntoCopiedIterator, KvDataType, SubRefSlice, SubTxSlice, TxPage,
+};
 use std::iter::Copied;
 use std::ops::RangeBounds;
 
-impl<'tx> SubSlice<'tx> for &'tx [u8] {
-  type OutputSlice = &'tx [u8];
-  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice {
+impl<'tx> SubTxSlice<'tx> for &'tx [u8] {
+  type TxSlice = &'tx [u8];
+  fn sub_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
+    &self[(range.start_bound().cloned(), range.end_bound().cloned())]
+  }
+}
+
+impl<'tx> SubRefSlice for &'tx [u8] {
+  type RefSlice<'a>
+    = &'a [u8]
+  where
+    Self: 'a;
+
+  fn sub_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefSlice<'a> {
     &self[(range.start_bound().cloned(), range.end_bound().cloned())]
   }
 }
@@ -23,7 +36,7 @@ impl<'tx> IntoCopiedIterator<'tx> for &'tx [u8] {
   }
 }
 
-impl<'a> KvDataType<'a> for &'a [u8] {
+impl<'a> KvDataType for &'a [u8] {
   #[inline]
   fn partial_eq(&self, other: &[u8]) -> bool {
     PartialEq::eq(*self, other)

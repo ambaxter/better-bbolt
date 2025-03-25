@@ -39,7 +39,7 @@ impl SubRange for Range<usize> {
   }
 }
 
-pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx> {
+pub trait KvDataType: Ord {
   fn partial_eq(&self, other: &[u8]) -> bool;
 
   fn lt(&self, other: &[u8]) -> bool;
@@ -49,10 +49,20 @@ pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx> {
   fn ge(&self, other: &[u8]) -> bool;
 }
 
-pub trait SubSlice<'tx> {
-  type OutputSlice: KvDataType<'tx>;
+// TODO: Concept of a 'tx slice and a 'a ref slice
 
-  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice;
+pub trait SubTxSlice<'tx> {
+  type TxSlice: KvDataType + 'tx;
+
+  fn sub_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice;
+}
+
+pub trait SubRefSlice {
+  type RefSlice<'a>: KvDataType + 'a
+  where
+    Self: 'a;
+
+  fn sub_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefSlice<'a>;
 }
 
 pub trait IntoCopiedIterator<'tx> {
@@ -63,6 +73,13 @@ pub trait IntoCopiedIterator<'tx> {
   fn iter_copied<'a>(&'a self) -> Self::CopiedIter<'a>
   where
     'tx: 'a;
+}
+
+pub trait RefIntoCopiedIterator {
+  type RefCopiedIter<'a>: Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator + 'a
+  where
+    Self: 'a;
+  fn ref_iter_copied<'a>(&'a self) -> Self::RefCopiedIter<'a>;
 }
 
 pub trait HasRootPage {
@@ -77,7 +94,7 @@ pub trait HasHeader: HasRootPage {
 
 impl<T> HasHeader for T where T: HasRootPage {}
 
-pub trait TxPage<'tx>: HasHeader + SubSlice<'tx> + Clone {}
+pub trait TxPage<'tx>: HasHeader + SubTxSlice<'tx> + Clone {}
 
 #[derive(Clone)]
 pub struct Page<T> {

@@ -2,7 +2,7 @@ use crate::common::errors::PageError;
 use crate::common::id::OverflowPageId;
 use crate::io::NonContigReader;
 use crate::io::pages::{
-  HasHeader, HasRootPage, IntoCopiedIterator, KvDataType, Page, SubRange, SubSlice, TxPage,
+  HasHeader, HasRootPage, IntoCopiedIterator, KvDataType, Page, SubRange, SubTxSlice, TxPage,
 };
 use delegate::delegate;
 use error_stack::ResultExt;
@@ -320,24 +320,24 @@ where
   }
 }
 
-impl<'tx, RD> SubSlice<'tx> for LazyPage<RD::PageData, RD>
+impl<'tx, RD> SubTxSlice<'tx> for LazyPage<RD::PageData, RD>
 where
   RD: NonContigReader<'tx> + 'tx,
 {
-  type OutputSlice = LazySlice<RD::PageData, RD>;
+  type TxSlice = LazySlice<RD::PageData, RD>;
 
-  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice {
+  fn sub_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
     LazySlice::new(self.clone(), range)
   }
 }
 
-impl<'tx, RD> SubSlice<'tx> for LazySlice<RD::PageData, RD>
+impl<'tx, RD> SubTxSlice<'tx> for LazySlice<RD::PageData, RD>
 where
   RD: NonContigReader<'tx> + 'tx,
 {
-  type OutputSlice = LazySlice<RD::PageData, RD>;
+  type TxSlice = LazySlice<RD::PageData, RD>;
 
-  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice {
+  fn sub_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
     let range = self.range.sub_range(range);
     LazySlice::new(self.page.clone(), range)
   }
@@ -361,7 +361,7 @@ where
   }
 }
 
-impl<'tx, RD> KvDataType<'tx> for LazySlice<RD::PageData, RD>
+impl<'tx, RD> KvDataType for LazySlice<RD::PageData, RD>
 where
   RD: NonContigReader<'tx> + 'tx,
 {

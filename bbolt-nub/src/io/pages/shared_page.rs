@@ -1,9 +1,11 @@
 use crate::common::buffer_pool::PoolBuffer;
-use crate::io::pages::{HasRootPage, IntoCopiedIterator, KvDataType, SubRange, SubSlice, TxPage};
+use crate::io::pages::{
+  HasRootPage, IntoCopiedIterator, KvDataType, RefIntoCopiedIterator, SubRange, SubTxSlice, TxPage,
+};
 use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
-use triomphe::{Arc, UniqueArc};
+use triomphe::{Arc, ArcBorrow, UniqueArc};
 
 #[derive(Clone)]
 pub struct SharedBuffer {
@@ -109,7 +111,7 @@ impl<'tx> IntoCopiedIterator<'tx> for SharedBufferSlice {
   }
 }
 
-impl<'tx> KvDataType<'tx> for SharedBufferSlice {
+impl<'tx> KvDataType for SharedBufferSlice {
   fn partial_eq(&self, other: &[u8]) -> bool {
     self.iter_copied().eq(other.iter_copied())
   }
@@ -131,18 +133,18 @@ impl<'tx> KvDataType<'tx> for SharedBufferSlice {
   }
 }
 
-impl<'tx> SubSlice<'tx> for SharedBuffer {
-  type OutputSlice = SharedBufferSlice;
+impl<'tx> SubTxSlice<'tx> for SharedBuffer {
+  type TxSlice = SharedBufferSlice;
 
-  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice {
+  fn sub_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
     SharedBufferSlice::new(self.clone(), range)
   }
 }
 
-impl<'tx> SubSlice<'tx> for SharedBufferSlice {
-  type OutputSlice = SharedBufferSlice;
+impl<'tx> SubTxSlice<'tx> for SharedBufferSlice {
+  type TxSlice = SharedBufferSlice;
 
-  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::OutputSlice {
+  fn sub_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
     SharedBufferSlice::new(self.inner.clone(), self.range.sub_range(range))
   }
 }
@@ -154,3 +156,80 @@ impl HasRootPage for SharedBuffer {
 }
 
 impl<'tx> TxPage<'tx> for SharedBuffer {}
+
+pub struct SharedRefSlice<'a> {
+  pub(crate) inner: &'a Arc<PoolBuffer>,
+  pub(crate) range: Range<usize>,
+}
+
+impl<'a> AsRef<[u8]> for SharedRefSlice<'a> {
+  fn as_ref(&self) -> &[u8] {
+    &self.inner.slice.as_ref()[self.range.start..self.range.end]
+  }
+}
+
+impl<'a> Eq for SharedRefSlice<'a> {}
+
+impl<'a> PartialEq for SharedRefSlice<'a> {
+  fn eq(&self, other: &Self) -> bool {
+    self.as_ref().eq(other.as_ref())
+  }
+}
+
+impl<'a> Ord for SharedRefSlice<'a> {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.as_ref().cmp(other.as_ref())
+  }
+}
+
+impl<'a> PartialOrd for SharedRefSlice<'a> {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self.as_ref().partial_cmp(other.as_ref())
+  }
+
+  fn lt(&self, other: &Self) -> bool {
+    self.as_ref().lt(other.as_ref())
+  }
+  fn le(&self, other: &Self) -> bool {
+    self.as_ref().le(other.as_ref())
+  }
+  fn gt(&self, other: &Self) -> bool {
+    self.as_ref().gt(other.as_ref())
+  }
+  fn ge(&self, other: &Self) -> bool {
+    self.as_ref().ge(other.as_ref())
+  }
+}
+
+impl<'p> RefIntoCopiedIterator for SharedRefSlice<'p> {
+  type RefCopiedIter<'a>
+    = Copied<std::slice::Iter<'a, u8>>
+  where
+    Self: 'a;
+
+  fn ref_iter_copied<'a>(&'a self) -> Self::RefCopiedIter<'a> {
+    self.as_ref().iter().copied()
+  }
+}
+
+impl<'a> KvDataType for SharedRefSlice<'a> {
+  fn partial_eq(&self, other: &[u8]) -> bool {
+    self.as_ref().partial_eq(other)
+  }
+
+  fn lt(&self, other: &[u8]) -> bool {
+    self.as_ref().lt(other)
+  }
+
+  fn le(&self, other: &[u8]) -> bool {
+    self.as_ref().le(other)
+  }
+
+  fn gt(&self, other: &[u8]) -> bool {
+    self.as_ref().gt(other)
+  }
+
+  fn ge(&self, other: &[u8]) -> bool {
+    self.as_ref().ge(other)
+  }
+}
