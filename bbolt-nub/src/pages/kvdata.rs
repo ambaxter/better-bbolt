@@ -5,10 +5,7 @@ use std::collections::Bound;
 use std::iter::Copied;
 use std::ops::RangeBounds;
 
-pub trait IntoCopiedIterator<'tx>
-where
-  Self: 'tx,
-{
+pub trait IntoCopiedIterator<'tx> {
   type CopiedIter<'a>: Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator + 'a
   where
     Self: 'a,
@@ -22,8 +19,7 @@ impl<'tx> IntoCopiedIterator<'tx> for &'tx [u8] {
   type CopiedIter<'a>
     = Copied<std::slice::Iter<'a, u8>>
   where
-    Self: 'a,
-    'tx: 'a;
+    Self: 'a;
 
   fn iter_copied<'a>(&'a self) -> Self::CopiedIter<'a>
   where
@@ -157,7 +153,7 @@ pub enum KvDataIter<'a, T, R> {
 
 impl<'a, 'tx, R> Iterator for KvDataIter<'a, R::PageData, R>
 where
-  R: NonContigReader<'tx>,
+  R: NonContigReader<'tx> + 'tx,
 {
   type Item = u8;
 
@@ -171,7 +167,7 @@ where
 
 impl<'a, 'tx, R> DoubleEndedIterator for KvDataIter<'a, R::PageData, R>
 where
-  R: NonContigReader<'tx>,
+  R: NonContigReader<'tx> + 'tx,
 {
   fn next_back(&mut self) -> Option<Self::Item> {
     match self {
@@ -183,7 +179,7 @@ where
 
 impl<'a, 'tx, R> ExactSizeIterator for KvDataIter<'a, R::PageData, R>
 where
-  R: NonContigReader<'tx>,
+  R: NonContigReader<'tx> + 'tx,
 {
   #[inline]
   fn len(&self) -> usize {
@@ -194,20 +190,20 @@ where
   }
 }
 
-impl<'a, 'tx, R> PartialEq for KvData<'a, R::PageData, R>
+impl<'tx, R> PartialEq for KvData<'tx, R::PageData, R>
 where
-  R: NonContigReader<'tx>,
+  R: NonContigReader<'tx> + 'tx,
 {
   fn eq(&self, other: &Self) -> bool {
     self.iter_copied().eq(other.iter_copied())
   }
 }
 
-impl<'a, 'tx, R> Eq for KvData<'a, R::PageData, R> where R: NonContigReader<'tx> {}
+impl<'tx, R> Eq for KvData<'tx, R::PageData, R> where R: NonContigReader<'tx> + 'tx {}
 
-impl<'a, 'tx, R> PartialOrd for KvData<'a, R::PageData, R>
+impl<'tx, R> PartialOrd for KvData<'tx, R::PageData, R>
 where
-  R: NonContigReader<'tx>,
+  R: NonContigReader<'tx> + 'tx,
 {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     self.iter_copied().partial_cmp(other.iter_copied())
@@ -226,9 +222,9 @@ where
   }
 }
 
-impl<'a, 'tx, R> Ord for KvData<'a, R::PageData, R>
+impl<'tx, R> Ord for KvData<'tx, R::PageData, R>
 where
-  R: NonContigReader<'tx>,
+  R: NonContigReader<'tx> + 'tx,
 {
   fn cmp(&self, other: &Self) -> Ordering {
     self.iter_copied().cmp(other.iter_copied())
