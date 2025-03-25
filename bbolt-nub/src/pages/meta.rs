@@ -1,11 +1,10 @@
 use crate::common::bucket::BucketHeader;
 use crate::common::id::{EOFPageId, FreelistPageId, TxId};
 use crate::common::page::PageHeader;
-use crate::pages::bytes::{TxPage};
-use crate::pages::{HasHeader, Page};
+use crate::io::pages::{HasHeader, HasRootPage, TxPage};
+use crate::pages::Page;
 use bytemuck::{Pod, Zeroable};
 use delegate::delegate;
-use crate::io::pages::HasRootPage;
 
 /// `Meta` represents the on-file layout of a database's metadata
 ///
@@ -48,17 +47,6 @@ where
   delegate! {
       to &self.page {
           fn root_page(&self) -> &[u8];
-      }
-  }
-}
-
-impl<'tx, T> HasHeader for MetaPage<T>
-where
-  T: TxPage<'tx>,
-{
-  delegate! {
-      to &self.page {
-          fn page_header(&self) -> &PageHeader;
       }
   }
 }

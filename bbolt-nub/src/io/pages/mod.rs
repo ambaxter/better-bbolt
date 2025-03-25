@@ -1,7 +1,9 @@
-use std::collections::Bound;
-use std::ops::{Range, RangeBounds};
 use crate::common::errors::PageError;
 use crate::common::id::DbPageType;
+use crate::common::page::PageHeader;
+use delegate::delegate;
+use std::collections::Bound;
+use std::ops::{Range, RangeBounds};
 
 pub mod kvdata;
 pub mod lazy_page;
@@ -37,8 +39,7 @@ impl SubRange for Range<usize> {
   }
 }
 
-
-pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx>{
+pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx> {
   fn partial_eq(&self, other: &[u8]) -> bool;
 
   fn lt(&self, other: &[u8]) -> bool;
@@ -46,7 +47,6 @@ pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx>{
 
   fn gt(&self, other: &[u8]) -> bool;
   fn ge(&self, other: &[u8]) -> bool;
-
 }
 
 pub trait SubSlice<'tx> {
@@ -65,23 +65,33 @@ pub trait IntoCopiedIterator<'tx> {
     'tx: 'a;
 }
 
-
 pub trait HasRootPage {
   fn root_page(&self) -> &[u8];
 }
 
-pub trait TxPage<'tx>: HasRootPage + SubSlice<'tx> + Clone {
-
+pub trait HasHeader: HasRootPage {
+  fn page_header(&self) -> &PageHeader {
+    bytemuck::from_bytes(&self.root_page()[0..size_of::<PageHeader>()])
+  }
 }
+
+impl<T> HasHeader for T where T: HasRootPage {}
+
+pub trait TxPage<'tx>: HasHeader + SubSlice<'tx> + Clone {}
 
 #[derive(Clone)]
 pub struct Page<T> {
-  pub(crate) buffer: T
+  pub(crate) buffer: T,
 }
 
-impl<T> HasRootPage for Page<T> where T: HasRootPage {
-  fn root_page(&self) -> &[u8] {
-    self.buffer.root_page()
+impl<T> HasRootPage for Page<T>
+where
+  T: HasRootPage,
+{
+  delegate! {
+      to &self.buffer {
+          fn root_page(&self) -> &[u8];
+      }
   }
 }
 

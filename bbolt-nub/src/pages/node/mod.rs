@@ -1,10 +1,8 @@
 use crate::api::bytes::TxSlice;
 use crate::common::id::NodePageId;
 use crate::common::page::PageHeader;
-use crate::pages::HasHeader;
-use crate::pages::bytes::{TxPage};
+use crate::io::pages::{HasHeader, HasRootPage};
 use std::ops::Deref;
-use crate::io::pages::HasRootPage;
 
 pub mod branch;
 pub mod leaf;
@@ -38,19 +36,6 @@ where
     match self {
       NodePage::Branch(b) => b.root_page(),
       NodePage::Leaf(l) => l.root_page(),
-    }
-  }
-}
-
-impl<B, L> HasHeader for NodePage<B, L>
-where
-  B: HasHeader,
-  L: HasHeader,
-{
-  fn page_header(&self) -> &PageHeader {
-    match self {
-      NodePage::Branch(b) => b.page_header(),
-      NodePage::Leaf(l) => l.page_header(),
     }
   }
 }

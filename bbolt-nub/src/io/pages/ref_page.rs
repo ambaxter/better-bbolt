@@ -48,7 +48,6 @@ impl<'a> KvDataType<'a> for &'a [u8] {
   fn ge(&self, other: &[u8]) -> bool {
     PartialOrd::ge(*self, other)
   }
-
 }
 impl<'tx> HasRootPage for &'tx [u8] {
   fn root_page(&self) -> &[u8] {

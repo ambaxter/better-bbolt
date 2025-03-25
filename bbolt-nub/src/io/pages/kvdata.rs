@@ -1,11 +1,11 @@
 use crate::io::pages::IntoCopiedIterator;
+use crate::io::pages::lazy_page::{LazySlice, LazySliceIter};
 use crate::io::pages::shared_page::SharedBufferSlice;
 use crate::io::{NonContigReader, ReadData};
 use std::cmp::Ordering;
 use std::collections::Bound;
 use std::iter::Copied;
 use std::ops::RangeBounds;
-use crate::io::pages::lazy_page::{LazySlice, LazySliceIter};
 
 pub enum KvData<'tx, T, RD> {
   Slice(&'tx [u8]),

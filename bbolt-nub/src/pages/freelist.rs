@@ -1,10 +1,9 @@
 use crate::common::id::FreelistPageId;
 use crate::common::page::PageHeader;
-use crate::pages::bytes::{TxPage};
-use crate::pages::{HasHeader, Page};
+use crate::io::pages::{HasHeader, HasRootPage, TxPage};
+use crate::pages::Page;
 use delegate::delegate;
 use std::iter::RepeatN;
-use crate::io::pages::HasRootPage;
 
 pub trait HasFreelist: HasHeader {
   type FreelistIter: Iterator<Item = FreelistPageId>;
@@ -24,17 +23,6 @@ where
   delegate! {
       to &self.page {
           fn root_page(&self) -> &[u8];
-      }
-  }
-}
-
-impl<'tx, T> HasHeader for FreelistPage<T>
-where
-  T: TxPage<'tx>,
-{
-  delegate! {
-      to &self.page {
-          fn page_header(&self) -> &PageHeader;
       }
   }
 }

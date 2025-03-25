@@ -1,8 +1,7 @@
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, FreelistPageId, MetaPageId, NodePageId};
+use crate::io::pages::{Page, TxPage};
 use crate::io::reader::BaseReader;
-use crate::pages::Page;
-use crate::pages::bytes::TxPage;
 use crate::pages::freelist::FreelistPage;
 use crate::pages::meta::MetaPage;
 use pages::shared_page::SharedBuffer;

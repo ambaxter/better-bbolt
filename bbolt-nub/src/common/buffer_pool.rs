@@ -1,6 +1,5 @@
 use crate::io::pages::SubRange;
 use crate::io::pages::shared_page::{SharedBuffer, SharedBufferSlice};
-use crate::pages::bytes::{TxPage, TxPageSlice};
 use parking_lot::Mutex;
 use size::Size;
 use std::cmp::Ordering;
@@ -58,30 +57,6 @@ impl UniqueBuffer {
     Ok(SharedBuffer {
       inner: Some(shared),
     })
-  }
-}
-
-impl<'tx> TxPage<'tx> for SharedBuffer {
-  type TxSlice = SharedBufferSlice;
-
-  //TODO: Test!
-  fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
-    let range = (0..self.len()).sub_range(range);
-    SharedBufferSlice {
-      inner: self.clone(),
-      range,
-    }
-  }
-}
-
-impl<'tx> TxPageSlice<'tx> for SharedBufferSlice {
-  // TODO: Test!!
-  fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self {
-    let range = self.range.sub_range(range);
-    SharedBufferSlice {
-      inner: self.inner.clone(),
-      range,
-    }
   }
 }
 
