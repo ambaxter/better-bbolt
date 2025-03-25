@@ -5,14 +5,12 @@ use crate::io::ReadData;
 use crate::pages::bytes::{HasRootPage, TxPage};
 use std::ops::{Deref, RangeBounds};
 
-pub mod kvdata;
-
 pub mod bytes;
 
 pub mod freelist;
+pub mod impls;
 pub mod meta;
 pub mod node;
-pub mod slice_index;
 
 pub trait HasHeader: HasRootPage + Clone {
   fn page_header(&self) -> &PageHeader;

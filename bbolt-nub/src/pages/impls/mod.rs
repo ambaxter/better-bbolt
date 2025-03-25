@@ -1,6 +1,10 @@
 use std::collections::Bound;
 use std::ops::{Range, RangeBounds};
-use crate::api::bytes::TxSlice;
+
+pub mod kvdata;
+pub mod lazy_page;
+pub mod ref_page;
+pub mod shared_page;
 
 pub trait SubRange {
   fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
@@ -18,10 +22,45 @@ impl SubRange for Range<usize> {
       Bound::Excluded(end) => self.start + end,
       Bound::Unbounded => self.end,
     };
-    assert!(start <= end, "New start ({start}) should be <= new end ({end})");
-    assert!(end <= self.end, "New end ({end}) should be <= current end ({0})", self.end);
+    assert!(
+      start <= end,
+      "New start ({start}) should be <= new end ({end})"
+    );
+    assert!(
+      end <= self.end,
+      "New end ({end}) should be <= current end ({0})",
+      self.end
+    );
     start..end
   }
+}
+
+pub trait SubSlice<'tx> {
+  type Output: 'tx;
+
+  fn sub_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::Output;
+}
+
+pub trait IntoCopiedIterator<'tx> {
+  type CopiedIter<'a>: Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator + 'a
+  where
+    Self: 'a,
+    'tx: 'a;
+  fn iter_copied<'a>(&'a self) -> Self::CopiedIter<'a>
+  where
+    'tx: 'a;
+}
+
+pub trait KvDataType<'tx>: Ord + IntoCopiedIterator<'tx> {
+  fn partial_eq(&self, other: &[u8]) -> bool;
+
+  fn lt(&self, other: &[u8]) -> bool;
+  fn le(&self, other: &[u8]) -> bool;
+
+  fn gt(&self, other: &[u8]) -> bool;
+  fn ge(&self, other: &[u8]) -> bool;
+
+  fn slice_index<R: RangeBounds<usize>>(&self, range: R) -> Self;
 }
 
 #[cfg(test)]

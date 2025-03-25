@@ -1,8 +1,9 @@
-use crate::common::buffer_pool::{BufferPool, SharedBuffer};
+use crate::common::buffer_pool::BufferPool;
 use crate::common::errors::DiskReadError;
 use crate::common::id::DiskPageId;
 use crate::common::page::PageHeader;
 use crate::io::ReadData;
+use crate::pages::impls::shared_page::SharedBuffer;
 use bytemuck::bytes_of_mut;
 use error_stack::ResultExt;
 use std::io::{BufReader, Read, Seek, SeekFrom};

@@ -1,10 +1,10 @@
-use crate::common::buffer_pool::SharedBuffer;
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::io::reader::BaseReader;
 use crate::pages::Page;
 use crate::pages::bytes::TxPage;
 use crate::pages::freelist::FreelistPage;
+use crate::pages::impls::shared_page::SharedBuffer;
 use crate::pages::meta::MetaPage;
 use parking_lot::{RwLock, RwLockReadGuard};
 

@@ -1,5 +1,6 @@
 use crate::pages::bytes::{TxPage, TxPageSlice};
-use crate::pages::kvdata::IntoCopiedIterator;
+use crate::pages::impls::SubRange;
+use crate::pages::impls::shared_page::{SharedBuffer, SharedBufferSlice};
 use parking_lot::Mutex;
 use size::Size;
 use std::cmp::Ordering;
@@ -12,7 +13,6 @@ use std::ops::{Deref, Range, RangeBounds};
 use triomphe::{Arc, HeaderSlice, UniqueArc};
 use uninit::extension_traits::AsOut;
 use uninit::read::ReadIntoUninit;
-use crate::pages::slice_index::SubRange;
 
 pub type PoolMaybeUninitBuffer = HeaderSlice<Option<BufferPool>, [MaybeUninit<u8>]>;
 pub type PoolBuffer = HeaderSlice<Option<BufferPool>, [u8]>;
@@ -61,41 +61,6 @@ impl UniqueBuffer {
   }
 }
 
-#[derive(Clone)]
-pub struct SharedBuffer {
-  inner: Option<Arc<PoolBuffer>>,
-}
-
-impl Deref for SharedBuffer {
-  type Target = [u8];
-  fn deref(&self) -> &Self::Target {
-    self.as_ref()
-  }
-}
-
-impl AsRef<[u8]> for SharedBuffer {
-  fn as_ref(&self) -> &[u8] {
-    self
-      .inner
-      .as_ref()
-      .expect("shared buffer is dropped")
-      .slice
-      .as_ref()
-  }
-}
-
-impl Drop for SharedBuffer {
-  fn drop(&mut self) {
-    let inner = self.inner.take().expect("shared buffer is dropped");
-    if inner.is_unique() {
-      let mut inner: UniqueArc<PoolBuffer> = inner.try_into().expect("shared buffer isn't unique?");
-      if let Some(pool) = inner.header.take() {
-        pool.push(inner);
-      }
-    }
-  }
-}
-
 impl<'tx> TxPage<'tx> for SharedBuffer {
   type TxSlice = SharedBufferSlice;
 
@@ -106,64 +71,6 @@ impl<'tx> TxPage<'tx> for SharedBuffer {
       inner: self.clone(),
       range,
     }
-  }
-}
-
-#[derive(Clone)]
-pub struct SharedBufferSlice {
-  inner: SharedBuffer,
-  range: Range<usize>,
-}
-
-impl AsRef<[u8]> for SharedBufferSlice {
-  fn as_ref(&self) -> &[u8] {
-    &self.inner.as_ref()[self.range.start..self.range.end]
-  }
-}
-
-impl Ord for SharedBufferSlice {
-  fn cmp(&self, other: &Self) -> Ordering {
-    self.as_ref().cmp(other.as_ref())
-  }
-}
-
-impl Eq for SharedBufferSlice {}
-
-impl PartialEq<Self> for SharedBufferSlice {
-  fn eq(&self, other: &Self) -> bool {
-    self.as_ref().eq(other.as_ref())
-  }
-}
-
-impl PartialOrd<Self> for SharedBufferSlice {
-  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-    self.as_ref().partial_cmp(other.as_ref())
-  }
-}
-
-impl PartialEq<[u8]> for SharedBufferSlice {
-  fn eq(&self, other: &[u8]) -> bool {
-    self.as_ref().eq(other)
-  }
-}
-
-impl PartialOrd<[u8]> for SharedBufferSlice {
-  fn partial_cmp(&self, other: &[u8]) -> Option<Ordering> {
-    self.as_ref().partial_cmp(other)
-  }
-}
-
-impl<'tx> IntoCopiedIterator<'tx> for SharedBufferSlice {
-  type CopiedIter<'a>
-    = Copied<std::slice::Iter<'a, u8>>
-  where
-    Self: 'a,
-    'tx: 'a;
-  fn iter_copied<'a>(&'a self) -> Self::CopiedIter<'a>
-  where
-    'tx: 'a,
-  {
-    self.as_ref().iter().copied()
   }
 }
 
@@ -266,9 +173,15 @@ impl BufferPool {
     }
   }
 
+  pub fn page_size(&self) -> usize {
+    self.inner.page_size
+  }
+
   // TODO: Can we put this on a different thread?
-  fn push(&self, buffer: UniqueArc<PoolBuffer>) {
-    self.inner.push(buffer);
+  pub(crate) fn push(&self, buffer: UniqueArc<PoolBuffer>) {
+    if buffer.slice.len() == self.inner.page_size {
+      self.inner.push(buffer);
+    }
   }
 
   pub fn pop(&self) -> UniqueBuffer {
