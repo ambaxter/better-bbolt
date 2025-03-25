@@ -12,6 +12,7 @@ use std::ops::{Deref, Range, RangeBounds};
 use triomphe::{Arc, HeaderSlice, UniqueArc};
 use uninit::extension_traits::AsOut;
 use uninit::read::ReadIntoUninit;
+use crate::pages::slice_index::SubRange;
 
 pub type PoolMaybeUninitBuffer = HeaderSlice<Option<BufferPool>, [MaybeUninit<u8>]>;
 pub type PoolBuffer = HeaderSlice<Option<BufferPool>, [u8]>;
@@ -100,19 +101,10 @@ impl<'tx> TxPage<'tx> for SharedBuffer {
 
   //TODO: Test!
   fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
-    let start = match range.start_bound().cloned() {
-      Bound::Included(included) => included,
-      Bound::Excluded(excluded) => excluded + 1,
-      Bound::Unbounded => 0,
-    };
-    let end = match range.end_bound().cloned() {
-      Bound::Included(included) => self.len() - (self.len() - included) + 1,
-      Bound::Excluded(excluded) => self.len() - (self.len() - excluded),
-      Bound::Unbounded => self.len(),
-    };
+    let range = (0..self.len()).sub_range(range);
     SharedBufferSlice {
       inner: self.clone(),
-      range: start..end,
+      range,
     }
   }
 }
@@ -178,19 +170,10 @@ impl<'tx> IntoCopiedIterator<'tx> for SharedBufferSlice {
 impl<'tx> TxPageSlice<'tx> for SharedBufferSlice {
   // TODO: Test!!
   fn subslice<R: RangeBounds<usize>>(&self, range: R) -> Self {
-    let start = match range.start_bound().cloned() {
-      Bound::Included(included) => self.range.start + included,
-      Bound::Excluded(excluded) => self.range.start + excluded + 1,
-      Bound::Unbounded => self.range.start,
-    };
-    let end = match range.end_bound().cloned() {
-      Bound::Included(included) => self.range.end - (self.range.end - included) + 1,
-      Bound::Excluded(excluded) => self.range.end - (self.range.end - excluded),
-      Bound::Unbounded => self.range.end,
-    };
+    let range = self.range.sub_range(range);
     SharedBufferSlice {
       inner: self.inner.clone(),
-      range: start..end,
+      range,
     }
   }
 }
