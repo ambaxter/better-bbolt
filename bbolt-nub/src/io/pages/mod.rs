@@ -1,9 +1,14 @@
 use crate::common::errors::PageError;
 use crate::common::id::DbPageType;
 use crate::common::page::PageHeader;
+use crate::io::NonContigReader;
+use crate::io::pages::lazy_page::{LazySlice, LazySliceIter};
+use crate::io::pages::shared_page::{SharedBufferSlice, SharedRefSlice};
 use delegate::delegate;
 use std::collections::Bound;
+use std::iter::Copied;
 use std::ops::{Range, RangeBounds};
+use std::slice::Iter;
 
 pub mod kvdata;
 pub mod lazy_page;
@@ -80,6 +85,66 @@ pub trait RefIntoCopiedIterator {
   where
     Self: 'a;
   fn ref_iter_copied<'a>(&'a self) -> Self::RefCopiedIter<'a>;
+}
+
+pub trait LolCopiedIter {
+  type CopiedIter<'a>: Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator + 'a
+  where
+    Self: 'a;
+
+  fn lol_copied<'a>(&'a self) -> Self::CopiedIter<'a>;
+}
+
+impl LolCopiedIter for [u8] {
+  type CopiedIter<'a>
+    = Copied<Iter<'a, u8>>
+  where
+    Self: 'a;
+
+  fn lol_copied<'a>(&'a self) -> Self::CopiedIter<'a> {
+    self.into_iter().copied()
+  }
+}
+
+impl LolCopiedIter for SharedBufferSlice {
+  type CopiedIter<'a>
+    = Copied<Iter<'a, u8>>
+  where
+    Self: 'a;
+
+  fn lol_copied<'a>(&'a self) -> Self::CopiedIter<'a> {
+    self.inner.as_ref().iter().copied()
+  }
+}
+
+impl<'p> LolCopiedIter for SharedRefSlice<'p> {
+  type CopiedIter<'a>
+    = Copied<Iter<'a, u8>>
+  where
+    Self: 'a;
+
+  fn lol_copied<'a>(&'a self) -> Self::CopiedIter<'a> {
+    self.inner.slice.iter().copied()
+  }
+}
+
+impl<'tx, RD> LolCopiedIter for LazySlice<RD::PageData, RD>
+where
+  RD: NonContigReader<'tx> + 'tx,
+  Self: 'tx,
+{
+  type CopiedIter<'a>
+    = LazySliceIter<'a, RD::PageData, RD>
+  where
+    Self: 'a,
+    Self: 'tx;
+
+  fn lol_copied<'a>(&'a self) -> Self::CopiedIter<'a>
+  where
+    'tx: 'a,
+  {
+    LazySliceIter::new(self)
+  }
 }
 
 pub trait HasRootPage {
