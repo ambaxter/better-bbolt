@@ -4,8 +4,8 @@ use crate::io::pages::{Page, TxPage};
 use crate::io::reader::BaseReader;
 use crate::pages::freelist::FreelistPage;
 use crate::pages::meta::MetaPage;
-use pages::shared_page::SharedBuffer;
 use parking_lot::{RwLock, RwLockReadGuard};
+use crate::common::buffer_pool::SharedBuffer;
 
 pub mod disk_cache;
 pub mod memmap;

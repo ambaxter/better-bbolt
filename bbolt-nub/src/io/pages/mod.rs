@@ -127,7 +127,7 @@ impl<'p> LolCopiedIter for SharedRefSlice<'p> {
     self.inner.slice.iter().copied()
   }
 }
-
+/*
 impl<'tx, RD> LolCopiedIter for LazySlice<RD::PageData, RD>
 where
   RD: NonContigReader<'tx> + 'tx,
@@ -145,7 +145,7 @@ where
   {
     LazySliceIter::new(self)
   }
-}
+}*/
 
 pub trait HasRootPage {
   fn root_page(&self) -> &[u8];

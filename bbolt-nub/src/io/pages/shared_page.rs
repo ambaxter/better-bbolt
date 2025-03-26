@@ -1,4 +1,4 @@
-use crate::common::buffer_pool::PoolBuffer;
+use crate::common::buffer_pool::{PoolBuffer, SharedBuffer};
 use crate::io::pages::{
   HasRootPage, IntoCopiedIterator, KvDataType, RefIntoCopiedIterator, SubRange, SubTxSlice, TxPage,
 };
@@ -6,41 +6,6 @@ use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
 use triomphe::{Arc, ArcBorrow, UniqueArc};
-
-#[derive(Clone)]
-pub struct SharedBuffer {
-  pub(crate) inner: Option<Arc<PoolBuffer>>,
-}
-
-impl Deref for SharedBuffer {
-  type Target = [u8];
-  fn deref(&self) -> &Self::Target {
-    self.as_ref()
-  }
-}
-
-impl AsRef<[u8]> for SharedBuffer {
-  fn as_ref(&self) -> &[u8] {
-    self
-      .inner
-      .as_ref()
-      .expect("shared buffer is dropped")
-      .slice
-      .as_ref()
-  }
-}
-
-impl Drop for SharedBuffer {
-  fn drop(&mut self) {
-    let inner = self.inner.take().expect("shared buffer is dropped");
-    if inner.is_unique() {
-      let mut inner: UniqueArc<PoolBuffer> = inner.try_into().expect("shared buffer isn't unique?");
-      if let Some(pool) = inner.header.take() {
-        pool.push(inner);
-      }
-    }
-  }
-}
 
 #[derive(Clone)]
 pub struct SharedBufferSlice {
