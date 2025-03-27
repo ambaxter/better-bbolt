@@ -1,3 +1,4 @@
+use crate::common::buffer_pool::SharedBuffer;
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::io::pages::{Page, TxPage};
@@ -5,7 +6,6 @@ use crate::io::reader::BaseReader;
 use crate::pages::freelist::FreelistPage;
 use crate::pages::meta::MetaPage;
 use parking_lot::{RwLock, RwLockReadGuard};
-use crate::common::buffer_pool::SharedBuffer;
 
 pub mod disk_cache;
 pub mod memmap;

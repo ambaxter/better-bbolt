@@ -1,5 +1,5 @@
 use crate::io::pages::SubRange;
-use crate::io::pages::shared_page::{SharedBufferSlice};
+use crate::io::pages::shared_page::SharedBufferSlice;
 use parking_lot::Mutex;
 use size::Size;
 use std::cmp::Ordering;
@@ -59,7 +59,6 @@ impl UniqueBuffer {
     })
   }
 }
-
 
 #[derive(Clone)]
 pub struct SharedBuffer {
