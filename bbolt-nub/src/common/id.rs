@@ -72,7 +72,7 @@ impl TxId {
 
 #[repr(C)]
 #[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash, Pod, Zeroable)]
-pub struct DbPageId(u64);
+pub struct DbPageId(pub u64);
 
 pub trait DbPageType: Debug + Copy + Clone + Deref<Target = DbPageId> {
   fn page_type_mask(&self) -> PageFlag;
