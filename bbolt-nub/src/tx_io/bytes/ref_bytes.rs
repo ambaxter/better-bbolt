@@ -3,6 +3,7 @@ use crate::tx_io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use std::ops::Deref;
 use std::ptr::slice_from_raw_parts;
 use std::slice;
+use crate::tx_io::pages::RefIntoCopiedIter;
 
 #[derive(Debug, Clone)]
 pub struct RefBytes {

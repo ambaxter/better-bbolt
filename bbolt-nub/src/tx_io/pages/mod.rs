@@ -1,10 +1,14 @@
-use crate::common::errors::DiskReadError;
-use crate::common::id::{FreelistPageId, MetaPageId, NodePageId};
 use crate::common::page::PageHeader;
 use crate::tx_io::backends::ReadIO;
 use crate::tx_io::bytes::TxBytes;
-use crate::tx_io::pages::complete::CompletePage;
 use std::ops::{Deref, RangeBounds};
+use bytemuck::from_bytes;
+use crate::common::errors::DiskReadError;
+use crate::common::id::{FreelistPageId, MetaPageId, NodePageId};
+
+pub mod kv;
+
+pub mod io;
 
 pub mod complete;
 
@@ -27,17 +31,24 @@ pub trait KvDataType: Ord + RefIntoCopiedIter {
   fn ge(&self, other: &[u8]) -> bool;
 }
 
-pub trait GetKvSlice<'tx> {
-  type RefKv<'a>: KvDataType + 'a
+pub trait GetKvRefSlice {
+  type RefKv<'a>: GetKvRefSlice + KvDataType + 'a
   where
     Self: 'a;
-  type TxKv: KvDataType + 'tx;
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a>;
+}
+
+pub trait GetKvTxSlice<'tx> {
+  type TxKv: GetKvTxSlice<'tx> + KvDataType + 'tx;
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv;
 }
 
-pub trait Page<'tx> {
-  fn header(&self) -> &PageHeader;
+pub trait Page<'tx> : GetKvTxSlice<'tx> + GetKvRefSlice {
+
+  fn page_header(&self) -> &PageHeader {
+    from_bytes(&self.root_page()[0..size_of::<PageHeader>()])
+  }
+
   fn root_page(&self) -> &[u8];
 }
 

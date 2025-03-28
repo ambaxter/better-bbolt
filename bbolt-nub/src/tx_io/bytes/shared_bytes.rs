@@ -1,8 +1,10 @@
+use std::cmp::Ordering;
 use crate::common::buffer_pool::PoolBuffer;
 use crate::tx_io::TxSlot;
 use crate::tx_io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use std::ops::Deref;
 use triomphe::{Arc, UniqueArc};
+use crate::tx_io::pages::KvDataType;
 
 #[derive(Clone)]
 pub struct SharedBytes {
@@ -76,3 +78,48 @@ impl<'tx> FromIOBytes<'tx, SharedBytes> for SharedTxBytes<'tx> {
     SharedTxBytes::new(value)
   }
 }
+
+impl<'tx> PartialOrd for SharedTxBytes<'tx> {
+  #[inline]
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self.as_ref().partial_cmp(other.as_ref())
+  }
+
+  #[inline]
+  fn lt(&self, other: &Self) -> bool {
+    self.as_ref().lt(other.as_ref())
+  }
+
+  #[inline]
+  fn le(&self, other: &Self) -> bool {
+    self.as_ref().le(other.as_ref())
+  }
+
+  #[inline]
+  fn gt(&self, other: &Self) -> bool {
+    self.as_ref().gt(other.as_ref())
+  }
+
+  #[inline]
+  fn ge(&self, other: &Self) -> bool {
+    self.as_ref().ge(other.as_ref())
+  }
+}
+
+impl<'tx> PartialEq for SharedTxBytes<'tx> {
+  #[inline]
+  fn eq(&self, other: &Self) -> bool {
+    self.as_ref().eq(other.as_ref())
+  }
+}
+
+
+impl<'tx> Eq for SharedTxBytes<'tx> {}
+
+impl<'tx> Ord for SharedTxBytes<'tx> {
+  #[inline]
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.as_ref().cmp(other.as_ref())
+  }
+}
+
