@@ -1,9 +1,15 @@
-use std::ops::{Range, RangeBounds};
-use triomphe::Arc;
+use crate::common::errors::{DiskReadError, PageError};
+use crate::common::id::OverflowPageId;
 use crate::tx_io::TxSlot;
 use crate::tx_io::backends::ReadLazyIO;
 use crate::tx_io::bytes::TxBytes;
-use crate::tx_io::pages::{GetKvRefSlice, GetKvTxSlice, Page, ReadLazyPageIO, RefIntoCopiedIter, SubRange};
+use crate::tx_io::pages::{
+  GetKvRefSlice, GetKvTxSlice, Page, ReadLazyPageIO, RefIntoCopiedIter, SubRange,
+};
+use error_stack::ResultExt;
+use std::cmp::Ordering;
+use std::ops::{Range, RangeBounds};
+use triomphe::Arc;
 
 #[derive(Clone)]
 pub struct LazyPage<'tx, L: ReadLazyPageIO<'tx>> {
@@ -12,51 +18,169 @@ pub struct LazyPage<'tx, L: ReadLazyPageIO<'tx>> {
   r: Option<&'tx L>,
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> Page<'tx> for LazyPage<'tx, L> {
+impl<'tx, L: ReadLazyPageIO<'tx>> LazyPage<'tx, L> {
+  pub fn len(&self) -> usize {
+    self.root_page().len() * (self.page_header().get_overflow() + 1) as usize
+  }
+
+  pub fn read_overflow_page(&self, overflow_index: u32) -> crate::Result<L::PageBytes, PageError> {
+    let header = self.page_header();
+    let overflow_count = header.get_overflow();
+    assert!(overflow_index <= overflow_count);
+    if overflow_index == 0 {
+      Ok(self.root.clone())
+    } else {
+      let page_id = header.overflow_page_id().expect("overflow page id");
+      match page_id {
+        OverflowPageId::Freelist(page_id) => self
+          .r
+          .unwrap()
+          .read_freelist_overflow(page_id, overflow_index),
+        OverflowPageId::Node(page_id) => {
+          self.r.unwrap().read_node_overflow(page_id, overflow_index)
+        }
+      }
+      .change_context(PageError::OverflowReadError(page_id, overflow_index))
+    }
+  }
+}
+
+impl<'tx, L: ReadLazyPageIO<'tx>> Page for LazyPage<'tx, L> {
+  #[inline]
   fn root_page(&self) -> &[u8] {
     self.root.as_ref()
   }
 }
 
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> IntoIterator for &'a LazyPage<'tx, L> {
-  type Item = u8;
-  type IntoIter = LazyIter<'a, 'tx,  L>;
+#[derive(Clone)]
+pub struct LazyIter<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> {
+  page: &'a LazyPage<'tx, L>,
+  range: Range<usize>,
+  next_overflow_index: u32,
+  next_page: L::PageBytes,
+  next_back_overflow_index: u32,
+  next_back_page: L::PageBytes,
+}
 
-  fn into_iter(self) -> Self::IntoIter {
+impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> LazyIter<'a, 'tx, L> {
+  pub fn new<R: RangeBounds<usize>>(page: &'a LazyPage<'tx, L>, range: R) -> LazyIter<'a, 'tx, L> {
+    let page_size = page.root_page().len();
+    let overflow_count = page.page_header().get_overflow();
+    let range = (0..page.len()).sub_range(range);
+    let next_overflow_index = (range.start / page_size) as u32;
+    let next_page = page
+      .read_overflow_page(next_overflow_index)
+      .expect("unable to read next overflow page");
+    let next_back_overflow_index = (range.end / page_size) as u32;
+    let next_back_page = page
+      .read_overflow_page(next_back_overflow_index)
+      .expect("unable to read next_back overflow page");
+
     LazyIter {
-      page: self,
-      range: 0..self.root_page().len(),
+      page,
+      range,
+      next_overflow_index,
+      next_page,
+      next_back_overflow_index,
+      next_back_page,
     }
   }
 }
 
-#[derive(Clone)]
-pub struct LazyIter<'a, 'tx: 'a,  L: ReadLazyPageIO<'tx>> {
-  page: &'a LazyPage<'tx, L>,
-  range: Range<usize>,
-}
-
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> LazyIter<'a, 'tx,  L> {
-
-}
-
-impl<'a, 'tx:'a , L: ReadLazyPageIO<'tx>> Iterator for LazyIter<'a,'tx, L> {
+impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> Iterator for LazyIter<'a, 'tx, L> {
   type Item = u8;
   fn next(&mut self) -> Option<Self::Item> {
-    todo!()
+    let index = self.range.next()?;
+    let page_size = self.page.root_page().len();
+    let next_overflow_index = (index / page_size) as u32;
+    if next_overflow_index != self.next_overflow_index {
+      self.next_page = self
+        .page
+        .read_overflow_page(next_overflow_index)
+        .expect("unable to read next overflow page");
+      self.next_overflow_index = next_overflow_index;
+    }
+    let page_index = index % page_size;
+    self.next_page.as_ref().get(page_index).copied()
+  }
+}
+
+impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> DoubleEndedIterator for LazyIter<'a, 'tx, L> {
+  fn next_back(&mut self) -> Option<Self::Item> {
+    let index = self.range.next_back()?;
+    let page_size = self.page.root_page().len();
+    let next_back_overflow_index = (index / page_size) as u32;
+    if next_back_overflow_index != self.next_back_overflow_index {
+      self.next_back_page = self
+        .page
+        .read_overflow_page(next_back_overflow_index)
+        .expect("unable to read next overflow page");
+      self.next_back_overflow_index = next_back_overflow_index;
+    }
+    let page_index = index % page_size;
+    self.next_back_page.as_ref().get(page_index).copied()
+  }
+}
+
+impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> ExactSizeIterator for LazyIter<'a, 'tx, L> {
+  #[inline]
+  fn len(&self) -> usize {
+    self.range.len()
   }
 }
 
 #[derive(Clone)]
-pub struct LazyRefSlice<'a, L:ReadLazyPageIO<'a>> {
-  page: &'a LazyPage<'a, L>,
+pub struct LazyRefSlice<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> {
+  page: &'a LazyPage<'tx, L>,
   range: Range<usize>,
 }
 
-impl<'p, L:ReadLazyPageIO<'p>> GetKvRefSlice for LazyRefSlice<'p, L> {
-  type RefKv<'a> = LazyRefSlice<'p, L>
+impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> PartialOrd for LazyRefSlice<'a, 'tx, L> {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self
+      .ref_into_copied_iter()
+      .partial_cmp(other.ref_into_copied_iter())
+  }
+
+  fn lt(&self, other: &Self) -> bool {
+    self.ref_into_copied_iter().lt(other.ref_into_copied_iter())
+  }
+
+  fn le(&self, other: &Self) -> bool {
+    self.ref_into_copied_iter().le(other.ref_into_copied_iter())
+  }
+
+  fn gt(&self, other: &Self) -> bool {
+    self.ref_into_copied_iter().gt(other.ref_into_copied_iter())
+  }
+
+  fn ge(&self, other: &Self) -> bool {
+    self.ref_into_copied_iter().ge(other.ref_into_copied_iter())
+  }
+}
+
+impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> Ord for LazyRefSlice<'a, 'tx, L> {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self
+      .ref_into_copied_iter()
+      .cmp(other.ref_into_copied_iter())
+  }
+}
+
+impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> PartialEq for LazyRefSlice<'a, 'tx, L> {
+  fn eq(&self, other: &Self) -> bool {
+    self.ref_into_copied_iter().eq(other.ref_into_copied_iter())
+  }
+}
+
+impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> Eq for LazyRefSlice<'a, 'tx, L> {}
+
+impl<'p, 'tx: 'p, L: ReadLazyPageIO<'tx>> GetKvRefSlice for LazyRefSlice<'p, 'tx, L> {
+  type RefKv<'a>
+    = LazyRefSlice<'a, 'tx, L>
   where
-    Self: 'a, 'p: 'a;
+    Self: 'a,
+    'p: 'a;
 
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
     LazyRefSlice {
@@ -66,8 +190,71 @@ impl<'p, L:ReadLazyPageIO<'p>> GetKvRefSlice for LazyRefSlice<'p, L> {
   }
 }
 
+impl<'p, 'tx: 'p, L: ReadLazyPageIO<'tx>> RefIntoCopiedIter for LazyRefSlice<'p, 'tx, L> {
+  type Iter<'a>
+    = LazyIter<'a, 'tx, L>
+  where
+    Self: 'a;
+
+  #[inline]
+  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
+    LazyIter::new(self.page, self.range.clone())
+  }
+}
+
 #[derive(Clone)]
 pub struct LazyTxSlice<'tx, L: ReadLazyPageIO<'tx>> {
   page: LazyPage<'tx, L>,
   range: Range<usize>,
+}
+
+impl<'tx, L: ReadLazyPageIO<'tx>> PartialOrd for LazyTxSlice<'tx, L> {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self
+      .ref_into_copied_iter()
+      .partial_cmp(other.ref_into_copied_iter())
+  }
+
+  fn lt(&self, other: &Self) -> bool {
+    self.ref_into_copied_iter().lt(other.ref_into_copied_iter())
+  }
+
+  fn le(&self, other: &Self) -> bool {
+    self.ref_into_copied_iter().le(other.ref_into_copied_iter())
+  }
+
+  fn gt(&self, other: &Self) -> bool {
+    self.ref_into_copied_iter().gt(other.ref_into_copied_iter())
+  }
+
+  fn ge(&self, other: &Self) -> bool {
+    self.ref_into_copied_iter().ge(other.ref_into_copied_iter())
+  }
+}
+
+impl<'tx, L: ReadLazyPageIO<'tx>> Ord for LazyTxSlice<'tx, L> {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self
+      .ref_into_copied_iter()
+      .cmp(other.ref_into_copied_iter())
+  }
+}
+
+impl<'tx, L: ReadLazyPageIO<'tx>> PartialEq for LazyTxSlice<'tx, L> {
+  fn eq(&self, other: &Self) -> bool {
+    self.ref_into_copied_iter().eq(other.ref_into_copied_iter())
+  }
+}
+impl<'tx, L: ReadLazyPageIO<'tx>> Eq for LazyTxSlice<'tx, L> {}
+
+impl<'tx, L: ReadLazyPageIO<'tx>> RefIntoCopiedIter for LazyTxSlice<'tx, L> {
+  type Iter<'a>
+    = LazyIter<'a, 'tx, L>
+  where
+    Self: 'a;
+
+  #[inline]
+  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
+    LazyIter::new(&self.page, self.range.clone())
+  }
 }

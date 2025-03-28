@@ -73,7 +73,7 @@ pub trait GetKvTxSlice<'tx>: GetKvRefSlice {
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv;
 }
 
-pub trait Page<'tx>: GetKvTxSlice<'tx> + GetKvRefSlice {
+pub trait Page {
   #[inline]
   fn page_header(&self) -> &PageHeader {
     from_bytes(&self.root_page()[0..size_of::<PageHeader>()])
@@ -81,6 +81,8 @@ pub trait Page<'tx>: GetKvTxSlice<'tx> + GetKvRefSlice {
 
   fn root_page(&self) -> &[u8];
 }
+
+pub trait TxPage<'tx>: Page + GetKvTxSlice<'tx> + GetKvRefSlice {}
 
 pub trait ReadPageIO<'tx> {
   type PageBytes: TxBytes<'tx>;

@@ -1,5 +1,8 @@
 use crate::tx_io::bytes::shared_bytes::{SharedRefSlice, SharedTxBytes, SharedTxSlice};
-use crate::tx_io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, RefIntoCopiedIter, SubRange};
+use crate::tx_io::pages::lazy::{LazyRefSlice, LazyTxSlice};
+use crate::tx_io::pages::{
+  GetKvRefSlice, GetKvTxSlice, KvDataType, ReadLazyPageIO, RefIntoCopiedIter, SubRange,
+};
 use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::RangeBounds;
@@ -54,6 +57,7 @@ impl<'p> GetKvRefSlice for &'p [u8] {
     Self: 'a,
     'p: 'a;
 
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
     &self[(range.start_bound().cloned(), range.end_bound().cloned())]
   }
@@ -62,6 +66,7 @@ impl<'p> GetKvRefSlice for &'p [u8] {
 impl<'tx> GetKvTxSlice<'tx> for &'tx [u8] {
   type TxKv = &'tx [u8];
 
+  #[inline]
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
     &self[(range.start_bound().cloned(), range.end_bound().cloned())]
   }
@@ -114,6 +119,7 @@ impl<'tx> GetKvRefSlice for SharedTxBytes<'tx> {
   where
     Self: 'a;
 
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
@@ -169,6 +175,8 @@ impl<'p> GetKvRefSlice for SharedRefSlice<'p> {
   where
     Self: 'a,
     'p: 'a;
+
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
@@ -190,28 +198,34 @@ impl<'tx> RefIntoCopiedIter for SharedTxSlice<'tx> {
 }
 
 impl<'tx> PartialEq<Self> for SharedTxSlice<'tx> {
+  #[inline]
   fn eq(&self, other: &Self) -> bool {
     self.as_ref().eq(other.as_ref())
   }
 }
 
 impl<'tx> PartialOrd for SharedTxSlice<'tx> {
+  #[inline]
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     self.as_ref().partial_cmp(other.as_ref())
   }
 
+  #[inline]
   fn lt(&self, other: &Self) -> bool {
     self.as_ref().lt(other.as_ref())
   }
 
+  #[inline]
   fn le(&self, other: &Self) -> bool {
     self.as_ref().le(other.as_ref())
   }
 
+  #[inline]
   fn gt(&self, other: &Self) -> bool {
     self.as_ref().gt(other.as_ref())
   }
 
+  #[inline]
   fn ge(&self, other: &Self) -> bool {
     self.as_ref().ge(other.as_ref())
   }
@@ -220,28 +234,34 @@ impl<'tx> PartialOrd for SharedTxSlice<'tx> {
 impl<'tx> Eq for SharedTxSlice<'tx> {}
 
 impl<'tx> Ord for SharedTxSlice<'tx> {
+  #[inline]
   fn cmp(&self, other: &Self) -> Ordering {
     self.as_ref().cmp(other.as_ref())
   }
 }
 
 impl<'tx> KvDataType for SharedTxSlice<'tx> {
+  #[inline]
   fn partial_eq(&self, other: &[u8]) -> bool {
     self.as_ref().eq(other)
   }
 
+  #[inline]
   fn lt(&self, other: &[u8]) -> bool {
     self.as_ref().lt(other)
   }
 
+  #[inline]
   fn le(&self, other: &[u8]) -> bool {
     self.as_ref().le(other)
   }
 
+  #[inline]
   fn gt(&self, other: &[u8]) -> bool {
     self.as_ref().gt(other)
   }
 
+  #[inline]
   fn ge(&self, other: &[u8]) -> bool {
     self.as_ref().ge(other)
   }
@@ -254,6 +274,7 @@ impl<'tx> GetKvRefSlice for SharedTxSlice<'tx> {
     Self: 'a,
     'tx: 'a;
 
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
@@ -269,5 +290,49 @@ impl<'tx> GetKvTxSlice<'tx> for SharedTxSlice<'tx> {
       inner: self.inner.clone(),
       range: self.range.sub_range(range),
     }
+  }
+}
+
+impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L> {
+  fn partial_eq(&self, other: &[u8]) -> bool {
+    self.ref_into_copied_iter().eq(other.ref_into_copied_iter())
+  }
+
+  fn lt(&self, other: &[u8]) -> bool {
+    self.ref_into_copied_iter().lt(other.ref_into_copied_iter())
+  }
+
+  fn le(&self, other: &[u8]) -> bool {
+    self.ref_into_copied_iter().le(other.ref_into_copied_iter())
+  }
+
+  fn gt(&self, other: &[u8]) -> bool {
+    self.ref_into_copied_iter().gt(other.ref_into_copied_iter())
+  }
+
+  fn ge(&self, other: &[u8]) -> bool {
+    self.ref_into_copied_iter().ge(other.ref_into_copied_iter())
+  }
+}
+
+impl<'tx, L: ReadLazyPageIO<'tx>> KvDataType for LazyTxSlice<'tx, L> {
+  fn partial_eq(&self, other: &[u8]) -> bool {
+    self.ref_into_copied_iter().eq(other.ref_into_copied_iter())
+  }
+
+  fn lt(&self, other: &[u8]) -> bool {
+    self.ref_into_copied_iter().lt(other.ref_into_copied_iter())
+  }
+
+  fn le(&self, other: &[u8]) -> bool {
+    self.ref_into_copied_iter().le(other.ref_into_copied_iter())
+  }
+
+  fn gt(&self, other: &[u8]) -> bool {
+    self.ref_into_copied_iter().gt(other.ref_into_copied_iter())
+  }
+
+  fn ge(&self, other: &[u8]) -> bool {
+    self.ref_into_copied_iter().ge(other.ref_into_copied_iter())
   }
 }
