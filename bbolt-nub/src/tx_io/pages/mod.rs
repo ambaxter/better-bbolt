@@ -1,7 +1,8 @@
+use std::collections::Bound;
 use crate::common::page::PageHeader;
 use crate::tx_io::backends::ReadIO;
 use crate::tx_io::bytes::TxBytes;
-use std::ops::{Deref, RangeBounds};
+use std::ops::{Deref, Range, RangeBounds};
 use bytemuck::from_bytes;
 use crate::common::errors::DiskReadError;
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId};
@@ -31,6 +32,36 @@ pub trait KvDataType: Ord + RefIntoCopiedIter {
   fn ge(&self, other: &[u8]) -> bool;
 }
 
+
+pub trait SubRange {
+  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
+}
+
+impl SubRange for Range<usize> {
+  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self {
+    let start = match range.start_bound().cloned() {
+      Bound::Included(start) => self.start + start,
+      Bound::Excluded(start) => self.start + start + 1,
+      Bound::Unbounded => self.start,
+    };
+    let end = match range.end_bound().cloned() {
+      Bound::Included(end) => self.start + end + 1,
+      Bound::Excluded(end) => self.start + end,
+      Bound::Unbounded => self.end,
+    };
+    assert!(
+      start <= end,
+      "New start ({start}) should be <= new end ({end})"
+    );
+    assert!(
+      end <= self.end,
+      "New end ({end}) should be <= current end ({0})",
+      self.end
+    );
+    start..end
+  }
+}
+
 pub trait GetKvRefSlice {
   type RefKv<'a>: GetKvRefSlice + KvDataType + 'a
   where
@@ -45,6 +76,7 @@ pub trait GetKvTxSlice<'tx> {
 
 pub trait Page<'tx> : GetKvTxSlice<'tx> + GetKvRefSlice {
 
+  #[inline]
   fn page_header(&self) -> &PageHeader {
     from_bytes(&self.root_page()[0..size_of::<PageHeader>()])
   }

@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use crate::common::buffer_pool::PoolBuffer;
 use crate::tx_io::TxSlot;
 use crate::tx_io::bytes::{FromIOBytes, IOBytes, TxBytes};
-use std::ops::Deref;
+use std::ops::{Deref, Range, RangeBounds};
 use triomphe::{Arc, UniqueArc};
 use crate::tx_io::pages::KvDataType;
 
@@ -123,3 +123,25 @@ impl<'tx> Ord for SharedTxBytes<'tx> {
   }
 }
 
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct SharedRefSlice<'a> {
+  pub(crate) inner: &'a [u8],
+}
+
+impl<'a> AsRef<[u8]> for SharedRefSlice<'a> {
+  fn as_ref(&self) -> &[u8] {
+    self.inner
+  }
+}
+
+#[derive(Clone)]
+pub struct SharedTxSlice<'tx> {
+  pub(crate) inner: SharedTxBytes<'tx>,
+  pub(crate) range: Range<usize>,
+}
+
+impl<'tx> AsRef<[u8]> for SharedTxSlice<'tx> {
+  fn as_ref(&self) -> &[u8] {
+    &self.inner.inner.as_ref()[(self.range.start_bound().cloned(), self.range.end_bound().cloned())]
+  }
+}
