@@ -3,7 +3,7 @@ use std::iter::Copied;
 use std::ops::RangeBounds;
 use std::slice;
 use crate::tx_io::bytes::shared_bytes::{SharedRefSlice, SharedTxBytes, SharedTxSlice};
-use crate::tx_io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, RefIntoCopiedIter};
+use crate::tx_io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, RefIntoCopiedIter, SubRange};
 
 // &'a [u8] //
 
@@ -232,5 +232,26 @@ impl<'tx> KvDataType for SharedTxSlice<'tx> {
 
   fn ge(&self, other: &[u8]) -> bool {
     self.as_ref().ge(other)
+  }
+}
+
+impl<'tx> GetKvRefSlice for SharedTxSlice<'tx> {
+  type RefKv<'a> = SharedRefSlice<'a> where Self: 'a, 'tx: 'a;
+
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+    SharedRefSlice {
+      inner: &self.as_ref()[(range.start_bound().cloned(),range.end_bound().cloned())],
+    }
+  }
+}
+
+impl<'tx> GetKvTxSlice<'tx> for SharedTxSlice<'tx> {
+  type TxKv = Self;
+
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+    SharedTxSlice {
+      inner: self.inner.clone(),
+      range: self.range.sub_range(range),
+    }
   }
 }

@@ -69,7 +69,7 @@ pub trait GetKvRefSlice {
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a>;
 }
 
-pub trait GetKvTxSlice<'tx> {
+pub trait GetKvTxSlice<'tx> : GetKvRefSlice {
   type TxKv: GetKvTxSlice<'tx> + KvDataType + 'tx;
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv;
 }
