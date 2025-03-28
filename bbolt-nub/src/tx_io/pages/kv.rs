@@ -1,16 +1,18 @@
+use crate::tx_io::bytes::shared_bytes::{SharedRefSlice, SharedTxBytes, SharedTxSlice};
+use crate::tx_io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, RefIntoCopiedIter, SubRange};
 use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::RangeBounds;
 use std::slice;
-use crate::tx_io::bytes::shared_bytes::{SharedRefSlice, SharedTxBytes, SharedTxSlice};
-use crate::tx_io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, RefIntoCopiedIter, SubRange};
 
 // &'a [u8] //
 
 impl<'p> RefIntoCopiedIter for &'p [u8] {
-  type Iter<'a> = Copied<slice::Iter<'a, u8>>
+  type Iter<'a>
+    = Copied<slice::Iter<'a, u8>>
   where
-    Self: 'a, 'p: 'a;
+    Self: 'a,
+    'p: 'a;
 
   #[inline]
   fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
@@ -46,12 +48,14 @@ impl<'tx> KvDataType for &'tx [u8] {
 }
 
 impl<'p> GetKvRefSlice for &'p [u8] {
-  type RefKv<'a> = &'a [u8]
+  type RefKv<'a>
+    = &'a [u8]
   where
-    Self: 'a, 'p: 'a;
+    Self: 'a,
+    'p: 'a;
 
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
-    &self[(range.start_bound().cloned(),range.end_bound().cloned())]
+    &self[(range.start_bound().cloned(), range.end_bound().cloned())]
   }
 }
 
@@ -59,14 +63,15 @@ impl<'tx> GetKvTxSlice<'tx> for &'tx [u8] {
   type TxKv = &'tx [u8];
 
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
-    &self[(range.start_bound().cloned(),range.end_bound().cloned())]
+    &self[(range.start_bound().cloned(), range.end_bound().cloned())]
   }
 }
 
 // Shared Tx Bytes //
 
 impl<'tx> RefIntoCopiedIter for SharedTxBytes<'tx> {
-  type Iter<'a> = Copied<slice::Iter<'a, u8>>
+  type Iter<'a>
+    = Copied<slice::Iter<'a, u8>>
   where
     Self: 'a;
 
@@ -75,7 +80,6 @@ impl<'tx> RefIntoCopiedIter for SharedTxBytes<'tx> {
     self.iter().copied()
   }
 }
-
 
 impl<'tx> KvDataType for SharedTxBytes<'tx> {
   #[inline]
@@ -105,13 +109,14 @@ impl<'tx> KvDataType for SharedTxBytes<'tx> {
 }
 
 impl<'tx> GetKvRefSlice for SharedTxBytes<'tx> {
-  type RefKv<'a> = SharedRefSlice<'a>
+  type RefKv<'a>
+    = SharedRefSlice<'a>
   where
     Self: 'a;
 
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
     SharedRefSlice {
-      inner: &self.as_ref()[(range.start_bound().cloned(),range.end_bound().cloned())],
+      inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
     }
   }
 }
@@ -119,9 +124,11 @@ impl<'tx> GetKvRefSlice for SharedTxBytes<'tx> {
 // SharedRefSlice<'a> //
 
 impl<'p> RefIntoCopiedIter for SharedRefSlice<'p> {
-  type Iter<'a> = Copied<slice::Iter<'a, u8>>
+  type Iter<'a>
+    = Copied<slice::Iter<'a, u8>>
   where
-    Self: 'a, 'p: 'a;
+    Self: 'a,
+    'p: 'a;
 
   #[inline]
   fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
@@ -157,10 +164,14 @@ impl<'a> KvDataType for SharedRefSlice<'a> {
 }
 
 impl<'p> GetKvRefSlice for SharedRefSlice<'p> {
-  type RefKv<'a> = SharedRefSlice<'a> where Self: 'a, 'p: 'a;
+  type RefKv<'a>
+    = SharedRefSlice<'a>
+  where
+    Self: 'a,
+    'p: 'a;
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
     SharedRefSlice {
-      inner: &self.as_ref()[(range.start_bound().cloned(),range.end_bound().cloned())],
+      inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
     }
   }
 }
@@ -168,7 +179,8 @@ impl<'p> GetKvRefSlice for SharedRefSlice<'p> {
 // SharedTxSlice<'tx> //
 
 impl<'tx> RefIntoCopiedIter for SharedTxSlice<'tx> {
-  type Iter<'a> = Copied<slice::Iter<'a, u8>>
+  type Iter<'a>
+    = Copied<slice::Iter<'a, u8>>
   where
     Self: 'a;
 
@@ -236,11 +248,15 @@ impl<'tx> KvDataType for SharedTxSlice<'tx> {
 }
 
 impl<'tx> GetKvRefSlice for SharedTxSlice<'tx> {
-  type RefKv<'a> = SharedRefSlice<'a> where Self: 'a, 'tx: 'a;
+  type RefKv<'a>
+    = SharedRefSlice<'a>
+  where
+    Self: 'a,
+    'tx: 'a;
 
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
     SharedRefSlice {
-      inner: &self.as_ref()[(range.start_bound().cloned(),range.end_bound().cloned())],
+      inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
     }
   }
 }
