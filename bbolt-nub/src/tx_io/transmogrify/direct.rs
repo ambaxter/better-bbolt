@@ -1,9 +1,9 @@
 use crate::common::id::{DiskPageId, FreelistPageId, MetaPageId, NodePageId};
-use crate::tx_io::transmogrify::{TransComplete, TransDbIds, TransLazy};
+use crate::tx_io::transmogrify::{TxContext, TxDirectContext, TxIndirectContext};
 
 struct DirectTransmogrify;
 
-impl TransDbIds for DirectTransmogrify {
+impl TxContext for DirectTransmogrify {
   #[inline]
   fn trans_meta_id(&self, meta_page_id: MetaPageId) -> DiskPageId {
     DiskPageId(meta_page_id.0.0)
@@ -20,9 +20,9 @@ impl TransDbIds for DirectTransmogrify {
   }
 }
 
-impl TransComplete for DirectTransmogrify {}
+impl TxDirectContext for DirectTransmogrify {}
 
-impl TransLazy for DirectTransmogrify {
+impl TxIndirectContext for DirectTransmogrify {
   #[inline]
   fn trans_freelist_overflow(&self, freelist_page_id: FreelistPageId, overflow: u32) -> DiskPageId {
     let page_id = freelist_page_id + overflow;

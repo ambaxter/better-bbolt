@@ -11,6 +11,15 @@ pub struct RefBytes {
   len: usize,
 }
 
+impl RefBytes {
+  pub(crate) fn from_ref(bytes: &[u8]) -> Self {
+    Self {
+      ptr: bytes.as_ptr(),
+      len: bytes.len(),
+    }
+  }
+}
+
 impl AsRef<[u8]> for RefBytes {
   fn as_ref(&self) -> &[u8] {
     unsafe { slice::from_raw_parts(self.ptr, self.len) }
