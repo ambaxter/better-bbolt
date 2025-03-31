@@ -1,8 +1,9 @@
-use crate::common::buffer_pool::{BufferPool, SharedBuffer};
+use crate::common::buffer_pool::BufferPool;
 use crate::common::errors::DiskReadError;
 use crate::common::id::DiskPageId;
 use crate::common::page::PageHeader;
 use crate::io::ReadData;
+use crate::tx_io::bytes::shared_bytes::SharedBytes;
 use bytemuck::bytes_of_mut;
 use error_stack::ResultExt;
 use std::io::{BufReader, Read, Seek, SeekFrom};
@@ -39,9 +40,7 @@ where
       .change_context(DiskReadError::ReadError(disk_page_id))
   }
 
-  fn read_contig(
-    &mut self, disk_page_id: DiskPageId,
-  ) -> crate::Result<SharedBuffer, DiskReadError> {
+  fn read_contig(&mut self, disk_page_id: DiskPageId) -> crate::Result<SharedBytes, DiskReadError> {
     let header = self.peak_header(disk_page_id)?;
     let mut shared = if header.get_overflow() == 0 {
       self.buffer_pool.pop()
@@ -54,7 +53,7 @@ where
       .change_context(DiskReadError::ReadError(disk_page_id))
   }
 
-  fn read_page(&mut self, disk_page_id: DiskPageId) -> crate::Result<SharedBuffer, DiskReadError> {
+  fn read_page(&mut self, disk_page_id: DiskPageId) -> crate::Result<SharedBytes, DiskReadError> {
     let shared = self.buffer_pool.pop();
     self
       .reader
@@ -68,7 +67,7 @@ impl<'tx, R: Read + Seek> ReadData<'tx> for BaseReader<R>
 where
   Self: 'tx,
 {
-  type PageData = SharedBuffer;
+  type PageData = SharedBytes;
 
   fn read_disk(
     &self, disk_page_id: DiskPageId, pages: usize,

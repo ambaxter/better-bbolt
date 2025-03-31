@@ -5,7 +5,9 @@ use crate::tx_io::bytes::IOBytes;
 use crate::tx_io::bytes::ref_bytes::RefBytes;
 use crate::tx_io::transmogrify::{TxContext, TxDirectContext};
 
+pub mod file;
 pub mod memmap;
+pub mod meta_reader;
 
 pub trait IOReader {
   type Bytes: IOBytes;

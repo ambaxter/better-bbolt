@@ -5,6 +5,8 @@ use crate::io::pages::{HasHeader, HasRootPage, TxPage};
 use crate::pages::Page;
 use bytemuck::{Pod, Zeroable};
 use delegate::delegate;
+use fnv_rs::{Fnv64, FnvHasher};
+use std::hash::Hasher;
 
 /// `Meta` represents the on-file layout of a database's metadata
 ///
@@ -29,6 +31,31 @@ pub struct Meta {
   pub tx_id: TxId,
   /// Checksum of the previous Meta fields using the 64-bit version of the Fowler-Noll-Vo hash function
   pub checksum: u64,
+}
+
+impl Meta {
+  pub fn sum64(&self) -> u64 {
+    let mut h = Fnv64::new();
+    let bytes = &bytemuck::bytes_of(self)[0..size_of::<Meta>() - size_of::<u64>()];
+    h.update(bytes);
+    h.finish()
+  }
+
+  pub fn is_valid(&self) -> bool {
+    let checksum = self.sum64();
+    checksum == self.checksum
+  }
+
+  pub fn update_checksum(&mut self) {
+    self.checksum = self.sum64();
+  }
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, Pod, Zeroable)]
+pub struct HeaderMetaPage {
+  pub(crate) header: PageHeader,
+  pub(crate) meta: Meta,
 }
 
 pub trait HasMeta: HasHeader {

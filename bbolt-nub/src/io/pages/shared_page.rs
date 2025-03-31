@@ -1,7 +1,8 @@
-use crate::common::buffer_pool::{PoolBuffer, SharedBuffer};
+use crate::common::buffer_pool::PoolBuffer;
 use crate::io::pages::{
   HasRootPage, IntoCopiedIterator, KvDataType, RefIntoCopiedIterator, SubRange, SubTxSlice, TxPage,
 };
+use crate::tx_io::bytes::shared_bytes::SharedBytes;
 use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
@@ -9,12 +10,12 @@ use triomphe::{Arc, ArcBorrow, UniqueArc};
 
 #[derive(Clone)]
 pub struct SharedBufferSlice {
-  pub(crate) inner: SharedBuffer,
+  pub(crate) inner: SharedBytes,
   pub(crate) range: Range<usize>,
 }
 
 impl SharedBufferSlice {
-  pub fn new<R: RangeBounds<usize>>(shared: SharedBuffer, range: R) -> Self {
+  pub fn new<R: RangeBounds<usize>>(shared: SharedBytes, range: R) -> Self {
     let range = (0..shared.len()).sub_range(range);
 
     SharedBufferSlice {
@@ -98,7 +99,7 @@ impl<'tx> KvDataType for SharedBufferSlice {
   }
 }
 
-impl<'tx> SubTxSlice<'tx> for SharedBuffer {
+impl<'tx> SubTxSlice<'tx> for SharedBytes {
   type TxSlice = SharedBufferSlice;
 
   fn sub_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxSlice {
@@ -114,13 +115,13 @@ impl<'tx> SubTxSlice<'tx> for SharedBufferSlice {
   }
 }
 
-impl HasRootPage for SharedBuffer {
+impl HasRootPage for SharedBytes {
   fn root_page(&self) -> &[u8] {
     self.as_ref()
   }
 }
 
-impl<'tx> TxPage<'tx> for SharedBuffer {}
+impl<'tx> TxPage<'tx> for SharedBytes {}
 
 pub struct SharedRefSlice<'a> {
   pub(crate) inner: &'a Arc<PoolBuffer>,

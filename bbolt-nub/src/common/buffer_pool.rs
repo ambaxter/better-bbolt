@@ -1,5 +1,6 @@
 use crate::io::pages::SubRange;
 use crate::io::pages::shared_page::SharedBufferSlice;
+use crate::tx_io::bytes::shared_bytes::SharedBytes;
 use parking_lot::Mutex;
 use size::Size;
 use std::cmp::Ordering;
@@ -41,7 +42,7 @@ impl UniqueBuffer {
     }
   }
 
-  pub fn read_exact_and_share<R: ReadIntoUninit>(self, r: &mut R) -> io::Result<SharedBuffer> {
+  pub fn read_exact_and_share<R: ReadIntoUninit>(self, r: &mut R) -> io::Result<SharedBytes> {
     let unique = match self {
       UniqueBuffer::Uninit(mut uninit) => {
         r.read_into_uninit_exact(uninit.slice.as_out())?;
@@ -54,44 +55,9 @@ impl UniqueBuffer {
     };
     let shared = unique.shareable();
 
-    Ok(SharedBuffer {
+    Ok(SharedBytes {
       inner: Some(shared),
     })
-  }
-}
-
-#[derive(Clone)]
-pub struct SharedBuffer {
-  pub(crate) inner: Option<Arc<PoolBuffer>>,
-}
-
-impl Deref for SharedBuffer {
-  type Target = [u8];
-  fn deref(&self) -> &Self::Target {
-    self.as_ref()
-  }
-}
-
-impl AsRef<[u8]> for SharedBuffer {
-  fn as_ref(&self) -> &[u8] {
-    self
-      .inner
-      .as_ref()
-      .expect("shared buffer is dropped")
-      .slice
-      .as_ref()
-  }
-}
-
-impl Drop for SharedBuffer {
-  fn drop(&mut self) {
-    let inner = self.inner.take().expect("shared buffer is dropped");
-    if inner.is_unique() {
-      let mut inner: UniqueArc<PoolBuffer> = inner.try_into().expect("shared buffer isn't unique?");
-      if let Some(pool) = inner.header.take() {
-        pool.push(inner);
-      }
-    }
   }
 }
 
