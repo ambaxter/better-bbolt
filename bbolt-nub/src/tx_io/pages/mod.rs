@@ -11,7 +11,7 @@ pub mod kv;
 
 pub mod io;
 
-pub mod complete;
+pub mod entire;
 
 pub mod lazy;
 
@@ -23,7 +23,7 @@ pub trait RefIntoCopiedIter {
 }
 
 pub trait KvDataType: Ord + RefIntoCopiedIter {
-  fn partial_eq(&self, other: &[u8]) -> bool;
+  fn eq(&self, other: &[u8]) -> bool;
 
   fn lt(&self, other: &[u8]) -> bool;
   fn le(&self, other: &[u8]) -> bool;
@@ -96,7 +96,7 @@ pub trait ReadPageIO<'tx> {
   fn read_node_page(&self, page_id: NodePageId) -> crate::Result<Self::PageBytes, DiskReadError>;
 }
 
-pub trait ReadCompletePageIO<'tx>: ReadPageIO<'tx> {}
+pub trait ReadEntirePageIO<'tx>: ReadPageIO<'tx> {}
 
 pub trait ReadLazyPageIO<'tx>: ReadPageIO<'tx> {
   fn read_freelist_overflow(

@@ -25,7 +25,7 @@ impl<'p> RefIntoCopiedIter for &'p [u8] {
 
 impl<'tx> KvDataType for &'tx [u8] {
   #[inline]
-  fn partial_eq(&self, other: &[u8]) -> bool {
+  fn eq(&self, other: &[u8]) -> bool {
     PartialEq::eq(*self, other)
   }
 
@@ -88,7 +88,7 @@ impl<'tx> RefIntoCopiedIter for SharedTxBytes<'tx> {
 
 impl<'tx> KvDataType for SharedTxBytes<'tx> {
   #[inline]
-  fn partial_eq(&self, other: &[u8]) -> bool {
+  fn eq(&self, other: &[u8]) -> bool {
     self.as_ref().eq(other)
   }
 
@@ -144,7 +144,7 @@ impl<'p> RefIntoCopiedIter for SharedRefSlice<'p> {
 
 impl<'a> KvDataType for SharedRefSlice<'a> {
   #[inline]
-  fn partial_eq(&self, other: &[u8]) -> bool {
+  fn eq(&self, other: &[u8]) -> bool {
     self.inner.eq(other)
   }
 
@@ -242,7 +242,7 @@ impl<'tx> Ord for SharedTxSlice<'tx> {
 
 impl<'tx> KvDataType for SharedTxSlice<'tx> {
   #[inline]
-  fn partial_eq(&self, other: &[u8]) -> bool {
+  fn eq(&self, other: &[u8]) -> bool {
     self.as_ref().eq(other)
   }
 
@@ -294,7 +294,7 @@ impl<'tx> GetKvTxSlice<'tx> for SharedTxSlice<'tx> {
 }
 
 impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L> {
-  fn partial_eq(&self, other: &[u8]) -> bool {
+  fn eq(&self, other: &[u8]) -> bool {
     self.ref_into_copied_iter().eq(other.ref_into_copied_iter())
   }
 
@@ -316,7 +316,7 @@ impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L
 }
 
 impl<'tx, L: ReadLazyPageIO<'tx>> KvDataType for LazyTxSlice<'tx, L> {
-  fn partial_eq(&self, other: &[u8]) -> bool {
+  fn eq(&self, other: &[u8]) -> bool {
     self.ref_into_copied_iter().eq(other.ref_into_copied_iter())
   }
 

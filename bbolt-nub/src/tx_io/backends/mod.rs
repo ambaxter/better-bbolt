@@ -14,7 +14,7 @@ pub trait ReadIO {
   fn read_node_page(&self, page_id: NodePageId) -> crate::Result<Self::Bytes, DiskReadError>;
 }
 
-pub trait ReadCompleteIO: ReadIO {}
+pub trait ReadEntireIO: ReadIO {}
 
 pub trait ReadLazyIO: ReadIO {
   fn read_freelist_overflow(
