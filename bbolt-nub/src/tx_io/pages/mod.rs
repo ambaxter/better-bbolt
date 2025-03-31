@@ -1,7 +1,7 @@
 use crate::common::errors::DiskReadError;
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId};
 use crate::common::page::PageHeader;
-use crate::tx_io::backends::ReadIO;
+use crate::tx_io::backends::IOPageReader;
 use crate::tx_io::bytes::TxBytes;
 use bytemuck::from_bytes;
 use std::collections::Bound;
