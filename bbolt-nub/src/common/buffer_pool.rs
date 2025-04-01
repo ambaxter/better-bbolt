@@ -53,7 +53,9 @@ impl UniqueBuffer {
     };
     let shared = unique.shareable();
 
-    Ok(SharedBytes { inner: Some(shared) })
+    Ok(SharedBytes {
+      inner: Some(shared),
+    })
   }
 }
 
@@ -128,7 +130,9 @@ impl BufferPool {
       page_size,
       pool: Mutex::new(pool),
     };
-    BufferPool { inner: Arc::new(inner) }
+    BufferPool {
+      inner: Arc::new(inner),
+    }
   }
 
   pub fn new_unbound(len: usize) -> UniqueBuffer {

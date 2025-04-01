@@ -4,7 +4,8 @@ use crate::io::TxSlot;
 use crate::io::backends::IOSinglePageReader;
 use crate::io::bytes::TxBytes;
 use crate::io::pages::{
-  GetKvRefSlice, GetKvTxSlice, Page, ReadLazyPageIO, RefIntoCopiedIter, SubRange, TxPage, TxPageType,
+  GetKvRefSlice, GetKvTxSlice, Page, ReadLazyPageIO, RefIntoCopiedIter, SubRange, TxPage,
+  TxPageType,
 };
 use error_stack::ResultExt;
 use std::cmp::Ordering;
@@ -41,8 +42,13 @@ impl<'tx, L: ReadLazyPageIO<'tx>> LazyPage<'tx, L> {
     } else {
       let page_id = header.overflow_page_id().expect("overflow page id");
       match page_id {
-        OverflowPageId::Freelist(page_id) => self.r.unwrap().read_freelist_overflow(page_id, overflow_index),
-        OverflowPageId::Node(page_id) => self.r.unwrap().read_node_overflow(page_id, overflow_index),
+        OverflowPageId::Freelist(page_id) => self
+          .r
+          .unwrap()
+          .read_freelist_overflow(page_id, overflow_index),
+        OverflowPageId::Node(page_id) => {
+          self.r.unwrap().read_node_overflow(page_id, overflow_index)
+        }
       }
       .change_context(PageError::OverflowReadError(page_id, overflow_index))
     }
@@ -167,7 +173,9 @@ pub struct LazyRefSlice<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> {
 
 impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> PartialOrd for LazyRefSlice<'a, 'tx, L> {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-    self.ref_into_copied_iter().partial_cmp(other.ref_into_copied_iter())
+    self
+      .ref_into_copied_iter()
+      .partial_cmp(other.ref_into_copied_iter())
   }
 
   fn lt(&self, other: &Self) -> bool {
@@ -189,7 +197,9 @@ impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> PartialOrd for LazyRefSlice<'a, 'tx, L
 
 impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> Ord for LazyRefSlice<'a, 'tx, L> {
   fn cmp(&self, other: &Self) -> Ordering {
-    self.ref_into_copied_iter().cmp(other.ref_into_copied_iter())
+    self
+      .ref_into_copied_iter()
+      .cmp(other.ref_into_copied_iter())
   }
 }
 
@@ -236,7 +246,9 @@ pub struct LazyTxSlice<'tx, L: ReadLazyPageIO<'tx>> {
 
 impl<'tx, L: ReadLazyPageIO<'tx>> PartialOrd for LazyTxSlice<'tx, L> {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-    self.ref_into_copied_iter().partial_cmp(other.ref_into_copied_iter())
+    self
+      .ref_into_copied_iter()
+      .partial_cmp(other.ref_into_copied_iter())
   }
 
   fn lt(&self, other: &Self) -> bool {
@@ -258,7 +270,9 @@ impl<'tx, L: ReadLazyPageIO<'tx>> PartialOrd for LazyTxSlice<'tx, L> {
 
 impl<'tx, L: ReadLazyPageIO<'tx>> Ord for LazyTxSlice<'tx, L> {
   fn cmp(&self, other: &Self) -> Ordering {
-    self.ref_into_copied_iter().cmp(other.ref_into_copied_iter())
+    self
+      .ref_into_copied_iter()
+      .cmp(other.ref_into_copied_iter())
   }
 }
 

@@ -22,7 +22,9 @@ impl MetaReader {
     let mut meta_page = HeaderMetaPage::default();
     self.reader.seek(SeekFrom::Start(0))?;
     self.reader.read(bytes_of_mut(&mut meta_page))?;
-    self.reader.seek_relative(-(size_of::<HeaderMetaPage>() as i64))?;
+    self
+      .reader
+      .seek_relative(-(size_of::<HeaderMetaPage>() as i64))?;
     if meta_page.meta.is_valid() {
       Ok(Some(meta_page))
     } else {
@@ -43,7 +45,9 @@ impl MetaReader {
       if meta_page.meta.is_valid() {
         return Ok(Some(meta_page));
       }
-      self.reader.seek_relative(-(size_of::<HeaderMetaPage>() as i64))?;
+      self
+        .reader
+        .seek_relative(-(size_of::<HeaderMetaPage>() as i64))?;
       current_pos = meta_pos;
     }
     Ok(None)
@@ -58,7 +62,9 @@ impl MetaReader {
   }
 
   pub fn determine_file_meta(mut self) -> crate::Result<HeaderMetaPage, DiskReadError> {
-    let meta_page = self.check_metadata().change_context(DiskReadError::MetaError)?;
+    let meta_page = self
+      .check_metadata()
+      .change_context(DiskReadError::MetaError)?;
     match meta_page {
       None => Err(DiskReadError::MetaError.into()),
       Some(meta) => Ok(meta),

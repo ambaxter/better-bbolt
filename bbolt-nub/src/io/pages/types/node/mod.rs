@@ -4,10 +4,13 @@ use crate::io::pages::types::node::leaf::LeafPage;
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, Page, TxPageType};
 
 pub mod branch;
+pub mod cursor;
 pub mod leaf;
 
 pub trait HasNode<'tx> {
-  type RefKv<'a>: GetKvRefSlice + KvDataType + 'a where Self: 'a;
+  type RefKv<'a>: GetKvRefSlice + KvDataType + 'a
+  where
+    Self: 'a;
   type TxKv: GetKvTxSlice<'tx> + KvDataType + 'tx;
 
   fn search(&self, v: &[u8]) -> usize;
@@ -27,6 +30,29 @@ pub trait HasLeaf<'tx>: HasNode<'tx> {
 pub enum NodePage<'tx, T: 'tx> {
   Branch(BranchPage<'tx, T>),
   Leaf(LeafPage<'tx, T>),
+}
+
+impl<'tx, T: 'tx> NodePage<'tx, T> {
+  pub fn is_leaf(&self) -> bool {
+    matches!(self, NodePage::Leaf(_))
+  }
+
+  pub fn is_branch(&self) -> bool {
+    matches!(self, NodePage::Branch(_))
+  }
+}
+
+impl<'tx, T: 'tx> NodePage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  pub fn len(&self) -> usize {
+    let len = match self {
+      NodePage::Branch(branch) => branch.page_header().count(),
+      NodePage::Leaf(leaf) => leaf.page_header().count(),
+    };
+    len as usize
+  }
 }
 
 impl<'tx, T: 'tx> Page for NodePage<'tx, T>

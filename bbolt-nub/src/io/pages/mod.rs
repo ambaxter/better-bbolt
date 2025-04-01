@@ -52,7 +52,10 @@ impl SubRange for Range<usize> {
       Bound::Excluded(end) => self.start + end,
       Bound::Unbounded => self.end,
     };
-    assert!(start <= end, "New start ({start}) should be <= new end ({end})");
+    assert!(
+      start <= end,
+      "New start ({start}) should be <= new end ({end})"
+    );
     assert!(
       end <= self.end,
       "New end ({end}) should be <= current end ({0})",
@@ -106,7 +109,9 @@ pub trait ReadPageIO<'tx> {
 
   fn read_meta_page(&self, page_id: MetaPageId) -> crate::Result<Self::PageBytes, DiskReadError>;
 
-  fn read_freelist_page(&self, page_id: FreelistPageId) -> crate::Result<Self::PageBytes, DiskReadError>;
+  fn read_freelist_page(
+    &self, page_id: FreelistPageId,
+  ) -> crate::Result<Self::PageBytes, DiskReadError>;
 
   fn read_node_page(&self, page_id: NodePageId) -> crate::Result<Self::PageBytes, DiskReadError>;
 }
@@ -118,5 +123,7 @@ pub trait ReadLazyPageIO<'tx>: ReadPageIO<'tx> {
     &self, page_id: FreelistPageId, overflow: u32,
   ) -> crate::Result<Self::PageBytes, DiskReadError>;
 
-  fn read_node_overflow(&self, page_id: NodePageId, overflow: u32) -> crate::Result<Self::PageBytes, DiskReadError>;
+  fn read_node_overflow(
+    &self, page_id: NodePageId, overflow: u32,
+  ) -> crate::Result<Self::PageBytes, DiskReadError>;
 }

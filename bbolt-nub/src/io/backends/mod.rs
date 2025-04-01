@@ -24,7 +24,9 @@ pub trait IOReader {
     &self, disk_page_id: DiskPageId, page_offset: usize, page_len: usize,
   ) -> crate::Result<Self::Bytes, DiskReadError>;
 
-  fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, DiskReadError> {
+  fn read_single_page(
+    &self, disk_page_id: DiskPageId,
+  ) -> crate::Result<Self::Bytes, DiskReadError> {
     let page_size = self.page_size();
     let page_offset = disk_page_id.0 as usize * page_size;
     let page_len = page_size;
@@ -34,7 +36,9 @@ pub trait IOReader {
 
 pub trait ContigIOReader: IOReader {
   fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, DiskReadError>;
-  fn read_contig_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, DiskReadError> {
+  fn read_contig_page(
+    &self, disk_page_id: DiskPageId,
+  ) -> crate::Result<Self::Bytes, DiskReadError> {
     let page_size = self.page_size();
     let page_offset = disk_page_id.0 as usize * page_size;
     let header = self.read_header(disk_page_id)?;
@@ -55,7 +59,9 @@ pub trait IOPageReader {
 
   fn read_meta_page(&self, meta_page_id: MetaPageId) -> crate::Result<Self::Bytes, DiskReadError>;
 
-  fn read_freelist_page(&self, freelist_page_id: FreelistPageId) -> crate::Result<Self::Bytes, DiskReadError>;
+  fn read_freelist_page(
+    &self, freelist_page_id: FreelistPageId,
+  ) -> crate::Result<Self::Bytes, DiskReadError>;
 
   fn read_node_page(&self, node_page_id: NodePageId) -> crate::Result<Self::Bytes, DiskReadError>;
 }
@@ -67,17 +73,23 @@ where
 {
   type Bytes = I::Bytes;
 
-  fn read_meta_page(&self, meta_page_id: MetaPageId) -> error_stack::Result<Self::Bytes, DiskReadError> {
+  fn read_meta_page(
+    &self, meta_page_id: MetaPageId,
+  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
     let disk_page_id = self.tx_context.trans_meta_id(meta_page_id);
     self.io.read_contig_page(disk_page_id)
   }
 
-  fn read_freelist_page(&self, freelist_page_id: FreelistPageId) -> error_stack::Result<Self::Bytes, DiskReadError> {
+  fn read_freelist_page(
+    &self, freelist_page_id: FreelistPageId,
+  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
     let disk_page_id = self.tx_context.trans_freelist_id(freelist_page_id);
     self.io.read_contig_page(disk_page_id)
   }
 
-  fn read_node_page(&self, node_page_id: NodePageId) -> error_stack::Result<Self::Bytes, DiskReadError> {
+  fn read_node_page(
+    &self, node_page_id: NodePageId,
+  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
     let disk_page_id = self.tx_context.trans_node_id(node_page_id);
     self.io.read_contig_page(disk_page_id)
   }
@@ -97,7 +109,9 @@ pub trait IOSinglePageReader: IOPageReader {
     &self, freelist_page_id: FreelistPageId, overflow: u32,
   ) -> crate::Result<Self::Bytes, DiskReadError>;
 
-  fn read_node_overflow(&self, node_page_id: NodePageId, overflow: u32) -> crate::Result<Self::Bytes, DiskReadError>;
+  fn read_node_overflow(
+    &self, node_page_id: NodePageId, overflow: u32,
+  ) -> crate::Result<Self::Bytes, DiskReadError>;
 }
 
 pub struct CachedReadHandler<T, I: IOReader<Bytes = SharedBytes>> {
@@ -110,7 +124,9 @@ where
   T: TxContext,
   I: IOReader<Bytes = SharedBytes>,
 {
-  fn read_cache_or_disk(&self, disk_page_id: DiskPageId) -> crate::Result<SharedBytes, DiskReadError> {
+  fn read_cache_or_disk(
+    &self, disk_page_id: DiskPageId,
+  ) -> crate::Result<SharedBytes, DiskReadError> {
     self
       .page_cache
       .entry(disk_page_id)
@@ -139,17 +155,23 @@ where
 {
   type Bytes = SharedBytes;
 
-  fn read_meta_page(&self, meta_page_id: MetaPageId) -> error_stack::Result<Self::Bytes, DiskReadError> {
+  fn read_meta_page(
+    &self, meta_page_id: MetaPageId,
+  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
     let disk_page_id = self.handler.tx_context.trans_meta_id(meta_page_id);
     self.read_cache_or_disk(disk_page_id)
   }
 
-  fn read_freelist_page(&self, freelist_page_id: FreelistPageId) -> error_stack::Result<Self::Bytes, DiskReadError> {
+  fn read_freelist_page(
+    &self, freelist_page_id: FreelistPageId,
+  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
     let disk_page_id = self.handler.tx_context.trans_freelist_id(freelist_page_id);
     self.read_cache_or_disk(disk_page_id)
   }
 
-  fn read_node_page(&self, node_page_id: NodePageId) -> error_stack::Result<Self::Bytes, DiskReadError> {
+  fn read_node_page(
+    &self, node_page_id: NodePageId,
+  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
     let disk_page_id = self.handler.tx_context.trans_node_id(node_page_id);
     self.read_cache_or_disk(disk_page_id)
   }
@@ -163,14 +185,20 @@ where
   fn read_freelist_overflow(
     &self, freelist_page_id: FreelistPageId, overflow: u32,
   ) -> error_stack::Result<Self::Bytes, DiskReadError> {
-    let disk_page_id = self.handler.tx_context.trans_freelist_id(freelist_page_id + overflow);
+    let disk_page_id = self
+      .handler
+      .tx_context
+      .trans_freelist_id(freelist_page_id + overflow);
     self.read_cache_or_disk(disk_page_id)
   }
 
   fn read_node_overflow(
     &self, node_page_id: NodePageId, overflow: u32,
   ) -> error_stack::Result<Self::Bytes, DiskReadError> {
-    let disk_page_id = self.handler.tx_context.trans_node_id(node_page_id + overflow);
+    let disk_page_id = self
+      .handler
+      .tx_context
+      .trans_node_id(node_page_id + overflow);
     self.read_cache_or_disk(disk_page_id)
   }
 }

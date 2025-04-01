@@ -18,8 +18,11 @@ pub struct SingleFileReader {
 }
 
 impl SingleFileReader {
-  pub fn new<P: AsRef<Path>>(path: P, page_size: usize, buffer_pool: BufferPool) -> crate::Result<Self, DiskReadError> {
-    let file = File::open(&path).change_context_lazy(|| DiskReadError::OpenError(path.as_ref().to_path_buf()))?;
+  pub fn new<P: AsRef<Path>>(
+    path: P, page_size: usize, buffer_pool: BufferPool,
+  ) -> crate::Result<Self, DiskReadError> {
+    let file = File::open(&path)
+      .change_context_lazy(|| DiskReadError::OpenError(path.as_ref().to_path_buf()))?;
     let reader = BufReader::new(file);
     Ok(SingleFileReader {
       path: path.as_ref().to_path_buf(),
@@ -68,7 +71,8 @@ impl MultiFileReader {
     let (tx, rx) = crossbeam_channel::bounded(reader_count * 2);
     let path = path.as_ref().to_path_buf();
     for _ in 0..reader_count {
-      let file = File::open(&path).change_context_lazy(|| DiskReadError::OpenError(path.clone()))?;
+      let file =
+        File::open(&path).change_context_lazy(|| DiskReadError::OpenError(path.clone()))?;
       let reader = BufReader::new(file);
       tx.send(reader)
         .change_context_lazy(|| DiskReadError::OpenError(path.clone()))?;
@@ -93,7 +97,10 @@ impl IOReader for MultiFileReader {
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_offset: usize, page_len: usize,
   ) -> error_stack::Result<Self::Bytes, DiskReadError> {
-    let mut file = self.rx.recv().change_context(DiskReadError::ReadError(disk_page_id))?;
+    let mut file = self
+      .rx
+      .recv()
+      .change_context(DiskReadError::ReadError(disk_page_id))?;
     let result = file
       .seek(SeekFrom::Start(page_offset as u64))
       .and_then(|_| {

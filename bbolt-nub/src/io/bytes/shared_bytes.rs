@@ -20,7 +20,12 @@ impl Deref for SharedBytes {
 
 impl AsRef<[u8]> for SharedBytes {
   fn as_ref(&self) -> &[u8] {
-    self.inner.as_ref().expect("shared buffer is dropped").slice.as_ref()
+    self
+      .inner
+      .as_ref()
+      .expect("shared buffer is dropped")
+      .slice
+      .as_ref()
   }
 }
 
@@ -136,6 +141,9 @@ pub struct SharedTxSlice<'tx> {
 
 impl<'tx> AsRef<[u8]> for SharedTxSlice<'tx> {
   fn as_ref(&self) -> &[u8] {
-    &self.inner.inner.as_ref()[(self.range.start_bound().cloned(), self.range.end_bound().cloned())]
+    &self.inner.inner.as_ref()[(
+      self.range.start_bound().cloned(),
+      self.range.end_bound().cloned(),
+    )]
   }
 }
