@@ -69,9 +69,7 @@ where
 {
   type PageData = SharedBytes;
 
-  fn read_disk(
-    &self, disk_page_id: DiskPageId, pages: usize,
-  ) -> crate::Result<Self::PageData, DiskReadError> {
+  fn read_disk(&self, disk_page_id: DiskPageId, pages: usize) -> crate::Result<Self::PageData, DiskReadError> {
     todo!()
   }
 }

@@ -18,10 +18,7 @@ impl SharedBufferSlice {
   pub fn new<R: RangeBounds<usize>>(shared: SharedBytes, range: R) -> Self {
     let range = (0..shared.len()).sub_range(range);
 
-    SharedBufferSlice {
-      inner: shared,
-      range,
-    }
+    SharedBufferSlice { inner: shared, range }
   }
 }
 

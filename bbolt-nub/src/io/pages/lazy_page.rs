@@ -1,9 +1,7 @@
 use crate::common::errors::PageError;
 use crate::common::id::OverflowPageId;
 use crate::io::NonContigReader;
-use crate::io::pages::{
-  HasHeader, HasRootPage, IntoCopiedIterator, KvDataType, Page, SubRange, SubTxSlice, TxPage,
-};
+use crate::io::pages::{HasHeader, HasRootPage, IntoCopiedIterator, KvDataType, Page, SubRange, SubTxSlice, TxPage};
 use delegate::delegate;
 use error_stack::ResultExt;
 use std::ops::{Index, Range, RangeBounds};
@@ -63,9 +61,7 @@ where
     Self { page, range }
   }
 
-  fn read_overflow_page(
-    &self, idx: usize,
-  ) -> crate::Result<LazyPageBytes<RD::PageData>, PageError> {
+  fn read_overflow_page(&self, idx: usize) -> crate::Result<LazyPageBytes<RD::PageData>, PageError> {
     let page_size = self.page.root_page().len();
     let overflow_index = (idx / page_size) as u32;
     let header = self.page.page_header();
@@ -79,15 +75,10 @@ where
       })
     } else {
       match page_id {
-        OverflowPageId::Freelist(page_id) => {
-          self.page.io.read_freelist_overflow(page_id, overflow_index)
-        }
+        OverflowPageId::Freelist(page_id) => self.page.io.read_freelist_overflow(page_id, overflow_index),
         OverflowPageId::Node(page_id) => self.page.io.read_node_overflow(page_id, overflow_index),
       }
-      .map(|bytes| LazyPageBytes {
-        bytes,
-        overflow_index,
-      })
+      .map(|bytes| LazyPageBytes { bytes, overflow_index })
       .change_context(PageError::OverflowReadError(page_id, overflow_index))
     }
   }
@@ -104,10 +95,7 @@ where
       } else {
         page_size
       };
-      LazyPageBytesIter {
-        bytes,
-        range: 0..len,
-      }
+      LazyPageBytesIter { bytes, range: 0..len }
     })
   }
 
@@ -226,15 +214,11 @@ where
     }
   }
 
-  fn next_overflow_page(
-    &self, idx: usize,
-  ) -> crate::Result<LazyPageBytesIter<RD::PageData>, PageError> {
+  fn next_overflow_page(&self, idx: usize) -> crate::Result<LazyPageBytesIter<RD::PageData>, PageError> {
     self.slice.next_overflow_page(idx, self.range.end)
   }
 
-  fn next_back_overflow_page(
-    &self, idx: usize,
-  ) -> crate::Result<LazyPageBytesIter<RD::PageData>, PageError> {
+  fn next_back_overflow_page(&self, idx: usize) -> crate::Result<LazyPageBytesIter<RD::PageData>, PageError> {
     self.slice.next_back_overflow_page(idx, self.range.start)
   }
 }
@@ -250,9 +234,7 @@ where
       return if let Some(next) = self.next.next() {
         Some(next)
       } else {
-        let next = self
-          .next_overflow_page(idx)
-          .expect("next overflow read error");
+        let next = self.next_overflow_page(idx).expect("next overflow read error");
         self.next = next;
         self.next.next()
       };
@@ -270,9 +252,7 @@ where
       return if let Some(next) = self.next_back.next_back() {
         Some(next)
       } else {
-        let back = self
-          .next_back_overflow_page(idx)
-          .expect("back overflow read error");
+        let back = self.next_back_overflow_page(idx).expect("back overflow read error");
         self.next_back = back;
         self.next_back.next_back()
       };

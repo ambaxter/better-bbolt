@@ -1,9 +1,7 @@
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, EOFPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::common::page::PageHeader;
-use crate::tx_io::backends::{
-  ContigIOReader, IOPageReader, IOReader, IOSinglePageReader, ReadLoadedPageIO,
-};
+use crate::tx_io::backends::{ContigIOReader, IOPageReader, IOReader, IOSinglePageReader, ReadLoadedPageIO};
 use crate::tx_io::bytes::ref_bytes::RefBytes;
 use crate::tx_io::pages::{ReadLazyPageIO, ReadPageIO};
 use crate::tx_io::transmogrify::{TxContext, TxDirectContext, TxIndirectContext};
@@ -36,9 +34,7 @@ impl IOReader for MemMapReader {
 }
 
 impl ContigIOReader for MemMapReader {
-  fn read_header(
-    &self, disk_page_id: DiskPageId,
-  ) -> error_stack::Result<PageHeader, DiskReadError> {
+  fn read_header(&self, disk_page_id: DiskPageId) -> error_stack::Result<PageHeader, DiskReadError> {
     let page_offset = disk_page_id.0 as usize * self.page_size;
     let header_end = page_offset + size_of::<PageHeader>();
     if header_end > self.mmap.len() {

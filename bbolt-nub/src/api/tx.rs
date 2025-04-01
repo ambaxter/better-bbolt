@@ -48,8 +48,7 @@ pub trait MutTx<'db>: Tx<'db> {
 
   fn bucket_mut<'tx>(&'tx mut self, path: &[&[u8]]) -> Option<Self::MutBucketType<'tx>>;
 
-  fn upsert_bucket<'tx>(&'tx mut self, path: &[&[u8]])
-  -> Result<Self::MutBucketType<'tx>, DbError>;
+  fn upsert_bucket<'tx>(&'tx mut self, path: &[&[u8]]) -> Result<Self::MutBucketType<'tx>, DbError>;
 
   fn bucket_cursor_mut<'tx>(&mut self, path: &[&[u8]]) -> Option<Self::MutBucketCursorType<'tx>>;
 

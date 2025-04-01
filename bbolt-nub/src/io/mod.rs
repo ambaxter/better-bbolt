@@ -20,9 +20,7 @@ pub trait ReadPage<'tx>: Sized {
 }
 
 pub trait ReadContigPage<'tx>: ReadPage<'tx> {
-  fn read_contig_page(
-    &self, disk_page_id: DiskPageId,
-  ) -> crate::Result<Self::PageData, DiskReadError>;
+  fn read_contig_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::PageData, DiskReadError>;
 }
 
 pub struct PageReaderWrap<'tx, T, R> {
@@ -45,9 +43,7 @@ struct DummyReader;
 impl<'tx> ReadPage<'tx> for DummyReader {
   type PageData = SharedBytes;
 
-  fn read_page(
-    &self, disk_page_id: DiskPageId,
-  ) -> error_stack::Result<Self::PageData, DiskReadError> {
+  fn read_page(&self, disk_page_id: DiskPageId) -> error_stack::Result<Self::PageData, DiskReadError> {
     todo!()
   }
 }
@@ -76,32 +72,25 @@ fn t() {
 pub trait ReadData<'tx>: Sized {
   type PageData: TxPage<'tx>;
 
-  fn read_disk(
-    &self, disk_page_id: DiskPageId, pages: usize,
-  ) -> crate::Result<Self::PageData, DiskReadError>;
+  fn read_disk(&self, disk_page_id: DiskPageId, pages: usize) -> crate::Result<Self::PageData, DiskReadError>;
 }
 
 pub trait ContigReader<'tx>: ReadData<'tx> {
   type PageType: TxPage<'tx>;
 
-  fn read_meta(
-    &self, meta_page_id: MetaPageId,
-  ) -> crate::Result<MetaPage<Self::PageType>, DiskReadError>;
+  fn read_meta(&self, meta_page_id: MetaPageId) -> crate::Result<MetaPage<Self::PageType>, DiskReadError>;
 
   fn read_freelist(
     &self, freelist_page_id: FreelistPageId,
   ) -> crate::Result<FreelistPage<Self::PageType>, DiskReadError>;
 
-  fn read_node(
-    &self, node_page_id: NodePageId,
-  ) -> crate::Result<Page<Self::PageType>, DiskReadError>;
+  fn read_node(&self, node_page_id: NodePageId) -> crate::Result<Page<Self::PageType>, DiskReadError>;
 }
 
 pub trait NonContigReader<'tx>: ContigReader<'tx> {
   fn read_freelist_overflow(
     &self, root_page_id: FreelistPageId, overflow: u32,
   ) -> crate::Result<Self::PageData, DiskReadError>;
-  fn read_node_overflow(
-    &self, root_page_id: NodePageId, overflow: u32,
-  ) -> crate::Result<Self::PageData, DiskReadError>;
+  fn read_node_overflow(&self, root_page_id: NodePageId, overflow: u32)
+  -> crate::Result<Self::PageData, DiskReadError>;
 }

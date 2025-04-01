@@ -23,16 +23,7 @@ bitflags::bitflags! {
 ///
 /// `page` in Go BBolt
 #[repr(C)]
-#[derive(
-  Debug,
-  Copy,
-  Clone,
-  Default,
-  getset::CopyGetters,
-  getset::Setters,
-  bytemuck::Pod,
-  bytemuck::Zeroable,
-)]
+#[derive(Debug, Copy, Clone, Default, getset::CopyGetters, getset::Setters, bytemuck::Pod, bytemuck::Zeroable)]
 #[getset(get_copy = "pub", set = "pub")]
 pub struct PageHeader {
   /// This Page's ID
@@ -134,9 +125,7 @@ impl PageHeader {
     } else {
       let m = flag_mask & self.flags;
       if m == PageFlag::empty() || m.bits().count_ones() > 1 {
-        Err(Report::new(PageError::InvalidPageFlag(
-          flag_mask, self.flags,
-        )))
+        Err(Report::new(PageError::InvalidPageFlag(flag_mask, self.flags)))
       } else {
         Ok(())
       }

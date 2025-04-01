@@ -1,6 +1,4 @@
-use crate::io::pages::{
-  HasRootPage, IntoCopiedIterator, KvDataType, SubRefSlice, SubTxSlice, TxPage,
-};
+use crate::io::pages::{HasRootPage, IntoCopiedIterator, KvDataType, SubRefSlice, SubTxSlice, TxPage};
 use std::iter::Copied;
 use std::ops::RangeBounds;
 

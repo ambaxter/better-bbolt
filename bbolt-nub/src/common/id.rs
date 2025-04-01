@@ -210,8 +210,7 @@ impl StableFreeSpaceTranslator {
 
   #[inline]
   pub fn cluster_len(&self) -> u64 {
-    (2 * self.freespace_cluster_len as u64)
-      + (self.freespace_cluster_len as u64 * self.page_size as u64 * 8)
+    (2 * self.freespace_cluster_len as u64) + (self.freespace_cluster_len as u64 * self.page_size as u64 * 8)
   }
 }
 
@@ -252,8 +251,7 @@ impl SupportsNonContigPages for StableFreeSpaceTranslator {}
 #[cfg(test)]
 mod tests {
   use crate::common::id::{
-    DirectPageTranslator, DiskPageTranslator, FreelistPageId, NodePageId,
-    StableFreeSpaceTranslator, TxId,
+    DirectPageTranslator, DiskPageTranslator, FreelistPageId, NodePageId, StableFreeSpaceTranslator, TxId,
   };
 
   #[test]

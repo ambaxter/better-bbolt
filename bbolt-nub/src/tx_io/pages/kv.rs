@@ -1,8 +1,6 @@
 use crate::tx_io::bytes::shared_bytes::{SharedRefSlice, SharedTxBytes, SharedTxSlice};
 use crate::tx_io::pages::lazy::{LazyRefSlice, LazyTxSlice};
-use crate::tx_io::pages::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, ReadLazyPageIO, RefIntoCopiedIter, SubRange,
-};
+use crate::tx_io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, ReadLazyPageIO, RefIntoCopiedIter, SubRange};
 use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::RangeBounds;
