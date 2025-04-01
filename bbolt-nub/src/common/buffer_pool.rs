@@ -1,4 +1,4 @@
-use crate::tx_io::bytes::shared_bytes::SharedBytes;
+use crate::io::bytes::shared_bytes::SharedBytes;
 use parking_lot::Mutex;
 use size::Size;
 use std::cmp::Ordering;

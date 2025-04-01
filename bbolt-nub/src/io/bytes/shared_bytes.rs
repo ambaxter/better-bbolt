@@ -1,7 +1,7 @@
 use crate::common::buffer_pool::PoolBuffer;
-use crate::tx_io::TxSlot;
-use crate::tx_io::bytes::{FromIOBytes, IOBytes, TxBytes};
-use crate::tx_io::pages::KvDataType;
+use crate::io::TxSlot;
+use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
+use crate::io::pages::KvDataType;
 use std::cmp::Ordering;
 use std::ops::{Deref, Range, RangeBounds};
 use triomphe::{Arc, UniqueArc};

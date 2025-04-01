@@ -1,9 +1,9 @@
 use crate::common::errors::{DiskReadError, PageError};
 use crate::common::id::OverflowPageId;
-use crate::tx_io::TxSlot;
-use crate::tx_io::backends::IOSinglePageReader;
-use crate::tx_io::bytes::TxBytes;
-use crate::tx_io::pages::{
+use crate::io::TxSlot;
+use crate::io::backends::IOSinglePageReader;
+use crate::io::bytes::TxBytes;
+use crate::io::pages::{
   GetKvRefSlice, GetKvTxSlice, Page, ReadLazyPageIO, RefIntoCopiedIter, SubRange, TxPage, TxPageType,
 };
 use error_stack::ResultExt;

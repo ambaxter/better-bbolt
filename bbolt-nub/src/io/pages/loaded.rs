@@ -1,6 +1,6 @@
-use crate::tx_io::TxSlot;
-use crate::tx_io::bytes::TxBytes;
-use crate::tx_io::pages::{GetKvRefSlice, GetKvTxSlice, Page, ReadPageIO, TxPage, TxPageType};
+use crate::io::TxSlot;
+use crate::io::bytes::TxBytes;
+use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, ReadPageIO, TxPage, TxPageType};
 use std::ops::RangeBounds;
 
 #[derive(Clone)]

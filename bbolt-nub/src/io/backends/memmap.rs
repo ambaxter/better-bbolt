@@ -1,10 +1,10 @@
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, EOFPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
-use crate::tx_io::backends::{ContigIOReader, IOPageReader, IOReader, IOSinglePageReader, ReadLoadedPageIO};
-use crate::tx_io::bytes::ref_bytes::RefBytes;
-use crate::tx_io::pages::{ReadLazyPageIO, ReadPageIO};
-use crate::tx_io::transmogrify::{TxContext, TxDirectContext, TxIndirectContext};
+use crate::io::backends::{ContigIOReader, IOPageReader, IOReader, IOSinglePageReader, ReadLoadedPageIO};
+use crate::io::bytes::ref_bytes::RefBytes;
+use crate::io::pages::{ReadLazyPageIO, ReadPageIO};
+use crate::io::transmogrify::{TxContext, TxDirectContext, TxIndirectContext};
 use memmap2::Mmap;
 
 pub struct MemMapReader {

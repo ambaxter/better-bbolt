@@ -1,7 +1,7 @@
 use crate::common::layout::meta::Meta;
 use crate::common::layout::page::PageHeader;
-use crate::tx_io::TxSlot;
-use crate::tx_io::pages::{Page, TxPage, TxPageType};
+use crate::io::TxSlot;
+use crate::io::pages::{Page, TxPage, TxPageType};
 use bytemuck::from_bytes;
 use delegate::delegate;
 

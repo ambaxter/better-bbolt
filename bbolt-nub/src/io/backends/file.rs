@@ -1,8 +1,8 @@
 use crate::common::buffer_pool::BufferPool;
 use crate::common::errors::DiskReadError;
 use crate::common::id::DiskPageId;
-use crate::tx_io::backends::IOReader;
-use crate::tx_io::bytes::shared_bytes::SharedBytes;
+use crate::io::backends::IOReader;
+use crate::io::bytes::shared_bytes::SharedBytes;
 use crossbeam_channel::{Receiver, Sender};
 use error_stack::ResultExt;
 use parking_lot::Mutex;

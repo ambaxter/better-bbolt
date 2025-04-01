@@ -1,10 +1,10 @@
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
-use crate::tx_io::bytes::IOBytes;
-use crate::tx_io::bytes::ref_bytes::RefBytes;
-use crate::tx_io::bytes::shared_bytes::SharedBytes;
-use crate::tx_io::transmogrify::{TxContext, TxDirectContext};
+use crate::io::bytes::IOBytes;
+use crate::io::bytes::ref_bytes::RefBytes;
+use crate::io::bytes::shared_bytes::SharedBytes;
+use crate::io::transmogrify::{TxContext, TxDirectContext};
 use error_stack::Report;
 use moka::Entry;
 use moka::ops::compute::Op;

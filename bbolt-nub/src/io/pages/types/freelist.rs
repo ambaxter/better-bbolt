@@ -1,6 +1,6 @@
 use crate::common::id::FreelistPageId;
-use crate::tx_io::pages::types::meta::MetaPage;
-use crate::tx_io::pages::{Page, TxPage, TxPageType};
+use crate::io::pages::types::meta::MetaPage;
+use crate::io::pages::{Page, TxPage, TxPageType};
 use delegate::delegate;
 
 pub trait HasFreelist {
