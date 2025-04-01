@@ -1,9 +1,11 @@
 use crate::common::errors::DiskReadError;
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
+use crate::tx_io::TxSlot;
 use crate::tx_io::backends::IOPageReader;
 use crate::tx_io::bytes::TxBytes;
 use bytemuck::from_bytes;
+use delegate::delegate;
 use std::collections::Bound;
 use std::ops::{Deref, Range, RangeBounds};
 
@@ -14,6 +16,8 @@ pub mod io;
 pub mod loaded;
 
 pub mod lazy;
+
+pub mod types;
 
 pub trait RefIntoCopiedIter {
   type Iter<'a>: Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator + 'a
@@ -79,7 +83,23 @@ pub trait Page {
   fn root_page(&self) -> &[u8];
 }
 
-pub trait TxPage<'tx>: Page + GetKvTxSlice<'tx> + GetKvRefSlice {}
+pub trait TxPageType<'tx>: Page + GetKvTxSlice<'tx> + GetKvRefSlice {}
+
+pub struct TxPage<'tx, T: 'tx> {
+  tx: TxSlot<'tx>,
+  page: T,
+}
+
+impl<'tx, T: 'tx> Page for TxPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  delegate! {
+      to &self.page {
+      fn root_page(&self) -> &[u8];
+      }
+  }
+}
 
 pub trait ReadPageIO<'tx> {
   type PageBytes: TxBytes<'tx>;
@@ -91,7 +111,7 @@ pub trait ReadPageIO<'tx> {
   fn read_node_page(&self, page_id: NodePageId) -> crate::Result<Self::PageBytes, DiskReadError>;
 }
 
-pub trait ReadEntirePageIO<'tx>: ReadPageIO<'tx> {}
+pub trait ReadFullPageIO<'tx>: ReadPageIO<'tx> {}
 
 pub trait ReadLazyPageIO<'tx>: ReadPageIO<'tx> {
   fn read_freelist_overflow(

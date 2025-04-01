@@ -1,5 +1,5 @@
-use crate::common::bucket::BucketHeader;
 use crate::common::id::{EOFPageId, FreelistPageId, TxId};
+use crate::common::layout::bucket::BucketHeader;
 use crate::common::layout::page::PageHeader;
 use bytemuck::{Pod, Zeroable};
 use fnv_rs::{Fnv64, FnvHasher};

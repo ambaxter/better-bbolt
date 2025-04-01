@@ -3,7 +3,9 @@ use crate::common::id::OverflowPageId;
 use crate::tx_io::TxSlot;
 use crate::tx_io::backends::IOSinglePageReader;
 use crate::tx_io::bytes::TxBytes;
-use crate::tx_io::pages::{GetKvRefSlice, GetKvTxSlice, Page, ReadLazyPageIO, RefIntoCopiedIter, SubRange, TxPage};
+use crate::tx_io::pages::{
+  GetKvRefSlice, GetKvTxSlice, Page, ReadLazyPageIO, RefIntoCopiedIter, SubRange, TxPage, TxPageType,
+};
 use error_stack::ResultExt;
 use std::cmp::Ordering;
 use std::ops::{Range, RangeBounds};
@@ -78,7 +80,7 @@ impl<'tx, L: ReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyPage<'tx, L> {
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> TxPage<'tx> for LazyPage<'tx, L> {}
+impl<'tx, L: ReadLazyPageIO<'tx>> TxPageType<'tx> for LazyPage<'tx, L> {}
 
 #[derive(Clone)]
 pub struct LazyIter<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> {
