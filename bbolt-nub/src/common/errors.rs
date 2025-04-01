@@ -1,5 +1,5 @@
 use crate::common::id::{DbPageId, DiskPageId, EOFPageId, OverflowPageId};
-use crate::common::page::PageFlag;
+use crate::common::layout::page::PageFlag;
 use std::path::PathBuf;
 use thiserror::Error;
 

@@ -1,9 +1,8 @@
-use std::marker::PhantomData;
-
 pub mod id;
 
 pub mod buffer_pool;
 pub mod errors;
 
 pub mod bucket;
-pub mod page;
+
+pub mod layout;

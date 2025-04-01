@@ -1,6 +1,6 @@
 use crate::api::bytes::TxSlice;
 use crate::common::id::NodePageId;
-use crate::common::page::PageHeader;
+use crate::common::layout::page::PageHeader;
 use crate::io::pages::{HasHeader, HasRootPage, KvDataType, SubTxSlice, TxPage};
 use crate::pages::node::branch::BranchPage;
 use crate::pages::node::leaf::LeafPage;

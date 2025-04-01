@@ -1,5 +1,5 @@
 use crate::common::id::FreelistPageId;
-use crate::common::page::PageHeader;
+use crate::common::layout::page::PageHeader;
 use crate::io::pages::{HasHeader, HasRootPage, TxPage};
 use crate::pages::Page;
 use delegate::delegate;

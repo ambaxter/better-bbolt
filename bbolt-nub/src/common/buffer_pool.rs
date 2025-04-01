@@ -167,7 +167,7 @@ impl BufferPool {
 #[cfg(test)]
 mod test {
   use super::*;
-  use crate::common::page::PageHeader;
+  use crate::common::layout::page::PageHeader;
 
   #[test]
   fn test() {

@@ -1,7 +1,7 @@
 use crate::common::buffer_pool::BufferPool;
 use crate::common::errors::DiskReadError;
 use crate::common::id::DiskPageId;
-use crate::common::page::PageHeader;
+use crate::common::layout::page::PageHeader;
 use crate::io::ReadData;
 use crate::tx_io::bytes::shared_bytes::SharedBytes;
 use bytemuck::bytes_of_mut;

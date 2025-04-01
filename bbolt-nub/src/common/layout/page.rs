@@ -156,7 +156,7 @@ impl PageHeader {
 
 #[cfg(test)]
 mod tests {
-  use crate::common::page::PageHeader;
+  use crate::common::layout::page::PageHeader;
 
   #[test]
   fn test() {

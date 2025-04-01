@@ -1,6 +1,6 @@
 use crate::common::errors::DiskReadError;
 use crate::common::id::DiskPageId;
-use crate::pages::meta::{HeaderMetaPage, Meta};
+use crate::common::layout::meta::HeaderMetaPage;
 use bytemuck::bytes_of_mut;
 use error_stack::ResultExt;
 use std::fs::File;

@@ -1,6 +1,6 @@
 use crate::common::errors::PageError;
 use crate::common::id::DbPageType;
-use crate::common::page::PageHeader;
+use crate::common::layout::page::PageHeader;
 use crate::io::ReadData;
 use crate::io::pages::{HasRootPage, Page, TxPage};
 use std::ops::{Deref, RangeBounds};

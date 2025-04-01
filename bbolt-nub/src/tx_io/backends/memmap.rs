@@ -1,6 +1,6 @@
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, EOFPageId, FreelistPageId, MetaPageId, NodePageId};
-use crate::common::page::PageHeader;
+use crate::common::layout::page::PageHeader;
 use crate::tx_io::backends::{ContigIOReader, IOPageReader, IOReader, IOSinglePageReader, ReadLoadedPageIO};
 use crate::tx_io::bytes::ref_bytes::RefBytes;
 use crate::tx_io::pages::{ReadLazyPageIO, ReadPageIO};

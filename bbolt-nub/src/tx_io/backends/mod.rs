@@ -1,6 +1,6 @@
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, FreelistPageId, MetaPageId, NodePageId};
-use crate::common::page::PageHeader;
+use crate::common::layout::page::PageHeader;
 use crate::tx_io::bytes::IOBytes;
 use crate::tx_io::bytes::ref_bytes::RefBytes;
 use crate::tx_io::bytes::shared_bytes::SharedBytes;
