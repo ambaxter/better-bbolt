@@ -3,7 +3,11 @@ use crate::common::id::{DiskPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::common::page::PageHeader;
 use crate::tx_io::bytes::IOBytes;
 use crate::tx_io::bytes::ref_bytes::RefBytes;
+use crate::tx_io::bytes::shared_bytes::SharedBytes;
 use crate::tx_io::transmogrify::{TxContext, TxDirectContext};
+use error_stack::Report;
+use moka::sync::Cache;
+use std::sync::Arc;
 
 pub mod file;
 pub mod memmap;
@@ -89,9 +93,9 @@ where
   }
 }
 
-pub trait ReadEntireIO: IOPageReader {}
+pub trait ReadLoadedPageIO: IOPageReader {}
 
-impl<T, I> ReadEntireIO for ReadHandler<T, I>
+impl<T, I> ReadLoadedPageIO for ReadHandler<T, I>
 where
   T: TxDirectContext,
   I: ContigIOReader,
@@ -108,43 +112,64 @@ pub trait IOSinglePageReader: IOPageReader {
   ) -> crate::Result<Self::Bytes, DiskReadError>;
 }
 
-pub struct SinglePageReadHandler<T, I> {
+pub struct CachedReadHandler<T, I: IOReader<Bytes = SharedBytes>> {
   handler: ReadHandler<T, I>,
+  page_cache: Cache<DiskPageId, SharedBytes>,
 }
 
-impl<T, I> IOPageReader for SinglePageReadHandler<T, I>
+impl<T, I> CachedReadHandler<T, I>
 where
   T: TxContext,
-  I: IOReader,
+  I: IOReader<Bytes = SharedBytes>,
 {
-  type Bytes = I::Bytes;
+  fn read_cache_or_disk(
+    &self, disk_page_id: DiskPageId,
+  ) -> crate::Result<SharedBytes, DiskReadError> {
+    match self.page_cache.try_get_with(disk_page_id, || {
+      self.handler.io.read_single_page(disk_page_id)
+    }) {
+      Ok(bytes) => Ok(bytes),
+      Err(error) => match Arc::into_inner(error) {
+        None => Err(DiskReadError::ReadError(disk_page_id).into()),
+        Some(error) => Err(error),
+      },
+    }
+  }
+}
+
+impl<T, I> IOPageReader for CachedReadHandler<T, I>
+where
+  T: TxContext,
+  I: IOReader<Bytes = SharedBytes>,
+{
+  type Bytes = SharedBytes;
 
   fn read_meta_page(
     &self, meta_page_id: MetaPageId,
   ) -> error_stack::Result<Self::Bytes, DiskReadError> {
     let disk_page_id = self.handler.tx_context.trans_meta_id(meta_page_id);
-    self.handler.io.read_single_page(disk_page_id)
+    self.read_cache_or_disk(disk_page_id)
   }
 
   fn read_freelist_page(
     &self, freelist_page_id: FreelistPageId,
   ) -> error_stack::Result<Self::Bytes, DiskReadError> {
     let disk_page_id = self.handler.tx_context.trans_freelist_id(freelist_page_id);
-    self.handler.io.read_single_page(disk_page_id)
+    self.read_cache_or_disk(disk_page_id)
   }
 
   fn read_node_page(
     &self, node_page_id: NodePageId,
   ) -> error_stack::Result<Self::Bytes, DiskReadError> {
     let disk_page_id = self.handler.tx_context.trans_node_id(node_page_id);
-    self.handler.io.read_single_page(disk_page_id)
+    self.read_cache_or_disk(disk_page_id)
   }
 }
 
-impl<T, I> IOSinglePageReader for SinglePageReadHandler<T, I>
+impl<T, I> IOSinglePageReader for CachedReadHandler<T, I>
 where
   T: TxContext,
-  I: IOReader,
+  I: IOReader<Bytes = SharedBytes>,
 {
   fn read_freelist_overflow(
     &self, freelist_page_id: FreelistPageId, overflow: u32,
@@ -153,7 +178,7 @@ where
       .handler
       .tx_context
       .trans_freelist_id(freelist_page_id + overflow);
-    self.handler.io.read_single_page(disk_page_id)
+    self.read_cache_or_disk(disk_page_id)
   }
 
   fn read_node_overflow(
@@ -163,6 +188,6 @@ where
       .handler
       .tx_context
       .trans_node_id(node_page_id + overflow);
-    self.handler.io.read_single_page(disk_page_id)
+    self.read_cache_or_disk(disk_page_id)
   }
 }

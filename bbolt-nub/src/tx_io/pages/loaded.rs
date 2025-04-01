@@ -4,18 +4,18 @@ use crate::tx_io::pages::{GetKvRefSlice, GetKvTxSlice, Page, ReadPageIO, TxPage}
 use std::ops::RangeBounds;
 
 #[derive(Clone)]
-pub struct EntirePage<'tx, P: TxBytes<'tx>> {
+pub struct LoadedPage<'tx, P: TxBytes<'tx>> {
   tx: TxSlot<'tx>,
   root: P,
 }
 
-impl<'tx, P: TxBytes<'tx>> Page for EntirePage<'tx, P> {
+impl<'tx, P: TxBytes<'tx>> Page for LoadedPage<'tx, P> {
   fn root_page(&self) -> &[u8] {
     &self.root
   }
 }
 
-impl<'tx, P: TxBytes<'tx>> GetKvRefSlice for EntirePage<'tx, P>
+impl<'tx, P: TxBytes<'tx>> GetKvRefSlice for LoadedPage<'tx, P>
 where
   P: GetKvRefSlice,
 {
@@ -29,7 +29,7 @@ where
   }
 }
 
-impl<'tx, P: TxBytes<'tx>> GetKvTxSlice<'tx> for EntirePage<'tx, P>
+impl<'tx, P: TxBytes<'tx>> GetKvTxSlice<'tx> for LoadedPage<'tx, P>
 where
   P: GetKvTxSlice<'tx>,
 {
@@ -40,4 +40,4 @@ where
   }
 }
 
-impl<'tx, P: TxBytes<'tx>> TxPage<'tx> for EntirePage<'tx, P> where P: GetKvTxSlice<'tx> {}
+impl<'tx, P: TxBytes<'tx>> TxPage<'tx> for LoadedPage<'tx, P> where P: GetKvTxSlice<'tx> {}

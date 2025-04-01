@@ -11,7 +11,7 @@ pub mod kv;
 
 pub mod io;
 
-pub mod entire;
+pub mod loaded;
 
 pub mod lazy;
 
