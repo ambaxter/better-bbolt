@@ -3,6 +3,7 @@ use crate::common::id::{EOFPageId, FreelistPageId, TxId};
 use crate::common::layout::page::PageHeader;
 use bytemuck::{Pod, Zeroable};
 use fnv_rs::{Fnv64, FnvHasher};
+use std::hash::Hasher;
 
 /// `Meta` represents the on-file layout of a database's metadata
 ///
