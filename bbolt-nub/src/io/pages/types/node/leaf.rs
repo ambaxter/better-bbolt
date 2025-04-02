@@ -5,6 +5,7 @@ use crate::io::pages::types::node::{HasKeys, HasValues};
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use bytemuck::{cast_slice, from_bytes};
 use delegate::delegate;
+use std::ops::RangeBounds;
 
 pub struct LeafPage<'tx, T: 'tx> {
   page: TxPage<'tx, T>,
@@ -18,6 +19,21 @@ where
       to &self.page {
       fn root_page(&self) -> &[u8];
       }
+  }
+}
+
+impl<'tx, T: 'tx> GetKvRefSlice for LeafPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  type RefKv<'a>
+    = T::RefKv<'a>
+  where
+    Self: 'a;
+
+  #[inline]
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+    self.page.get_ref_slice(range)
   }
 }
 

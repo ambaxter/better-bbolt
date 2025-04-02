@@ -24,6 +24,10 @@ impl<'p> RefIntoCopiedIter for &'p [u8] {
 }
 
 impl<'tx> KvDataType for &'tx [u8] {
+  fn cmp(&self, other: &[u8]) -> Ordering {
+    self.as_ref().cmp(other)
+  }
+
   #[inline]
   fn eq(&self, other: &[u8]) -> bool {
     PartialEq::eq(*self, other)
@@ -88,6 +92,11 @@ impl<'tx> RefIntoCopiedIter for SharedTxBytes<'tx> {
 
 impl<'tx> KvDataType for SharedTxBytes<'tx> {
   #[inline]
+  fn cmp(&self, other: &[u8]) -> Ordering {
+    self.as_ref().cmp(other)
+  }
+
+  #[inline]
   fn eq(&self, other: &[u8]) -> bool {
     self.as_ref().eq(other)
   }
@@ -143,6 +152,11 @@ impl<'p> RefIntoCopiedIter for SharedRefSlice<'p> {
 }
 
 impl<'a> KvDataType for SharedRefSlice<'a> {
+  #[inline]
+  fn cmp(&self, other: &[u8]) -> Ordering {
+    self.as_ref().cmp(other)
+  }
+
   #[inline]
   fn eq(&self, other: &[u8]) -> bool {
     self.inner.eq(other)
@@ -242,6 +256,13 @@ impl<'tx> Ord for SharedTxSlice<'tx> {
 
 impl<'tx> KvDataType for SharedTxSlice<'tx> {
   #[inline]
+  fn cmp(&self, other: &[u8]) -> Ordering {
+    self
+      .ref_into_copied_iter()
+      .cmp(other.ref_into_copied_iter())
+  }
+
+  #[inline]
   fn eq(&self, other: &[u8]) -> bool {
     self.as_ref().eq(other)
   }
@@ -294,6 +315,13 @@ impl<'tx> GetKvTxSlice<'tx> for SharedTxSlice<'tx> {
 }
 
 impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L> {
+  #[inline]
+  fn cmp(&self, other: &[u8]) -> Ordering {
+    self
+      .ref_into_copied_iter()
+      .cmp(other.ref_into_copied_iter())
+  }
+
   fn eq(&self, other: &[u8]) -> bool {
     self.ref_into_copied_iter().eq(other.ref_into_copied_iter())
   }
@@ -316,6 +344,13 @@ impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L
 }
 
 impl<'tx, L: ReadLazyPageIO<'tx>> KvDataType for LazyTxSlice<'tx, L> {
+  #[inline]
+  fn cmp(&self, other: &[u8]) -> Ordering {
+    self
+      .ref_into_copied_iter()
+      .cmp(other.ref_into_copied_iter())
+  }
+
   fn eq(&self, other: &[u8]) -> bool {
     self.ref_into_copied_iter().eq(other.ref_into_copied_iter())
   }

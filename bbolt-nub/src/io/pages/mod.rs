@@ -1,3 +1,4 @@
+use std::cmp;
 use crate::common::errors::DiskReadError;
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
@@ -27,6 +28,8 @@ pub trait RefIntoCopiedIter {
 }
 
 pub trait KvDataType: Ord + RefIntoCopiedIter {
+  fn cmp(&self, other: &[u8]) -> cmp::Ordering;
+
   fn eq(&self, other: &[u8]) -> bool;
 
   fn lt(&self, other: &[u8]) -> bool;
@@ -143,7 +146,7 @@ pub trait ReadPageIO<'tx> {
   fn read_node_page(&self, page_id: NodePageId) -> crate::Result<Self::PageBytes, DiskReadError>;
 }
 
-pub trait ReadFullPageIO<'tx>: ReadPageIO<'tx> {}
+pub trait ReadLoadedPageIO<'tx>: ReadPageIO<'tx> {}
 
 pub trait ReadLazyPageIO<'tx>: ReadPageIO<'tx> {
   fn read_freelist_overflow(
