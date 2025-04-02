@@ -2,10 +2,11 @@ use crate::common::id::NodePageId;
 use crate::common::layout::node::{BranchElement, LeafElement};
 use crate::common::layout::page::PageHeader;
 use crate::io::pages::types::node::leaf::LeafPage;
-use crate::io::pages::types::node::{HasKeys, HasNodes};
+use crate::io::pages::types::node::{HasElements, HasKeys, HasNodes};
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use bytemuck::{cast_slice, from_bytes};
 use delegate::delegate;
+use std::ops::RangeBounds;
 
 pub struct BranchPage<'tx, T: 'tx> {
   page: TxPage<'tx, T>,
@@ -22,16 +23,28 @@ where
   }
 }
 
-impl<'tx, T: 'tx> BranchPage<'tx, T>
+impl<'tx, T: 'tx> GetKvRefSlice for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  fn elements(&self) -> &[BranchElement] {
-    let elements_len = self.page.page_header().count() as usize;
-    let elements_start = size_of::<PageHeader>();
-    let elements_end = elements_start + (elements_len * size_of::<BranchElement>());
-    cast_slice(&self.page.root_page()[elements_start..elements_end])
+  type RefKv<'a>
+    = T::RefKv<'a>
+  where
+    Self: 'a;
+
+  #[inline]
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+    self.page.get_ref_slice(range)
   }
+}
+
+impl<'tx, T: 'tx> BranchPage<'tx, T> where T: TxPageType<'tx> {}
+
+impl<'tx, T: 'tx> HasElements<'tx> for BranchPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  type Element = BranchElement;
 }
 
 impl<'tx, T: 'tx> HasKeys<'tx> for BranchPage<'tx, T>

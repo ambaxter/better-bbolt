@@ -1,4 +1,3 @@
-use std::cmp;
 use crate::common::errors::DiskReadError;
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
@@ -7,6 +6,7 @@ use crate::io::backends::IOPageReader;
 use crate::io::bytes::TxBytes;
 use bytemuck::from_bytes;
 use delegate::delegate;
+use std::cmp;
 use std::collections::Bound;
 use std::ops::{Deref, Range, RangeBounds};
 

@@ -1,7 +1,7 @@
 use crate::common::layout::node::{BranchElement, LeafElement};
 use crate::common::layout::page::PageHeader;
 use crate::io::pages::types::node::branch::BranchPage;
-use crate::io::pages::types::node::{HasKeys, HasValues};
+use crate::io::pages::types::node::{HasElements, HasKeys, HasValues};
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use bytemuck::{cast_slice, from_bytes};
 use delegate::delegate;
@@ -37,16 +37,13 @@ where
   }
 }
 
-impl<'tx, T: 'tx> LeafPage<'tx, T>
+impl<'tx, T: 'tx> LeafPage<'tx, T> where T: TxPageType<'tx> {}
+
+impl<'tx, T: 'tx> HasElements<'tx> for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  fn elements(&self) -> &[LeafElement] {
-    let elements_len = self.page.page_header().count() as usize;
-    let elements_start = size_of::<PageHeader>();
-    let elements_end = elements_start + (elements_len * size_of::<LeafElement>());
-    cast_slice(&self.page.root_page()[elements_start..elements_end])
-  }
+  type Element = LeafElement;
 }
 
 impl<'tx, T: 'tx> HasKeys<'tx> for LeafPage<'tx, T>
