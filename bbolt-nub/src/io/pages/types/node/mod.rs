@@ -5,6 +5,7 @@ use crate::io::pages::types::node::branch::BranchPage;
 use crate::io::pages::types::node::leaf::LeafPage;
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, Page, TxPageType};
 use bytemuck::{Pod, cast_slice};
+use std::ops::Range;
 use std::ptr;
 
 pub mod branch;
@@ -65,6 +66,14 @@ pub trait HasElements<'tx>: Page + GetKvRefSlice {
     let elements_start = size_of::<PageHeader>();
     let elements_end = elements_start + (elements_len * size_of::<Self::Element>());
     cast_slice(&self.root_page()[elements_start..elements_end])
+  }
+
+  fn key_range(&self, index: usize) -> Option<Range<usize>> {
+    self.elements().get(index).map(|element| {
+      let start = element.kv_data_start(index);
+      let end = start + element.elem_key_len();
+      start..end
+    })
   }
 
   fn search(&self, v: &[u8]) -> Result<usize, usize> {
