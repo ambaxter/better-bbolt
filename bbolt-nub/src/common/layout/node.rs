@@ -7,12 +7,13 @@ use getset::{CopyGetters, Setters};
 #[repr(C)]
 #[derive(Debug, Copy, Clone, CopyGetters, Setters, Pod, Zeroable)]
 pub struct BranchElement {
-  #[getset(set = "pub")]
+  #[getset(get_copy = "pub", set = "pub")]
   /// The distance from this element's pointer to its key location
   key_dist: u32,
-  #[getset(set = "pub")]
+  #[getset(get_copy = "pub", set = "pub")]
   /// Key length
   key_len: u32,
+  #[getset(get_copy = "pub", set = "pub")]
   /// Page ID of this branch
   page_id: NodePageId,
 }
@@ -35,13 +36,13 @@ pub struct LeafElement {
   #[getset(get_copy = "pub")]
   /// Additional flag for each element. If leaf is a Bucket then 0x01 set
   flags: LeafFlag,
-  #[getset(set = "pub")]
+  #[getset(get_copy = "pub", set = "pub")]
   /// The distance from this element's pointer to its key/value location
   key_dist: u32,
-  #[getset(set = "pub")]
+  #[getset(get_copy = "pub", set = "pub")]
   /// Key length
   key_len: u32,
-  #[getset(set = "pub")]
+  #[getset(get_copy = "pub", set = "pub")]
   /// Value length
   value_len: u32,
 }

@@ -1,28 +1,34 @@
 use crate::common::id::NodePageId;
+use crate::common::layout::node::{BranchElement, LeafElement};
+use crate::common::layout::page::PageHeader;
 use crate::io::pages::types::node::branch::BranchPage;
 use crate::io::pages::types::node::leaf::LeafPage;
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, Page, TxPageType};
+use bytemuck::{Pod, cast_slice};
 
 pub mod branch;
 pub mod cursor;
 pub mod leaf;
 
-pub trait HasNode<'tx> {
+pub trait HasKeys<'tx> {
   type RefKv<'a>: GetKvRefSlice + KvDataType + 'a
   where
     Self: 'a;
   type TxKv: GetKvTxSlice<'tx> + KvDataType + 'tx;
 
-  fn search(&self, v: &[u8]) -> usize;
   fn key_ref<'a>(&'a self, index: usize) -> Option<Self::RefKv<'a>>;
   fn key(&self, index: usize) -> Option<Self::TxKv>;
 }
 
-pub trait HasBranch<'tx>: HasNode<'tx> {
+pub trait HasNode<'tx> {
+  fn search(&self, v: &[u8]) -> usize;
+}
+
+pub trait HasNodes<'tx>: HasKeys<'tx> {
   fn node(&self, index: usize) -> Option<NodePageId>;
 }
 
-pub trait HasLeaf<'tx>: HasNode<'tx> {
+pub trait HasValues<'tx>: HasKeys<'tx> {
   fn value_ref<'a>(&'a self, index: usize) -> Option<Self::RefKv<'a>>;
   fn value(&self, index: usize) -> Option<Self::TxKv>;
 }

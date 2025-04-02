@@ -104,6 +104,33 @@ where
   }
 }
 
+impl<'tx, T: 'tx> GetKvRefSlice for TxPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  type RefKv<'a>
+    = T::RefKv<'a>
+  where
+    Self: 'a;
+
+  #[inline]
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+    self.page.get_ref_slice(range)
+  }
+}
+
+impl<'tx, T: 'tx> GetKvTxSlice<'tx> for TxPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  type TxKv = T::TxKv;
+
+  #[inline]
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+    self.page.get_tx_slice(range)
+  }
+}
+
 pub trait ReadPageIO<'tx> {
   type PageBytes: TxBytes<'tx>;
 
