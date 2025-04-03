@@ -41,7 +41,7 @@ impl<'tx, T: 'tx> LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  pub fn search_exact(&self, v: &[u8]) -> Option<usize> {
+  pub fn search_leaf(&self, v: &[u8]) -> Option<usize> {
     self.search(v).ok()
   }
 

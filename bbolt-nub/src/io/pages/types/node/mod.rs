@@ -129,16 +129,6 @@ pub trait HasElements<'tx>: Page + GetKvRefSlice + Sync + Send {
       .map(|index| (chunk * chunk_size) + index)
       .map_err(|index| (chunk * chunk_size) + index)
   }
-
-  fn search_exact(&self, v: &[u8]) -> Option<usize> {
-    self.search(v).ok()
-  }
-
-  fn search_branch(&self, v: &[u8]) -> usize {
-    self
-      .search(v)
-      .unwrap_or_else(|next_index| next_index.saturating_sub(1))
-  }
 }
 
 pub trait HasNodes<'tx>: HasKeys<'tx> {
