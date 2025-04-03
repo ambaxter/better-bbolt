@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 description = "The Rust port Bolt database. Core functionality and types"
 
+[features]
+default = []
+mt_search = ["dep:rayon"]
+
 [dependencies]
 parking_lot.workspace = true
 memmap2.workspace = true
@@ -20,7 +24,6 @@ once_cell.workspace = true
 size.workspace = true
 delegate.workspace = true
 fnv_rs.workspace = true
-rayon.workspace = true
 crossbeam-channel.workspace = true
 dashmap.workspace = true
 fake.workspace = true
@@ -31,3 +34,4 @@ enum_dispatch.workspace = true
 getset.workspace = true
 tracing.workspace = true
 error-stack.workspace = true
+rayon = {workspace = true, optional = true}

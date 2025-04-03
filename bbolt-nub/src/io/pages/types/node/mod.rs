@@ -58,8 +58,8 @@ impl HasKeyPosLen for LeafElement {
   }
 }
 
-pub trait HasElements<'tx>: Page + GetKvRefSlice {
-  type Element: HasKeyPosLen;
+pub trait HasElements<'tx>: Page + GetKvRefSlice + Sync + Send {
+  type Element: HasKeyPosLen + Sync;
 
   fn elements(&self) -> &[Self::Element] {
     let elements_len = self.page_header().count() as usize;
@@ -76,6 +76,7 @@ pub trait HasElements<'tx>: Page + GetKvRefSlice {
     })
   }
 
+  #[cfg(not(feature = "mt_search"))]
   fn search(&self, v: &[u8]) -> Result<usize, usize> {
     let elements = self.elements();
     let elements_start = elements.as_ptr().addr();
@@ -88,8 +89,55 @@ pub trait HasElements<'tx>: Page + GetKvRefSlice {
     })
   }
 
-  fn search_closest(&self, v: &[u8]) -> usize {
-    self.search(v).unwrap_or_else(|closest| closest)
+  // TODO: match closest vs match exact in 2 different traits
+  // that way we can parallel as needed
+  #[cfg(feature = "mt_search")]
+  fn search(&self, v: &[u8]) -> Result<usize, usize> {
+    use rayon::iter::IndexedParallelIterator;
+    use rayon::iter::ParallelIterator;
+    use rayon::slice::ParallelSlice;
+    let elements = self.elements();
+    let elements_start = elements.as_ptr().addr();
+    let chunk_size = (elements.len() / rayon::current_num_threads()).min(16);
+    let p = elements
+      .par_chunks(chunk_size)
+      .enumerate()
+      .filter_map(|(chunk_index, chunk)| {
+        let first = &chunk[0];
+        let first_key_start = first.kv_data_start(0);
+        let first_key = self.get_ref_slice(first_key_start..first_key_start + first.elem_key_len());
+        if KvDataType::gt(&first_key, v) {
+          None
+        } else {
+          Some((
+            chunk_index,
+            chunk
+              .binary_search_by(|element| {
+                let element_index =
+                  (ptr::from_ref(element).addr() - elements_start) / size_of::<Self::Element>();
+                let key_start = element.kv_data_start(element_index);
+                let key = self.get_ref_slice(key_start..key_start + element.elem_key_len());
+                KvDataType::cmp(&key, v)
+              })
+          ))
+        }
+      });
+    let (chunk, result) = p
+      .max_by_key(|chunk| chunk.0)
+      .expect("iterator can't be empty");
+    result
+      .map(|index| (chunk * chunk_size) + index)
+      .map_err(|index| (chunk * chunk_size) + index)
+  }
+
+  fn search_exact(&self, v: &[u8]) -> Option<usize> {
+    self.search(v).ok()
+  }
+
+  fn search_branch(&self, v: &[u8]) -> usize {
+    self
+      .search(v)
+      .unwrap_or_else(|next_index| next_index.saturating_sub(1))
   }
 }
 

@@ -89,7 +89,7 @@ pub trait Page {
   fn root_page(&self) -> &[u8];
 }
 
-pub trait TxPageType<'tx>: Page + GetKvTxSlice<'tx> + GetKvRefSlice {}
+pub trait TxPageType<'tx>: Page + GetKvTxSlice<'tx> + GetKvRefSlice + Sync + Send {}
 
 pub struct TxPage<'tx, T: 'tx> {
   tx: TxSlot<'tx>,
@@ -134,7 +134,7 @@ where
   }
 }
 
-pub trait ReadPageIO<'tx> {
+pub trait ReadPageIO<'tx>: Sync + Send {
   type PageBytes: TxBytes<'tx>;
 
   fn read_meta_page(&self, page_id: MetaPageId) -> crate::Result<Self::PageBytes, DiskReadError>;
