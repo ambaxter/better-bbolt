@@ -1,6 +1,6 @@
-use crate::api::bucket::{Bucket, MutBucket};
+use crate::api::bucket::{BucketApi, MutBucket};
 use crate::api::bytes::TxSlice;
-use crate::api::cursor::{BucketCursor, MutBucketCursor};
+use crate::api::cursor::{BucketCursorApi, MutBucketCursorApi};
 use crate::api::errors::DbError;
 use crate::common::id::TxId;
 use triomphe::Arc;
@@ -12,14 +12,14 @@ pub struct TxStats {
 
 struct TxStatsInner {}
 
-pub trait Tx<'db>: Sized {
+pub trait TxApi<'db>: Sized {
   type SliceType<'tx>: TxSlice<'tx>
   where
     Self: 'tx;
-  type BucketType<'tx>: Bucket<'tx, SliceType = Self::SliceType<'tx>>
+  type BucketType<'tx>: BucketApi<'tx, KvType= Self::SliceType<'tx>>
   where
     Self: 'tx;
-  type BucketCursorType<'tx>: BucketCursor<'tx, SliceType = Self::SliceType<'tx>>
+  type BucketCursorType<'tx>: BucketCursorApi<'tx, KvType= Self::SliceType<'tx>>
   where
     Self: 'tx;
 
@@ -34,11 +34,11 @@ pub trait Tx<'db>: Sized {
   fn bucket_cursor<'tx>(&'tx self, path: &[&[u8]]) -> Option<Self::BucketCursorType<'tx>>;
 }
 
-pub trait MutTx<'db>: Tx<'db> {
-  type MutBucketType<'tx>: MutBucket<'tx, SliceType = Self::SliceType<'tx>>
+pub trait MutTx<'db>: TxApi<'db> {
+  type MutBucketType<'tx>: MutBucket<'tx, KvType= Self::SliceType<'tx>>
   where
     Self: 'tx;
-  type MutBucketCursorType<'tx>: MutBucketCursor<'tx, SliceType = Self::SliceType<'tx>>
+  type MutBucketCursorType<'tx>: MutBucketCursorApi<'tx, KvType= Self::SliceType<'tx>>
   where
     Self: 'tx;
 

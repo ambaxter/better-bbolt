@@ -4,12 +4,11 @@ use crate::common::layout::page::PageHeader;
 use crate::io::pages::types::node::branch::BranchPage;
 use crate::io::pages::types::node::leaf::LeafPage;
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, Page, TxPageType};
-use bytemuck::{Pod, cast_slice};
+use bytemuck::{cast_slice, Pod};
 use std::ops::Range;
 use std::ptr;
 
 pub mod branch;
-pub mod cursor;
 pub mod leaf;
 
 pub trait HasKeys<'tx> {

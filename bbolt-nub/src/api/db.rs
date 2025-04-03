@@ -8,7 +8,7 @@ pub struct DbStats {
 
 struct DbStatsInner {}
 
-pub trait BoltDb: Sized {
+pub trait DbApi: Sized {
   type SliceType<'tx>: TxSlice<'tx>;
 
   fn stats(&self) -> DbStats;
@@ -16,4 +16,4 @@ pub trait BoltDb: Sized {
   fn writable(&self) -> bool;
 }
 
-pub trait MutBoltDb: BoltDb {}
+pub trait MutDbApi: DbApi {}

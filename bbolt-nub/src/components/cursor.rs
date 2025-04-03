@@ -1,4 +1,4 @@
-use super::NodePage;
+use crate::io::pages::types::node::NodePage;
 use crate::io::pages::TxPageType;
 pub struct StackEntry<'tx, T: 'tx> {
   page: NodePage<'tx, T>,

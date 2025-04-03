@@ -1,6 +1,6 @@
 use crate::Result;
 use crate::api::bytes::TxSlice;
-use crate::api::cursor::{Cursor, MutCursor};
+use crate::api::cursor::{CursorApi, MutCursorApi};
 use crate::api::errors::DbError;
 use triomphe::Arc;
 
@@ -11,10 +11,10 @@ pub struct BucketStats {
 
 struct BucketStatsInner {}
 
-pub trait Bucket<'tx>: Sized {
-  type SliceType: TxSlice<'tx>;
+pub trait BucketApi<'tx>: Sized {
+  type KvType: TxSlice<'tx>;
 
-  type CursorType<'a>: Cursor<'tx, SliceType = Self::SliceType> + 'a
+  type CursorType<'a>: CursorApi<'tx, KvType= Self::KvType> + 'a
   where
     Self: 'a;
   fn cursor<'a>(&'a self) -> Self::CursorType<'a>;
@@ -23,13 +23,13 @@ pub trait Bucket<'tx>: Sized {
 
   fn writable(&self) -> bool;
 
-  fn get(&self, key: &[u8]) -> Option<Self::SliceType>;
+  fn get(&self, key: &[u8]) -> Option<Self::KvType>;
 
   fn stats(&self) -> BucketStats;
 }
 
-pub trait MutBucket<'tx>: Bucket<'tx> {
-  type MutCursorType<'a>: MutCursor<'tx, SliceType = Self::SliceType> + 'a
+pub trait MutBucket<'tx>: BucketApi<'tx> {
+  type MutCursorType<'a>: MutCursorApi<'tx, KvType= Self::KvType> + 'a
   where
     Self: 'a;
 

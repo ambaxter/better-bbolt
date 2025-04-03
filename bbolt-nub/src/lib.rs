@@ -10,3 +10,5 @@ pub mod common;
 pub mod io;
 
 pub mod api;
+
+pub mod components;
