@@ -38,7 +38,10 @@ where
   }
 }
 
-impl<'tx, T: 'tx> BranchPage<'tx, T> where T: TxPageType<'tx> {
+impl<'tx, T: 'tx> BranchPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
   fn search_branch(&self, v: &[u8]) -> usize {
     self
       .search(v)

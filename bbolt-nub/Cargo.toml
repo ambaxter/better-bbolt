@@ -34,4 +34,6 @@ enum_dispatch.workspace = true
 getset.workspace = true
 tracing.workspace = true
 error-stack.workspace = true
+bumpalo.workspace = true
 rayon = {workspace = true, optional = true}
+disjoint_impls.workspace = true

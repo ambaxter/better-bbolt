@@ -4,7 +4,7 @@ use crate::common::layout::page::PageHeader;
 use crate::io::pages::types::node::branch::BranchPage;
 use crate::io::pages::types::node::leaf::LeafPage;
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, Page, TxPageType};
-use bytemuck::{cast_slice, Pod};
+use bytemuck::{Pod, cast_slice};
 use std::ops::Range;
 use std::ptr;
 
@@ -110,14 +110,13 @@ pub trait HasElements<'tx>: Page + GetKvRefSlice + Sync + Send {
         } else {
           Some((
             chunk_index,
-            chunk
-              .binary_search_by(|element| {
-                let element_index =
-                  (ptr::from_ref(element).addr() - elements_start) / size_of::<Self::Element>();
-                let key_start = element.kv_data_start(element_index);
-                let key = self.get_ref_slice(key_start..key_start + element.elem_key_len());
-                KvDataType::cmp(&key, v)
-              })
+            chunk.binary_search_by(|element| {
+              let element_index =
+                (ptr::from_ref(element).addr() - elements_start) / size_of::<Self::Element>();
+              let key_start = element.kv_data_start(element_index);
+              let key = self.get_ref_slice(key_start..key_start + element.elem_key_len());
+              KvDataType::cmp(&key, v)
+            }),
           ))
         }
       });

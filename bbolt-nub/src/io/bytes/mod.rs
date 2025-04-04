@@ -5,7 +5,7 @@ pub mod shared_bytes;
 
 pub trait IOBytes: Deref<Target = [u8]> + AsRef<[u8]> + Clone + Sized {}
 
-pub trait TxBytes<'tx>: Deref<Target = [u8]> + AsRef<[u8]> + Clone + Sized + Sync + Send{}
+pub trait TxBytes<'tx>: Deref<Target = [u8]> + AsRef<[u8]> + Clone + Sized + Sync + Send {}
 
 pub trait FromIOBytes<'tx, T: IOBytes>: TxBytes<'tx> {
   fn from_io(value: T) -> Self;

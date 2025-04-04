@@ -71,3 +71,18 @@ impl MetaReader {
     }
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use crate::io::backends::meta_reader::MetaReader;
+  use std::fs::File;
+  use std::io::BufReader;
+
+  #[test]
+  fn test_meta_reader() {
+    let file = File::open("my.db").unwrap();
+    let mut meta_reader = MetaReader::new(BufReader::new(file));
+    let meta_page = meta_reader.determine_file_meta().unwrap();
+    println!("{:?}", meta_page);
+  }
+}

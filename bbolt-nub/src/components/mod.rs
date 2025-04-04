@@ -1,7 +1,7 @@
-pub mod cursor;
 pub mod bucket;
-pub mod tx;
+pub mod cursor;
 pub mod db;
 pub mod iter;
+pub mod tx;
 
 pub mod backend;

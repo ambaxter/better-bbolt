@@ -14,7 +14,7 @@ struct BucketStatsInner {}
 pub trait BucketApi<'tx>: Sized {
   type KvType: TxSlice<'tx>;
 
-  type CursorType<'a>: CursorApi<'tx, KvType= Self::KvType> + 'a
+  type CursorType<'a>: CursorApi<'tx, KvType = Self::KvType> + 'a
   where
     Self: 'a;
   fn cursor<'a>(&'a self) -> Self::CursorType<'a>;
@@ -29,7 +29,7 @@ pub trait BucketApi<'tx>: Sized {
 }
 
 pub trait MutBucket<'tx>: BucketApi<'tx> {
-  type MutCursorType<'a>: MutCursorApi<'tx, KvType= Self::KvType> + 'a
+  type MutCursorType<'a>: MutCursorApi<'tx, KvType = Self::KvType> + 'a
   where
     Self: 'a;
 

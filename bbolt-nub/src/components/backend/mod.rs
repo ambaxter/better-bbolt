@@ -1,2 +1,2 @@
-pub mod memmap;
 pub mod file;
+pub mod memmap;

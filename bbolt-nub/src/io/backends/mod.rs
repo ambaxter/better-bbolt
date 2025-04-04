@@ -104,7 +104,7 @@ where
 {
 }
 
-pub trait IOSinglePageReader: IOPageReader {
+pub trait IOOverflowPageReader: IOPageReader {
   fn read_freelist_overflow(
     &self, freelist_page_id: FreelistPageId, overflow: u32,
   ) -> crate::Result<Self::Bytes, DiskReadError>;
@@ -177,7 +177,7 @@ where
   }
 }
 
-impl<T, I> IOSinglePageReader for CachedReadHandler<T, I>
+impl<T, I> IOOverflowPageReader for CachedReadHandler<T, I>
 where
   T: TxContext,
   I: IOReader<Bytes = SharedBytes>,

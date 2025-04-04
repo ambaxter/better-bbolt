@@ -1,5 +1,5 @@
-use crate::io::pages::types::node::NodePage;
 use crate::io::pages::TxPageType;
+use crate::io::pages::types::node::NodePage;
 pub struct StackEntry<'tx, T: 'tx> {
   page: NodePage<'tx, T>,
   index: usize,

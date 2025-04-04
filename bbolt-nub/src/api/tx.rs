@@ -16,10 +16,10 @@ pub trait TxApi<'db>: Sized {
   type SliceType<'tx>: TxSlice<'tx>
   where
     Self: 'tx;
-  type BucketType<'tx>: BucketApi<'tx, KvType= Self::SliceType<'tx>>
+  type BucketType<'tx>: BucketApi<'tx, KvType = Self::SliceType<'tx>>
   where
     Self: 'tx;
-  type BucketCursorType<'tx>: BucketCursorApi<'tx, KvType= Self::SliceType<'tx>>
+  type BucketCursorType<'tx>: BucketCursorApi<'tx, KvType = Self::SliceType<'tx>>
   where
     Self: 'tx;
 
@@ -35,10 +35,10 @@ pub trait TxApi<'db>: Sized {
 }
 
 pub trait MutTx<'db>: TxApi<'db> {
-  type MutBucketType<'tx>: MutBucket<'tx, KvType= Self::SliceType<'tx>>
+  type MutBucketType<'tx>: MutBucket<'tx, KvType = Self::SliceType<'tx>>
   where
     Self: 'tx;
-  type MutBucketCursorType<'tx>: MutBucketCursorApi<'tx, KvType= Self::SliceType<'tx>>
+  type MutBucketCursorType<'tx>: MutBucketCursorApi<'tx, KvType = Self::SliceType<'tx>>
   where
     Self: 'tx;
 

@@ -18,7 +18,7 @@ pub trait MutCursorApi<'tx>: CursorApi<'tx> {
 
 pub trait BucketCursorApi<'tx> {
   type KvType: TxSlice<'tx>;
-  type BucketType: BucketApi<'tx, KvType= Self::KvType>;
+  type BucketType: BucketApi<'tx, KvType = Self::KvType>;
 
   fn first(&mut self) -> Option<(Self::KvType, Self::BucketType)>;
   fn last(&mut self) -> Option<(Self::KvType, Self::BucketType)>;
@@ -29,7 +29,7 @@ pub trait BucketCursorApi<'tx> {
 
 pub trait MutBucketCursorApi<'tx> {
   type KvType: TxSlice<'tx>;
-  type BucketType<'a>: MutBucket<'tx, KvType= Self::KvType> + 'a
+  type BucketType<'a>: MutBucket<'tx, KvType = Self::KvType> + 'a
   where
     Self: 'a;
 
