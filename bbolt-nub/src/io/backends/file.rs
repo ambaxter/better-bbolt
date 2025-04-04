@@ -42,7 +42,7 @@ impl IOReader for SingleFileReader {
 
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_offset: usize, page_len: usize,
-  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
+  ) -> crate::Result<Self::Bytes, DiskReadError> {
     let mut lock = self.file.lock();
     lock
       .seek(SeekFrom::Start(page_offset as u64))
@@ -96,7 +96,7 @@ impl IOReader for MultiFileReader {
 
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_offset: usize, page_len: usize,
-  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
+  ) -> crate::Result<Self::Bytes, DiskReadError> {
     let mut file = self
       .rx
       .recv()

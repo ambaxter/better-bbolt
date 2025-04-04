@@ -24,7 +24,7 @@ impl IOReader for MemMapReader {
 
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_offset: usize, page_len: usize,
-  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
+  ) -> crate::Result<Self::Bytes, DiskReadError> {
     if page_offset + page_len > self.mmap.len() {
       let eof = EOFPageId(DiskPageId((self.mmap.len() / self.page_size) as u64));
       Err(DiskReadError::UnexpectedEOF(disk_page_id, eof).into())
@@ -36,9 +36,7 @@ impl IOReader for MemMapReader {
 }
 
 impl ContigIOReader for MemMapReader {
-  fn read_header(
-    &self, disk_page_id: DiskPageId,
-  ) -> error_stack::Result<PageHeader, DiskReadError> {
+  fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, DiskReadError> {
     let page_offset = disk_page_id.0 as usize * self.page_size;
     let header_end = page_offset + size_of::<PageHeader>();
     if header_end > self.mmap.len() {

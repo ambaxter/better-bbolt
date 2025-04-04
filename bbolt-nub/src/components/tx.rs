@@ -11,7 +11,7 @@ use parking_lot::RwLockReadGuard;
 
 pub struct InnerTxHandle<'tx, IO> {
   io: RwLockReadGuard<'tx, IO>,
-  tx_id: TxId
+  tx_id: TxId,
 }
 
 pub struct SharedTxHandle<'tx, IO> {
@@ -37,7 +37,7 @@ where
 
   fn read_freelist_page(
     &self, freelist_page_id: FreelistPageId,
-  ) -> error_stack::Result<Self::TxPageBytes, DiskReadError> {
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError> {
     self
       .handle
       .io
@@ -47,7 +47,7 @@ where
 
   fn read_node_page(
     &self, node_page_id: NodePageId,
-  ) -> error_stack::Result<Self::TxPageBytes, DiskReadError> {
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError> {
     self
       .handle
       .io
@@ -79,7 +79,7 @@ where
 
   fn read_freelist_page(
     &self, freelist_page_id: FreelistPageId,
-  ) -> error_stack::Result<Self::TxPageBytes, DiskReadError> {
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError> {
     self
       .handle
       .io
@@ -89,7 +89,7 @@ where
 
   fn read_node_page(
     &self, node_page_id: NodePageId,
-  ) -> error_stack::Result<Self::TxPageBytes, DiskReadError> {
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError> {
     self
       .handle
       .io
