@@ -66,7 +66,6 @@ itertools = "0.14.0"
 delegate = "0.13"
 getset = "0.1.5"
 enum_dispatch = "0.3.13"
-disjoint_impls = "1.0.0"
 
 # Unsafe handling
 uninit = "0.6.2"

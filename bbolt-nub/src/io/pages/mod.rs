@@ -135,19 +135,19 @@ where
 }
 
 pub trait TxReadPageIO<'tx> {
-  type PageBytes: TxBytes<'tx>;
+  type TxPageBytes: TxBytes<'tx>;
 
   fn read_meta_page(
     &self, meta_page_id: MetaPageId,
-  ) -> crate::Result<Self::PageBytes, DiskReadError>;
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError>;
 
   fn read_freelist_page(
     &self, freelist_page_id: FreelistPageId,
-  ) -> crate::Result<Self::PageBytes, DiskReadError>;
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError>;
 
   fn read_node_page(
     &self, node_page_id: NodePageId,
-  ) -> crate::Result<Self::PageBytes, DiskReadError>;
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError>;
 }
 
 pub trait TxReadLoadedPageIO<'tx>: TxReadPageIO<'tx> {}
@@ -155,9 +155,9 @@ pub trait TxReadLoadedPageIO<'tx>: TxReadPageIO<'tx> {}
 pub trait TxReadLazyPageIO<'tx>: TxReadPageIO<'tx> {
   fn read_freelist_overflow(
     &self, freelist_page_id: FreelistPageId, overflow: u32,
-  ) -> crate::Result<Self::PageBytes, DiskReadError>;
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError>;
 
   fn read_node_overflow(
     &self, node_page_id: NodePageId, overflow: u32,
-  ) -> crate::Result<Self::PageBytes, DiskReadError>;
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError>;
 }

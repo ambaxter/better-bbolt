@@ -1,16 +1,17 @@
 use crate::common::errors::DiskReadError;
-use crate::common::id::{FreelistPageId, MetaPageId, NodePageId};
+use crate::common::id::{FreelistPageId, MetaPageId, NodePageId, TxId};
+use crate::common::layout::meta::Meta;
 use crate::io::TxSlot;
 use crate::io::backends::{IOOverflowPageReader, IOPageReader, IOReader};
 use crate::io::bytes::ref_bytes::RefBytes;
 use crate::io::bytes::shared_bytes::{SharedBytes, SharedTxBytes};
 use crate::io::bytes::{FromIOBytes, IOBytes, IntoTxBytes, TxBytes};
 use crate::io::pages::TxReadPageIO;
-use disjoint_impls::disjoint_impls;
 use parking_lot::RwLockReadGuard;
 
 pub struct InnerTxHandle<'tx, IO> {
   io: RwLockReadGuard<'tx, IO>,
+  tx_id: TxId
 }
 
 pub struct SharedTxHandle<'tx, IO> {
@@ -22,11 +23,11 @@ where
   IO: IOPageReader,
   IO::Bytes: IntoTxBytes<'tx, SharedTxBytes<'tx>>,
 {
-  type PageBytes = SharedTxBytes<'tx>;
+  type TxPageBytes = SharedTxBytes<'tx>;
 
   fn read_meta_page(
     &self, meta_page_id: MetaPageId,
-  ) -> crate::Result<Self::PageBytes, DiskReadError> {
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError> {
     self
       .handle
       .io
@@ -36,7 +37,7 @@ where
 
   fn read_freelist_page(
     &self, freelist_page_id: FreelistPageId,
-  ) -> error_stack::Result<Self::PageBytes, DiskReadError> {
+  ) -> error_stack::Result<Self::TxPageBytes, DiskReadError> {
     self
       .handle
       .io
@@ -46,7 +47,7 @@ where
 
   fn read_node_page(
     &self, node_page_id: NodePageId,
-  ) -> error_stack::Result<Self::PageBytes, DiskReadError> {
+  ) -> error_stack::Result<Self::TxPageBytes, DiskReadError> {
     self
       .handle
       .io
@@ -64,11 +65,11 @@ where
   IO: IOPageReader,
   IO::Bytes: IntoTxBytes<'tx, &'tx [u8]>,
 {
-  type PageBytes = &'tx [u8];
+  type TxPageBytes = &'tx [u8];
 
   fn read_meta_page(
     &self, meta_page_id: MetaPageId,
-  ) -> crate::Result<Self::PageBytes, DiskReadError> {
+  ) -> crate::Result<Self::TxPageBytes, DiskReadError> {
     self
       .handle
       .io
@@ -78,7 +79,7 @@ where
 
   fn read_freelist_page(
     &self, freelist_page_id: FreelistPageId,
-  ) -> error_stack::Result<Self::PageBytes, DiskReadError> {
+  ) -> error_stack::Result<Self::TxPageBytes, DiskReadError> {
     self
       .handle
       .io
@@ -88,7 +89,7 @@ where
 
   fn read_node_page(
     &self, node_page_id: NodePageId,
-  ) -> error_stack::Result<Self::PageBytes, DiskReadError> {
+  ) -> error_stack::Result<Self::TxPageBytes, DiskReadError> {
     self
       .handle
       .io

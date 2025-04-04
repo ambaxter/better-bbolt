@@ -14,7 +14,7 @@ use triomphe::Arc;
 
 pub struct LazyPage<'tx, L: TxReadLazyPageIO<'tx>> {
   tx: TxSlot<'tx>,
-  root: L::PageBytes,
+  root: L::TxPageBytes,
   r: Option<&'tx L>,
 }
 
@@ -36,7 +36,9 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> LazyPage<'tx, L> {
     self.root_page().len() * (self.page_header().get_overflow() + 1) as usize
   }
 
-  pub fn read_overflow_page(&self, overflow_index: u32) -> crate::Result<L::PageBytes, PageError> {
+  pub fn read_overflow_page(
+    &self, overflow_index: u32,
+  ) -> crate::Result<L::TxPageBytes, PageError> {
     let header = self.page_header();
     let overflow_count = header.get_overflow();
     assert!(overflow_index <= overflow_count);
@@ -96,9 +98,9 @@ pub struct LazyIter<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
   page: &'a LazyPage<'tx, L>,
   range: Range<usize>,
   next_overflow_index: u32,
-  next_page: L::PageBytes,
+  next_page: L::TxPageBytes,
   next_back_overflow_index: u32,
-  next_back_page: L::PageBytes,
+  next_back_page: L::TxPageBytes,
 }
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> LazyIter<'a, 'tx, L> {

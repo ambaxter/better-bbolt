@@ -56,7 +56,7 @@ dependencies = [
  "fs4",
  "getset",
  "hashbrown 0.15.2",
- "itertools 0.14.0",
+ "itertools",
  "memmap2",
  "moka",
  "once_cell",
@@ -76,7 +76,6 @@ dependencies = [
  "crossbeam-channel",
  "dashmap",
  "delegate",
- "disjoint_impls",
  "enum_dispatch",
  "error-stack",
  "fake",
@@ -85,7 +84,7 @@ dependencies = [
  "fs4",
  "getset",
  "hashbrown 0.15.2",
- "itertools 0.14.0",
+ "itertools",
  "memmap2",
  "moka",
  "once_cell",
@@ -108,7 +107,7 @@ dependencies = [
  "bon",
  "bumpalo",
  "futures",
- "itertools 0.14.0",
+ "itertools",
  "lz4_flex",
  "parking_lot",
  "rayon",
@@ -278,20 +277,6 @@ name = "deunicode"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc55fe0d1f6c107595572ec8b107c0999bb1a2e0b75e37429a4fb0d6474a0e7d"
-
-[[package]]
-name = "disjoint_impls"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a28ea3b9c0ddf26a0391d4b8c553d5ce81aa9e3eb125895caf124b261e893ced"
-dependencies = [
- "indexmap",
- "itertools 0.13.0",
- "proc-macro-error2",
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "dummy"
@@ -564,25 +549,6 @@ name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
-
-[[package]]
-name = "indexmap"
-version = "2.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3954d50fe15b02142bf25d3b8bdadb634ec3948f103d04ffe3031bc8fe9d7058"
-dependencies = [
- "equivalent",
- "hashbrown 0.15.2",
-]
-
-[[package]]
-name = "itertools"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
-dependencies = [
- "either",
-]
 
 [[package]]
 name = "itertools"
