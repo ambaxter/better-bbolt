@@ -4,21 +4,24 @@ use crate::io::TxSlot;
 use crate::io::backends::IOOverflowPageReader;
 use crate::io::bytes::TxBytes;
 use crate::io::pages::{
-  GetKvRefSlice, GetKvTxSlice, Page, ReadLazyPageIO, RefIntoCopiedIter, SubRange, TxPage,
-  TxPageType,
+  GetKvRefSlice, GetKvTxSlice, Page, RefIntoCopiedIter, SubRange, TxPage, TxPageType,
+  TxReadLazyPageIO,
 };
 use error_stack::ResultExt;
 use std::cmp::Ordering;
 use std::ops::{Range, RangeBounds};
 use triomphe::Arc;
 
-pub struct LazyPage<'tx, L: ReadLazyPageIO<'tx>> {
+pub struct LazyPage<'tx, L: TxReadLazyPageIO<'tx>> {
   tx: TxSlot<'tx>,
   root: L::PageBytes,
   r: Option<&'tx L>,
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> Clone for LazyPage<'tx, L> {
+unsafe impl<'tx, L: TxReadLazyPageIO<'tx>> Send for LazyPage<'tx, L> {}
+unsafe impl<'tx, L: TxReadLazyPageIO<'tx>> Sync for LazyPage<'tx, L> {}
+
+impl<'tx, L: TxReadLazyPageIO<'tx>> Clone for LazyPage<'tx, L> {
   fn clone(&self) -> Self {
     LazyPage {
       tx: self.tx,
@@ -28,7 +31,7 @@ impl<'tx, L: ReadLazyPageIO<'tx>> Clone for LazyPage<'tx, L> {
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> LazyPage<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> LazyPage<'tx, L> {
   pub fn len(&self) -> usize {
     self.root_page().len() * (self.page_header().get_overflow() + 1) as usize
   }
@@ -55,14 +58,14 @@ impl<'tx, L: ReadLazyPageIO<'tx>> LazyPage<'tx, L> {
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> Page for LazyPage<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> Page for LazyPage<'tx, L> {
   #[inline]
   fn root_page(&self) -> &[u8] {
     self.root.as_ref()
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> GetKvRefSlice for LazyPage<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvRefSlice for LazyPage<'tx, L> {
   type RefKv<'a>
     = LazyRefSlice<'a, 'tx, L>
   where
@@ -74,7 +77,7 @@ impl<'tx, L: ReadLazyPageIO<'tx>> GetKvRefSlice for LazyPage<'tx, L> {
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyPage<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyPage<'tx, L> {
   type TxKv = LazyTxSlice<'tx, L>;
 
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
@@ -86,10 +89,10 @@ impl<'tx, L: ReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyPage<'tx, L> {
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> TxPageType<'tx> for LazyPage<'tx, L> {}
+impl<'tx, L: TxReadLazyPageIO<'tx>> TxPageType<'tx> for LazyPage<'tx, L> {}
 
 #[derive(Clone)]
-pub struct LazyIter<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> {
+pub struct LazyIter<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
   page: &'a LazyPage<'tx, L>,
   range: Range<usize>,
   next_overflow_index: u32,
@@ -98,7 +101,7 @@ pub struct LazyIter<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> {
   next_back_page: L::PageBytes,
 }
 
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> LazyIter<'a, 'tx, L> {
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> LazyIter<'a, 'tx, L> {
   pub fn new<R: RangeBounds<usize>>(page: &'a LazyPage<'tx, L>, range: R) -> LazyIter<'a, 'tx, L> {
     let page_size = page.root_page().len();
     let overflow_count = page.page_header().get_overflow();
@@ -123,7 +126,7 @@ impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> LazyIter<'a, 'tx, L> {
   }
 }
 
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> Iterator for LazyIter<'a, 'tx, L> {
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> Iterator for LazyIter<'a, 'tx, L> {
   type Item = u8;
   fn next(&mut self) -> Option<Self::Item> {
     let index = self.range.next()?;
@@ -141,7 +144,7 @@ impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> Iterator for LazyIter<'a, 'tx, L> {
   }
 }
 
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> DoubleEndedIterator for LazyIter<'a, 'tx, L> {
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> DoubleEndedIterator for LazyIter<'a, 'tx, L> {
   fn next_back(&mut self) -> Option<Self::Item> {
     let index = self.range.next_back()?;
     let page_size = self.page.root_page().len();
@@ -158,7 +161,7 @@ impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> DoubleEndedIterator for LazyIter<'a, '
   }
 }
 
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> ExactSizeIterator for LazyIter<'a, 'tx, L> {
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> ExactSizeIterator for LazyIter<'a, 'tx, L> {
   #[inline]
   fn len(&self) -> usize {
     self.range.len()
@@ -166,12 +169,12 @@ impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> ExactSizeIterator for LazyIter<'a, 'tx
 }
 
 #[derive(Clone)]
-pub struct LazyRefSlice<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> {
+pub struct LazyRefSlice<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
   page: &'a LazyPage<'tx, L>,
   range: Range<usize>,
 }
 
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> PartialOrd for LazyRefSlice<'a, 'tx, L> {
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> PartialOrd for LazyRefSlice<'a, 'tx, L> {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     self
       .ref_into_copied_iter()
@@ -195,7 +198,7 @@ impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> PartialOrd for LazyRefSlice<'a, 'tx, L
   }
 }
 
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> Ord for LazyRefSlice<'a, 'tx, L> {
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> Ord for LazyRefSlice<'a, 'tx, L> {
   fn cmp(&self, other: &Self) -> Ordering {
     self
       .ref_into_copied_iter()
@@ -203,15 +206,15 @@ impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> Ord for LazyRefSlice<'a, 'tx, L> {
   }
 }
 
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> PartialEq for LazyRefSlice<'a, 'tx, L> {
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> PartialEq for LazyRefSlice<'a, 'tx, L> {
   fn eq(&self, other: &Self) -> bool {
     self.ref_into_copied_iter().eq(other.ref_into_copied_iter())
   }
 }
 
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> Eq for LazyRefSlice<'a, 'tx, L> {}
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> Eq for LazyRefSlice<'a, 'tx, L> {}
 
-impl<'p, 'tx: 'p, L: ReadLazyPageIO<'tx>> GetKvRefSlice for LazyRefSlice<'p, 'tx, L> {
+impl<'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> GetKvRefSlice for LazyRefSlice<'p, 'tx, L> {
   type RefKv<'a>
     = LazyRefSlice<'a, 'tx, L>
   where
@@ -226,7 +229,7 @@ impl<'p, 'tx: 'p, L: ReadLazyPageIO<'tx>> GetKvRefSlice for LazyRefSlice<'p, 'tx
   }
 }
 
-impl<'p, 'tx: 'p, L: ReadLazyPageIO<'tx>> RefIntoCopiedIter for LazyRefSlice<'p, 'tx, L> {
+impl<'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> RefIntoCopiedIter for LazyRefSlice<'p, 'tx, L> {
   type Iter<'a>
     = LazyIter<'a, 'tx, L>
   where
@@ -239,12 +242,12 @@ impl<'p, 'tx: 'p, L: ReadLazyPageIO<'tx>> RefIntoCopiedIter for LazyRefSlice<'p,
 }
 
 #[derive(Clone)]
-pub struct LazyTxSlice<'tx, L: ReadLazyPageIO<'tx>> {
+pub struct LazyTxSlice<'tx, L: TxReadLazyPageIO<'tx>> {
   page: LazyPage<'tx, L>,
   range: Range<usize>,
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> PartialOrd for LazyTxSlice<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> PartialOrd for LazyTxSlice<'tx, L> {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     self
       .ref_into_copied_iter()
@@ -268,7 +271,7 @@ impl<'tx, L: ReadLazyPageIO<'tx>> PartialOrd for LazyTxSlice<'tx, L> {
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> Ord for LazyTxSlice<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> Ord for LazyTxSlice<'tx, L> {
   fn cmp(&self, other: &Self) -> Ordering {
     self
       .ref_into_copied_iter()
@@ -276,14 +279,14 @@ impl<'tx, L: ReadLazyPageIO<'tx>> Ord for LazyTxSlice<'tx, L> {
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> PartialEq for LazyTxSlice<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> PartialEq for LazyTxSlice<'tx, L> {
   fn eq(&self, other: &Self) -> bool {
     self.ref_into_copied_iter().eq(other.ref_into_copied_iter())
   }
 }
-impl<'tx, L: ReadLazyPageIO<'tx>> Eq for LazyTxSlice<'tx, L> {}
+impl<'tx, L: TxReadLazyPageIO<'tx>> Eq for LazyTxSlice<'tx, L> {}
 
-impl<'tx, L: ReadLazyPageIO<'tx>> RefIntoCopiedIter for LazyTxSlice<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> RefIntoCopiedIter for LazyTxSlice<'tx, L> {
   type Iter<'a>
     = LazyIter<'a, 'tx, L>
   where
@@ -295,7 +298,7 @@ impl<'tx, L: ReadLazyPageIO<'tx>> RefIntoCopiedIter for LazyTxSlice<'tx, L> {
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> GetKvRefSlice for LazyTxSlice<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvRefSlice for LazyTxSlice<'tx, L> {
   type RefKv<'a>
     = LazyRefSlice<'a, 'tx, L>
   where
@@ -310,7 +313,7 @@ impl<'tx, L: ReadLazyPageIO<'tx>> GetKvRefSlice for LazyTxSlice<'tx, L> {
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyTxSlice<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyTxSlice<'tx, L> {
   type TxKv = LazyTxSlice<'tx, L>;
 
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {

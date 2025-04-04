@@ -142,7 +142,7 @@ impl<'p> BranchPage<'p> {
 pub struct LeafPage<'p> {
   header: &'p PageHeader,
   elements: &'p [LeafElement],
-  data: &'p [u8]
+  data: &'p [u8],
 }
 
 pub enum LeafValue<'a> {

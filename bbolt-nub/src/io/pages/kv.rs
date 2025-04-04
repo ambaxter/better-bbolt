@@ -1,7 +1,7 @@
 use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxBytes, SharedTxSlice};
 use crate::io::pages::lazy::{LazyRefSlice, LazyTxSlice};
 use crate::io::pages::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, ReadLazyPageIO, RefIntoCopiedIter, SubRange,
+  GetKvRefSlice, GetKvTxSlice, KvDataType, RefIntoCopiedIter, SubRange, TxReadLazyPageIO,
 };
 use std::cmp::Ordering;
 use std::iter::Copied;
@@ -314,7 +314,7 @@ impl<'tx> GetKvTxSlice<'tx> for SharedTxSlice<'tx> {
   }
 }
 
-impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L> {
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L> {
   #[inline]
   fn cmp(&self, other: &[u8]) -> Ordering {
     self
@@ -343,7 +343,7 @@ impl<'a, 'tx: 'a, L: ReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L
   }
 }
 
-impl<'tx, L: ReadLazyPageIO<'tx>> KvDataType for LazyTxSlice<'tx, L> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> KvDataType for LazyTxSlice<'tx, L> {
   #[inline]
   fn cmp(&self, other: &[u8]) -> Ordering {
     self

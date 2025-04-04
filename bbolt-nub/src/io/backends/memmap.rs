@@ -5,7 +5,7 @@ use crate::io::backends::{
   ContigIOReader, IOOverflowPageReader, IOPageReader, IOReader, ReadLoadedPageIO,
 };
 use crate::io::bytes::ref_bytes::RefBytes;
-use crate::io::pages::{ReadLazyPageIO, ReadPageIO};
+use crate::io::pages::{TxReadLazyPageIO, TxReadPageIO};
 use crate::io::transmogrify::{TxContext, TxDirectContext, TxIndirectContext};
 use memmap2::Mmap;
 
