@@ -2,7 +2,7 @@ use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, EOFPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
 use crate::io::backends::{
-  ContigIOReader, IOPageReader, IOReader, IOOverflowPageReader, ReadLoadedPageIO,
+  ContigIOReader, IOOverflowPageReader, IOPageReader, IOReader, ReadLoadedPageIO,
 };
 use crate::io::bytes::ref_bytes::RefBytes;
 use crate::io::pages::{ReadLazyPageIO, ReadPageIO};
