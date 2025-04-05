@@ -136,6 +136,18 @@ impl<'tx> GetKvRefSlice for SharedTxBytes<'tx> {
   }
 }
 
+impl<'tx> GetKvTxSlice<'tx> for SharedTxBytes<'tx> {
+  type TxKv = SharedTxSlice<'tx>;
+
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+    let range = (0..self.len()).sub_range(range);
+    SharedTxSlice {
+      inner: self.clone(),
+      range,
+    }
+  }
+}
+
 // SharedRefSlice<'a> //
 
 impl<'p> RefIntoCopiedIter for SharedRefSlice<'p> {

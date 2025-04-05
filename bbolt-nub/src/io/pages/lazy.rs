@@ -3,18 +3,20 @@ use crate::common::id::OverflowPageId;
 use crate::io::TxSlot;
 use crate::io::backends::IOOverflowPageReader;
 use crate::io::bytes::TxBytes;
+use crate::io::bytes::shared_bytes::SharedTxBytes;
 use crate::io::pages::{
   GetKvRefSlice, GetKvTxSlice, Page, RefIntoCopiedIter, SubRange, TxPage, TxPageType,
-  TxReadLazyPageIO,
+  TxReadLazyPageIO, TxReadPageIO,
 };
 use error_stack::ResultExt;
 use std::cmp::Ordering;
 use std::ops::{Range, RangeBounds};
+use tracing::Id;
 use triomphe::Arc;
 
 pub struct LazyPage<'tx, L: TxReadLazyPageIO<'tx>> {
   tx: TxSlot<'tx>,
-  root: L::TxPageBytes,
+  root: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes,
   r: Option<&'tx L>,
 }
 
@@ -32,13 +34,30 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> Clone for LazyPage<'tx, L> {
 }
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> LazyPage<'tx, L> {
+  pub fn new(
+    root: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes, r: &'tx L,
+  ) -> Self {
+    let mut page = LazyPage {
+      tx: Default::default(),
+      root,
+      r: None,
+    };
+    if page.page_header().get_overflow() > 0 {
+      page.r = Some(r)
+    };
+    page
+  }
+
   pub fn len(&self) -> usize {
     self.root_page().len() * (self.page_header().get_overflow() + 1) as usize
   }
 
   pub fn read_overflow_page(
     &self, overflow_index: u32,
-  ) -> crate::Result<L::TxPageBytes, PageError> {
+  ) -> crate::Result<
+    <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes,
+    PageError,
+  > {
     let header = self.page_header();
     let overflow_count = header.get_overflow();
     assert!(overflow_index <= overflow_count);
@@ -91,16 +110,18 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyPage<'tx, L> {
   }
 }
 
-impl<'tx, L: TxReadLazyPageIO<'tx>> TxPageType<'tx> for LazyPage<'tx, L> {}
+impl<'tx, L: TxReadLazyPageIO<'tx>> TxPageType<'tx> for LazyPage<'tx, L> {
+  type TxPageBytes = SharedTxBytes<'tx>;
+}
 
 #[derive(Clone)]
 pub struct LazyIter<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
   page: &'a LazyPage<'tx, L>,
   range: Range<usize>,
   next_overflow_index: u32,
-  next_page: L::TxPageBytes,
+  next_page: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes,
   next_back_overflow_index: u32,
-  next_back_page: L::TxPageBytes,
+  next_back_page: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes,
 }
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> LazyIter<'a, 'tx, L> {

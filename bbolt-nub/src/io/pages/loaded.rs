@@ -9,6 +9,15 @@ pub struct LoadedPage<'tx, P: TxBytes<'tx>> {
   root: P,
 }
 
+impl<'tx, P: TxBytes<'tx>> LoadedPage<'tx, P> {
+  pub fn new(root: P) -> Self {
+    LoadedPage {
+      tx: Default::default(),
+      root,
+    }
+  }
+}
+
 impl<'tx, P: TxBytes<'tx>> Page for LoadedPage<'tx, P> {
   fn root_page(&self) -> &[u8] {
     &self.root
@@ -40,4 +49,9 @@ where
   }
 }
 
-impl<'tx, P: TxBytes<'tx>> TxPageType<'tx> for LoadedPage<'tx, P> where P: GetKvTxSlice<'tx> {}
+impl<'tx, P: TxBytes<'tx>> TxPageType<'tx> for LoadedPage<'tx, P>
+where
+  P: GetKvTxSlice<'tx>,
+{
+  type TxPageBytes = P;
+}
