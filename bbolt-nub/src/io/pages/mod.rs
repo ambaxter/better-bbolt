@@ -1,9 +1,12 @@
-use crate::common::errors::DiskReadError;
+use crate::common::errors::{DiskReadError, PageError};
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
 use crate::io::TxSlot;
 use crate::io::backends::IOPageReader;
 use crate::io::bytes::TxBytes;
+use crate::io::pages::types::freelist::FreelistPage;
+use crate::io::pages::types::meta::MetaPage;
+use crate::io::pages::types::node::NodePage;
 use bytemuck::from_bytes;
 use delegate::delegate;
 use std::cmp;
@@ -89,7 +92,7 @@ pub trait Page {
   fn root_page(&self) -> &[u8];
 }
 
-pub trait TxPageType<'tx>: Page + GetKvTxSlice<'tx> + GetKvRefSlice + Sync + Send {
+pub trait TxPageType<'tx>: Page + GetKvTxSlice<'tx> + GetKvRefSlice + Clone + Sync + Send {
   type TxPageBytes: TxBytes<'tx>;
 }
 
@@ -97,6 +100,18 @@ pub trait TxPageType<'tx>: Page + GetKvTxSlice<'tx> + GetKvRefSlice + Sync + Sen
 pub struct TxPage<'tx, T: 'tx> {
   tx: TxSlot<'tx>,
   page: T,
+}
+
+impl<'tx, T: 'tx> TxPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  pub fn new(page: T) -> Self {
+    TxPage {
+      tx: Default::default(),
+      page,
+    }
+  }
 }
 
 impl<'tx, T: 'tx> Page for TxPage<'tx, T>
@@ -142,15 +157,15 @@ pub trait TxReadPageIO<'tx> {
 
   fn read_meta_page(
     &'tx self, meta_page_id: MetaPageId,
-  ) -> crate::Result<Self::TxPageType, DiskReadError>;
+  ) -> crate::Result<MetaPage<'tx, Self::TxPageType>, PageError>;
 
   fn read_freelist_page(
     &'tx self, freelist_page_id: FreelistPageId,
-  ) -> crate::Result<Self::TxPageType, DiskReadError>;
+  ) -> crate::Result<FreelistPage<'tx, Self::TxPageType>, PageError>;
 
   fn read_node_page(
     &'tx self, node_page_id: NodePageId,
-  ) -> crate::Result<Self::TxPageType, DiskReadError>;
+  ) -> crate::Result<NodePage<'tx, Self::TxPageType>, PageError>;
 }
 
 pub trait TxReadLoadedPageIO<'tx>: TxReadPageIO<'tx> {}

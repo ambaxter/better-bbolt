@@ -12,6 +12,15 @@ pub struct LeafPage<'tx, T: 'tx> {
   page: TxPage<'tx, T>,
 }
 
+impl<'tx, T: 'tx> LeafPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  pub fn new(page: TxPage<'tx, T>) -> Self {
+    Self { page }
+  }
+}
+
 impl<'tx, T: 'tx> Page for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,

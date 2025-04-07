@@ -1,3 +1,4 @@
+use crate::common::errors::PageError;
 use crate::common::id::FreelistPageId;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::{Page, TxPage, TxPageType};
@@ -11,6 +12,23 @@ pub trait HasFreelist {
 
 pub struct FreelistPage<'tx, T: 'tx> {
   page: TxPage<'tx, T>,
+}
+
+impl<'tx, T> TryFrom<TxPage<'tx, T>> for FreelistPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  type Error = PageError;
+
+  fn try_from(value: TxPage<'tx, T>) -> Result<Self, Self::Error> {
+    if value.page.page_header().is_meta() {
+      Ok(FreelistPage { page: value })
+    } else {
+      Err(PageError::InvalidFreelistFlag(
+        value.page.page_header().flags(),
+      ))
+    }
+  }
 }
 
 impl<'tx, T: 'tx> Page for FreelistPage<'tx, T>

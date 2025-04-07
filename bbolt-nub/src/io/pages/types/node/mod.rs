@@ -1,9 +1,10 @@
+use crate::common::errors::PageError;
 use crate::common::id::NodePageId;
 use crate::common::layout::node::{BranchElement, LeafElement};
 use crate::common::layout::page::PageHeader;
 use crate::io::pages::types::node::branch::BranchPage;
 use crate::io::pages::types::node::leaf::LeafPage;
-use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, Page, TxPageType};
+use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, Page, TxPage, TxPageType};
 use bytemuck::{Pod, cast_slice};
 use std::ops::Range;
 use std::ptr;
@@ -142,6 +143,23 @@ pub trait HasValues<'tx>: HasKeys<'tx> {
 pub enum NodePage<'tx, T> {
   Branch(BranchPage<'tx, T>),
   Leaf(LeafPage<'tx, T>),
+}
+
+impl<'tx, T> TryFrom<TxPage<'tx, T>> for NodePage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  type Error = PageError;
+
+  fn try_from(value: TxPage<'tx, T>) -> Result<Self, Self::Error> {
+    if value.page.page_header().is_leaf() {
+      Ok(NodePage::Leaf(LeafPage::new(value)))
+    } else if value.page.page_header().is_branch() {
+      Ok(NodePage::Branch(BranchPage::new(value)))
+    } else {
+      Err(PageError::InvalidNodeFlag(value.page.page_header().flags()))
+    }
+  }
 }
 
 impl<'tx, T> NodePage<'tx, T> {

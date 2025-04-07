@@ -13,6 +13,15 @@ pub struct BranchPage<'tx, T: 'tx> {
   page: TxPage<'tx, T>,
 }
 
+impl<'tx, T: 'tx> BranchPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  pub fn new(page: TxPage<T>) -> BranchPage<T> {
+    BranchPage { page }
+  }
+}
+
 impl<'tx, T: 'tx> Page for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,

@@ -1,5 +1,8 @@
-use crate::common::id::{DbPageId, DiskPageId, EOFPageId, OverflowPageId};
+use crate::common::id::{
+  DbPageId, DiskPageId, EOFPageId, FreelistPageId, MetaPageId, NodePageId, OverflowPageId,
+};
 use crate::common::layout::page::PageFlag;
+use crate::io::pages::types::freelist::FreelistPage;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -11,6 +14,18 @@ pub enum PageError {
   InvalidPageFlag(PageFlag, PageFlag),
   #[error("Error while loading page {0:?} overflow {1} ")]
   OverflowReadError(OverflowPageId, u32),
+  #[error("Expected a node flag. Found `{0:#x}`.")]
+  InvalidNodeFlag(PageFlag),
+  #[error("Expected a meta flag. Found `{0:#x}`.")]
+  InvalidMetaFlag(PageFlag),
+  #[error("Expected a freelist flag. Found `{0:#x}`.")]
+  InvalidFreelistFlag(PageFlag),
+  #[error("Error reading node page `{0:?}`.")]
+  InvalidNode(NodePageId),
+  #[error("Error reading meta page `{0:?}`.")]
+  InvalidMeta(MetaPageId),
+  #[error("Error reading freelist page `{0:?}`.")]
+  InvalidFreelist(FreelistPageId),
 }
 
 #[derive(Debug, Error)]
