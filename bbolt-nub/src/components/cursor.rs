@@ -1,11 +1,14 @@
-use crate::io::pages::TxPageType;
+use crate::common::id::NodePageId;
+use crate::components::bucket::CoreBucket;
+use crate::components::tx::TheTx;
+use crate::io::pages::{TxPageType, TxReadPageIO};
 use crate::io::pages::types::node::NodePage;
-pub struct StackEntry<'tx, T: 'tx> {
+pub struct StackEntry<'tx, T> {
   page: NodePage<'tx, T>,
   index: usize,
 }
 
-impl<'tx, T: 'tx> StackEntry<'tx, T> {
+impl<'tx, T> StackEntry<'tx, T> {
   #[inline]
   pub fn new(page: NodePage<'tx, T>) -> Self {
     Self { page, index: 0 }
@@ -35,4 +38,9 @@ where
   pub fn len(&self) -> usize {
     self.page.len()
   }
+}
+
+pub struct CoreCursor<'a, 'tx: 'a, T: TheTx<'tx>> {
+  bucket: &'a CoreBucket<'tx, T>,
+  stack: Vec<StackEntry<'tx, T::TxPageType>>,
 }

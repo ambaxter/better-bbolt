@@ -138,12 +138,13 @@ pub trait HasValues<'tx>: HasKeys<'tx> {
   fn value(&self, index: usize) -> Option<Self::TxKv>;
 }
 
-pub enum NodePage<'tx, T: 'tx> {
+#[derive(Clone)]
+pub enum NodePage<'tx, T> {
   Branch(BranchPage<'tx, T>),
   Leaf(LeafPage<'tx, T>),
 }
 
-impl<'tx, T: 'tx> NodePage<'tx, T> {
+impl<'tx, T> NodePage<'tx, T> {
   pub fn is_leaf(&self) -> bool {
     matches!(self, NodePage::Leaf(_))
   }

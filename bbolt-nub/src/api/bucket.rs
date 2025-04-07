@@ -6,10 +6,10 @@ use triomphe::Arc;
 
 #[derive(Clone)]
 pub struct BucketStats {
-  inner: Arc<BucketStatsInner>,
+  inner: Arc<InnerBucketStats>,
 }
 
-struct BucketStatsInner {}
+struct InnerBucketStats {}
 
 pub trait BucketApi<'tx>: Sized {
   type KvType: TxSlice<'tx>;

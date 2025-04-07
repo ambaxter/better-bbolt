@@ -8,6 +8,7 @@ use bytemuck::{cast_slice, from_bytes};
 use delegate::delegate;
 use std::ops::{Range, RangeBounds};
 
+#[derive(Clone)]
 pub struct BranchPage<'tx, T: 'tx> {
   page: TxPage<'tx, T>,
 }

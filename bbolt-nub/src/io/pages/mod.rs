@@ -93,6 +93,7 @@ pub trait TxPageType<'tx>: Page + GetKvTxSlice<'tx> + GetKvRefSlice + Sync + Sen
   type TxPageBytes: TxBytes<'tx>;
 }
 
+#[derive(Clone)]
 pub struct TxPage<'tx, T: 'tx> {
   tx: TxSlot<'tx>,
   page: T,

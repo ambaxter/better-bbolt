@@ -11,13 +11,15 @@ use crate::io::pages::loaded::LoadedPage;
 use crate::io::pages::{TxPageType, TxReadLazyPageIO, TxReadPageIO};
 use parking_lot::RwLockReadGuard;
 
-pub struct InnerTxHandle<'tx, IO> {
+pub trait TheTx<'tx> : TxReadPageIO<'tx> {}
+
+pub struct CoreTxHandle<'tx, IO> {
   io: RwLockReadGuard<'tx, IO>,
   tx_id: TxId,
 }
 
 pub struct SharedTxHandle<'tx, IO> {
-  handle: InnerTxHandle<'tx, IO>,
+  handle: CoreTxHandle<'tx, IO>,
 }
 
 impl<'tx, IO> TxReadPageIO<'tx> for SharedTxHandle<'tx, IO>
@@ -58,8 +60,14 @@ where
   }
 }
 
+impl<'tx, IO> TheTx<'tx> for SharedTxHandle<'tx, IO>
+where
+  IO: IOPageReader,
+  IO::Bytes: IntoTxBytes<'tx, SharedTxBytes<'tx>>,
+{}
+
 pub struct RefTxHandle<'tx, IO> {
-  handle: InnerTxHandle<'tx, IO>,
+  handle: CoreTxHandle<'tx, IO>,
 }
 
 impl<'tx, IO> TxReadPageIO<'tx> for RefTxHandle<'tx, IO>
@@ -100,8 +108,14 @@ where
   }
 }
 
+impl<'tx, IO> TheTx<'tx> for RefTxHandle<'tx, IO>
+where
+IO: IOPageReader,
+IO::Bytes: IntoTxBytes<'tx, &'tx [u8]>,
+{}
+
 pub struct LazyTxHandle<'tx, IO> {
-  handle: InnerTxHandle<'tx, IO>,
+  handle: CoreTxHandle<'tx, IO>,
 }
 
 impl<'tx, IO> TxReadPageIO<'tx> for LazyTxHandle<'tx, IO>
@@ -167,3 +181,10 @@ where
       .map(|bytes| bytes.into_tx())
   }
 }
+
+
+impl<'tx, IO> TheTx<'tx> for LazyTxHandle<'tx, IO>
+where
+  IO: IOOverflowPageReader,
+  IO::Bytes: IntoTxBytes<'tx, SharedTxBytes<'tx>>,
+{}

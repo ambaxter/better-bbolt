@@ -7,10 +7,10 @@ use triomphe::Arc;
 
 #[derive(Clone)]
 pub struct TxStats {
-  inner: Arc<TxStatsInner>,
+  inner: Arc<InnerTxStats>,
 }
 
-struct TxStatsInner {}
+struct InnerTxStats {}
 
 pub trait TxApi<'db>: Sized {
   type SliceType<'tx>: TxSlice<'tx>

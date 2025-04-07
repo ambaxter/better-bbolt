@@ -3,10 +3,10 @@ use triomphe::Arc;
 
 #[derive(Clone)]
 pub struct DbStats {
-  inner: Arc<DbStatsInner>,
+  inner: Arc<InnerDbStats>,
 }
 
-struct DbStatsInner {}
+struct InnerDbStats {}
 
 pub trait DbApi: Sized {
   type SliceType<'tx>: TxSlice<'tx>;

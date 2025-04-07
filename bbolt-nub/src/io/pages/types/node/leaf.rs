@@ -7,6 +7,7 @@ use bytemuck::{cast_slice, from_bytes};
 use delegate::delegate;
 use std::ops::{Range, RangeBounds};
 
+#[derive(Clone)]
 pub struct LeafPage<'tx, T: 'tx> {
   page: TxPage<'tx, T>,
 }

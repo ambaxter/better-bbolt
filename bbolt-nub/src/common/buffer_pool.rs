@@ -59,7 +59,7 @@ impl UniqueBuffer {
   }
 }
 
-struct BufferPoolInner {
+struct InnerBufferPool {
   init_size: Size,
   min_size: Size,
   max_size: Size,
@@ -67,7 +67,7 @@ struct BufferPoolInner {
   pool: Mutex<Vec<UniqueBuffer>>,
 }
 
-impl BufferPoolInner {
+impl InnerBufferPool {
   fn pop(&self) -> Option<UniqueBuffer> {
     self.pool.lock().pop()
   }
@@ -101,7 +101,7 @@ impl BufferPoolInner {
 
 #[derive(Clone)]
 pub struct BufferPool {
-  inner: Arc<BufferPoolInner>,
+  inner: Arc<InnerBufferPool>,
 }
 
 impl Debug for BufferPool {
@@ -123,7 +123,7 @@ impl BufferPool {
     for _ in 0..reserve_size {
       pool.push(BufferPool::new_unbound(page_size));
     }
-    let inner = BufferPoolInner {
+    let inner = InnerBufferPool {
       init_size,
       min_size,
       max_size,
