@@ -30,7 +30,7 @@ pub trait RefIntoCopiedIter {
   fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a>;
 }
 
-pub trait KvDataType: Ord + RefIntoCopiedIter {
+pub trait KvDataType: Ord {
   fn cmp(&self, other: &[u8]) -> cmp::Ordering;
 
   fn eq(&self, other: &[u8]) -> bool;
