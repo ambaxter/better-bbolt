@@ -1,13 +1,11 @@
 use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxBytes, SharedTxSlice};
+use crate::io::ops::{RefIntoCopiedIter, SubRange};
 use crate::io::pages::lazy::{LazyRefSlice, LazyTxSlice};
-use crate::io::pages::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, RefIntoCopiedIter, SubRange, TxReadLazyPageIO,
-};
+use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, TxReadLazyPageIO};
 use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::RangeBounds;
 use std::slice;
-
 // &'a [u8] //
 
 impl<'p> RefIntoCopiedIter for &'p [u8] {

@@ -1,15 +1,54 @@
 use std::cmp::Ordering;
-use std::ops::Range;
-use crate::io::pages::SubRange;
+use std::collections::Bound;
+use std::ops::{Range, RangeBounds};
 
-pub trait TryGet {
+pub trait SubRange {
+  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
+}
+
+impl SubRange for Range<usize> {
+  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self {
+    let start = match range.start_bound().cloned() {
+      Bound::Included(start) => self.start + start,
+      Bound::Excluded(start) => self.start + start + 1,
+      Bound::Unbounded => self.start,
+    };
+    let end = match range.end_bound().cloned() {
+      Bound::Included(end) => self.start + end + 1,
+      Bound::Excluded(end) => self.start + end,
+      Bound::Unbounded => self.end,
+    };
+    assert!(
+      start <= end,
+      "New start ({start}) should be <= new end ({end})"
+    );
+    assert!(
+      end <= self.end,
+      "New end ({end}) should be <= current end ({0})",
+      self.end
+    );
+    start..end
+  }
+}
+
+pub trait RefIntoCopiedIter {
+  type Iter<'a>: Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator + 'a
+  where
+    Self: 'a;
+  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a>;
+}
+
+pub trait TryGet<T> {
   type Error;
 
-  fn try_get(&self, index: usize) -> Result<Option<u8>, Self::Error>;
+  fn try_get(&self, index: usize) -> Result<Option<T>, Self::Error>;
 }
 
 pub trait TryPartialEq<Rhs: ?Sized = Self> {
-  type Error<'a> where Self: 'a, Rhs: 'a;
+  type Error<'a>
+  where
+    Self: 'a,
+    Rhs: 'a;
   fn try_eq<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>>;
   fn try_ne<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
     self.try_eq(other).map(|ok| !ok)
@@ -55,10 +94,10 @@ pub trait IntoTryBuf {
 
 impl<Rhs, T: ?Sized> TryPartialEq<Rhs> for T
 where
-    for<'a> Rhs: 'a,
-    for<'a> &'a Rhs: IntoTryBuf<Error = <&'a T as IntoTryBuf>::Error>,
-    for<'a> T: 'a,
-    for<'a> &'a T: IntoTryBuf,
+  for<'a> Rhs: 'a,
+  for<'a> &'a Rhs: IntoTryBuf<Error = <&'a T as IntoTryBuf>::Error>,
+  for<'a> T: 'a,
+  for<'a> &'a T: IntoTryBuf,
 {
   type Error<'a> = <&'a T as IntoTryBuf>::Error;
 
@@ -89,10 +128,10 @@ where
 // RustRover doesn't like this
 impl<T: ?Sized, Rhs> TryPartialOrd<Rhs> for T
 where
-    for<'a> Rhs: 'a,
-    for<'a> &'a Rhs: IntoTryBuf<Error = <&'a T as IntoTryBuf>::Error>,
-    for<'a> T: 'a,
-    for<'a> &'a T: IntoTryBuf,
+  for<'a> Rhs: 'a,
+  for<'a> &'a Rhs: IntoTryBuf<Error = <&'a T as IntoTryBuf>::Error>,
+  for<'a> T: 'a,
+  for<'a> &'a T: IntoTryBuf,
 {
   fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> Result<Option<Ordering>, Self::Error<'a>> {
     let mut s_buf = self.into_try_buf()?;
@@ -158,11 +197,22 @@ impl<'a> IntoTryBuf for &'a [u8] {
   }
 }
 
+impl<T> TryGet<T> for [T]
+where
+  T: Copy,
+{
+  type Error = &'static str;
+
+  fn try_get(&self, index: usize) -> Result<Option<T>, Self::Error> {
+    Ok(self.get(index).copied())
+  }
+}
+
 #[cfg(test)]
 mod tests {
-  use std::ops::Range;
+  use crate::io::ops::SubRange;
   use crate::io::ops::{IntoTryBuf, TryBuf, TryPartialEq, TryPartialOrd};
-  use crate::io::pages::SubRange;
+  use std::ops::Range;
 
   pub struct ABuf {
     bytes: Vec<u8>,
@@ -206,7 +256,6 @@ mod tests {
       })
     }
   }
-
 
   pub struct BBuf {
     bytes: Vec<u8>,
@@ -280,7 +329,6 @@ mod tests {
     println!("r: {:?}", r);
   }
 
-
   #[test]
   fn ord_slice_test() {
     let r = vec![1, 2, 3, 4, 5];
@@ -291,6 +339,4 @@ mod tests {
     let r = TryPartialOrd::ge(r.as_slice(), &bbuf);
     println!("r: {:?}", r);
   }
-
-
 }

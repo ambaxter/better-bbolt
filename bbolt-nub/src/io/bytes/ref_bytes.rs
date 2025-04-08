@@ -1,6 +1,6 @@
 use crate::io::TxSlot;
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
-use crate::io::pages::RefIntoCopiedIter;
+use crate::io::ops::RefIntoCopiedIter;
 use std::ops::Deref;
 use std::ptr::slice_from_raw_parts;
 use std::slice;

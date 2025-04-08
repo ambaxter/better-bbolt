@@ -4,14 +4,15 @@ use crate::common::layout::page::PageHeader;
 use crate::io::TxSlot;
 use crate::io::backends::IOPageReader;
 use crate::io::bytes::TxBytes;
+use crate::io::ops::{TryGet, TryPartialEq, TryPartialOrd};
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::types::node::NodePage;
 use bytemuck::from_bytes;
 use delegate::delegate;
 use std::cmp;
-use std::collections::Bound;
-use std::ops::{Deref, Range, RangeBounds};
+use std::hash::Hash;
+use std::ops::{Deref, RangeBounds};
 
 pub mod kv;
 
@@ -23,12 +24,11 @@ pub mod lazy;
 
 pub mod types;
 
-pub trait RefIntoCopiedIter {
-  type Iter<'a>: Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator + 'a
-  where
-    Self: 'a;
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a>;
-}
+pub trait KvEq: Eq + PartialEq<[u8]> + TryPartialEq + TryPartialEq<[u8]> {}
+
+pub trait KvOrd: Ord + PartialOrd<[u8]> + TryPartialOrd + TryPartialOrd<[u8]> {}
+
+pub trait KvData: KvEq + KvOrd + Hash + TryGet<u8> {}
 
 pub trait KvDataType: Ord {
   fn cmp(&self, other: &[u8]) -> cmp::Ordering;
@@ -40,35 +40,6 @@ pub trait KvDataType: Ord {
 
   fn gt(&self, other: &[u8]) -> bool;
   fn ge(&self, other: &[u8]) -> bool;
-}
-
-pub trait SubRange {
-  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
-}
-
-impl SubRange for Range<usize> {
-  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self {
-    let start = match range.start_bound().cloned() {
-      Bound::Included(start) => self.start + start,
-      Bound::Excluded(start) => self.start + start + 1,
-      Bound::Unbounded => self.start,
-    };
-    let end = match range.end_bound().cloned() {
-      Bound::Included(end) => self.start + end + 1,
-      Bound::Excluded(end) => self.start + end,
-      Bound::Unbounded => self.end,
-    };
-    assert!(
-      start <= end,
-      "New start ({start}) should be <= new end ({end})"
-    );
-    assert!(
-      end <= self.end,
-      "New end ({end}) should be <= current end ({0})",
-      self.end
-    );
-    start..end
-  }
 }
 
 pub trait GetKvRefSlice {
