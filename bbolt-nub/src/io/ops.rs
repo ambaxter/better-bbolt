@@ -2,7 +2,11 @@ use std::cmp::Ordering;
 use std::ops::Range;
 use crate::io::pages::SubRange;
 
-pub trait TryIndex {}
+pub trait TryGet {
+  type Error;
+
+  fn try_get(&self, index: usize) -> Result<Option<u8>, Self::Error>;
+}
 
 pub trait TryPartialEq<Rhs: ?Sized = Self> {
   type Error<'a> where Self: 'a, Rhs: 'a;
@@ -42,14 +46,14 @@ pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
   }
 }
 
-pub trait IntoTryBuf: Sized {
+pub trait IntoTryBuf {
   type Error;
   type TryBuf: TryBuf<Error = Self::Error>;
 
   fn into_try_buf(self) -> Result<Self::TryBuf, Self::Error>;
 }
 
-impl<Rhs, T> TryPartialEq<Rhs> for T
+impl<Rhs, T: ?Sized> TryPartialEq<Rhs> for T
 where
     for<'a> Rhs: 'a,
     for<'a> &'a Rhs: IntoTryBuf<Error = <&'a T as IntoTryBuf>::Error>,
@@ -83,7 +87,7 @@ where
 }
 
 // RustRover doesn't like this
-impl<T, Rhs> TryPartialOrd<Rhs> for T
+impl<T: ?Sized, Rhs> TryPartialOrd<Rhs> for T
 where
     for<'a> Rhs: 'a,
     for<'a> &'a Rhs: IntoTryBuf<Error = <&'a T as IntoTryBuf>::Error>,
@@ -119,6 +123,39 @@ pub trait TryBuf {
   fn chunk(&self) -> &[u8];
 
   fn try_advance(&mut self, cnt: usize) -> Result<(), Self::Error>;
+}
+
+pub struct RefTryBuf<'a> {
+  buf: &'a [u8],
+  range: Range<usize>,
+}
+
+impl<'a> TryBuf for RefTryBuf<'a> {
+  type Error = &'static str;
+
+  fn remaining(&self) -> usize {
+    self.range.len()
+  }
+
+  fn chunk(&self) -> &[u8] {
+    &self.buf[self.range.clone()]
+  }
+
+  fn try_advance(&mut self, cnt: usize) -> Result<(), Self::Error> {
+    self.range = self.range.sub_range(cnt..);
+    Ok(())
+  }
+}
+
+impl<'a> IntoTryBuf for &'a [u8] {
+  type Error = &'static str;
+  type TryBuf = RefTryBuf<'a>;
+  fn into_try_buf(self) -> Result<Self::TryBuf, Self::Error> {
+    Ok(RefTryBuf {
+      buf: self,
+      range: 0..self.len(),
+    })
+  }
 }
 
 #[cfg(test)]
@@ -240,6 +277,18 @@ mod tests {
       max_chunk_len: 4,
     };
     let r = TryPartialOrd::ge(&abuf, &bbuf);
+    println!("r: {:?}", r);
+  }
+
+
+  #[test]
+  fn ord_slice_test() {
+    let r = vec![1, 2, 3, 4, 5];
+    let bbuf = BBuf {
+      bytes: vec![1, 2, 3, 4, 5],
+      max_chunk_len: 4,
+    };
+    let r = TryPartialOrd::ge(r.as_slice(), &bbuf);
     println!("r: {:?}", r);
   }
 
