@@ -2,7 +2,7 @@ use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxSlice};
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange,
+  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, SubRange,
   TryBuf, TryGet,
 };
 use std::cmp::Ordering;
@@ -11,6 +11,7 @@ use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
 use std::ptr::slice_from_raw_parts;
 use std::{io, slice};
+use crate::common::errors::OpsError;
 
 #[derive(Debug, Clone)]
 pub struct RefBytes {
@@ -193,18 +194,6 @@ impl<'tx> RefIntoCopiedIter for RefTxSlice<'tx> {
   }
 }
 
-impl<'tx> RefIntoTryBuf for RefTxSlice<'tx> {
-  type Error = io::Error;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
-
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
-    Ok(RefTryBuf::new(self.as_ref()))
-  }
-}
-
 impl<'tx> KvDataType for RefTxSlice<'tx> {}
 
 impl<'tx> GetKvRefSlice for RefTxSlice<'tx> {
@@ -247,7 +236,7 @@ impl<'a> RefTryBuf<'a> {
 }
 
 impl<'a> TryBuf for RefTryBuf<'a> {
-  type Error = io::Error;
+  type Error = OpsError;
 
   fn remaining(&self) -> usize {
     self.range.len()
@@ -257,30 +246,9 @@ impl<'a> TryBuf for RefTryBuf<'a> {
     &self.buf[self.range.clone()]
   }
 
-  fn try_advance(&mut self, cnt: usize) -> Result<(), Self::Error> {
+  fn try_advance(&mut self, cnt: usize) -> crate::Result<(), Self::Error> {
     self.range = self.range.sub_range(cnt..);
     Ok(())
-  }
-}
-
-impl<'tx> RefIntoTryBuf for RefTxBytes<'tx> {
-  type Error = io::Error;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
-
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
-    Ok(RefTryBuf::new(self.bytes))
-  }
-}
-
-impl RefIntoTryBuf for [u8] {
-  type Error = io::Error;
-  type TryBuf<'a> = RefTryBuf<'a>;
-
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
-    Ok(RefTryBuf::new(self))
   }
 }
 

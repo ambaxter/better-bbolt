@@ -1,12 +1,13 @@
 use crate::common::errors::OpsError;
 use crate::io::pages::{TxPage, TxPageType};
-use error_stack::ResultExt;
+use error_stack::{FutureExt, ResultExt};
 use std::cmp::Ordering;
 use std::collections::Bound;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::ops::{Range, RangeBounds};
+use crate::io::bytes::ref_bytes::RefTryBuf;
 
 pub trait SubRange {
   fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
@@ -80,8 +81,8 @@ where
 
 pub trait TryPartialEq<Rhs: ?Sized = Self> {
   type Error: Error + Send + Sync;
-  fn try_eq<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error>;
-  fn try_ne<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
+  fn try_eq(&self, other: &Rhs) -> crate::Result<bool, Self::Error>;
+  fn try_ne(&self, other: &Rhs) -> crate::Result<bool, Self::Error>{
     self.try_eq(other).map(|ok| !ok)
   }
 }
@@ -117,29 +118,33 @@ pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
 }
 
 pub trait RefIntoTryBuf {
-  type Error: Error + Send + Sync;
+  type TryBuf<'a>: TryBuf + 'a where Self: 'a;
 
-  type TryBuf<'a>: TryBuf + 'a
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error>;
+}
+
+impl<T> RefIntoTryBuf for T where T: AsRef<[u8]> {
+  type TryBuf<'a> = RefTryBuf<'a>
   where
     Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error>;
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error> {
+    Ok(RefTryBuf::new(self.as_ref()))
+  }
 }
-
-impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T
-where
-  T: RefIntoTryBuf,
-  Rhs: RefIntoTryBuf,
-{
+impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T where T: RefIntoTryBuf, Rhs: RefIntoTryBuf {
   type Error = OpsError;
 
   fn try_eq(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
-    let mut s_buf = self
-      .ref_into_try_buf()
-      .change_context(OpsError::TryPartialEq)?;
-    let mut o_buf = other
-      .ref_into_try_buf()
-      .change_context(OpsError::TryPartialEq)?;
+    // Until it's fixed, don't use Result.change_context(). Some compiler error exists there
+    let mut s_buf = match self.ref_into_try_buf() {
+      Ok(buf) => buf,
+      Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
+    };
+    let mut o_buf = match other.ref_into_try_buf() {
+      Ok(buf) => buf,
+      Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
+    };
     if s_buf.remaining() != o_buf.remaining() {
       return Ok(false);
     }
@@ -154,12 +159,14 @@ where
       if s_cmp != o_cmp {
         return Ok(false);
       }
-      s_buf
-        .try_advance(cmp_len)
-        .change_context(OpsError::TryPartialEq)?;
-      o_buf
-        .try_advance(cmp_len)
-        .change_context(OpsError::TryPartialEq)?;
+      match s_buf.try_advance(cmp_len) {
+        Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
+        _ => {}
+      };
+      match o_buf.try_advance(cmp_len) {
+        Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
+        _ => {}
+      };
     }
     Ok(true)
   }
@@ -192,14 +199,14 @@ where
   }
 }*/
 
-pub trait TryBuf {
+pub trait TryBuf : Sized {
   type Error: Error + Send + Sync;
 
   fn remaining(&self) -> usize;
 
   fn chunk(&self) -> &[u8];
 
-  fn try_advance(&mut self, cnt: usize) -> Result<(), Self::Error>;
+  fn try_advance(&mut self, cnt: usize) -> crate::Result<(), Self::Error>;
 }
 
 pub trait KvEq: Eq + PartialEq<[u8]> /* + TryPartialEq + TryPartialEq<[u8]> */ +  Sized {}
@@ -226,8 +233,8 @@ pub trait GetKvTxSlice<'tx>: GetKvRefSlice {
 #[cfg(test)]
 mod tests {
   use crate::common::errors::OpsError;
-  use crate::io::ops::SubRange;
-  use crate::io::ops::{RefIntoTryBuf, TryBuf, TryPartialEq, TryPartialOrd};
+  use crate::io::ops::{RefIntoTryBuf, SubRange};
+  use crate::io::ops::{TryBuf, TryPartialEq, TryPartialOrd};
   use std::io;
   use std::ops::Range;
 
@@ -243,7 +250,7 @@ mod tests {
   }
 
   impl<'a> TryBuf for ABufTryBuf<'a> {
-    type Error = io::Error;
+    type Error = OpsError;
 
     fn remaining(&self) -> usize {
       self.range.len()
@@ -255,17 +262,16 @@ mod tests {
       &self.bytes[range]
     }
 
-    fn try_advance(&mut self, cnt: usize) -> Result<(), Self::Error> {
+    fn try_advance(&mut self, cnt: usize) -> crate::Result<(), Self::Error> {
       self.range = self.range.sub_range(cnt..);
       Ok(())
     }
   }
 
   impl RefIntoTryBuf for ABuf {
-    type Error = OpsError;
     type TryBuf<'a> = ABufTryBuf<'a>;
 
-    fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
+    fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error> {
       Ok(ABufTryBuf {
         bytes: &self.bytes,
         range: 0..self.bytes.len(),
@@ -286,7 +292,7 @@ mod tests {
   }
 
   impl<'a> TryBuf for BBufTryBuf<'a> {
-    type Error = io::Error;
+    type Error = OpsError;
 
     fn remaining(&self) -> usize {
       self.range.len()
@@ -298,17 +304,16 @@ mod tests {
       &self.bytes[range]
     }
 
-    fn try_advance(&mut self, cnt: usize) -> Result<(), Self::Error> {
+    fn try_advance(&mut self, cnt: usize) -> crate::Result<(), Self::Error> {
       self.range = self.range.sub_range(cnt..);
       Ok(())
     }
   }
 
   impl RefIntoTryBuf for BBuf {
-    type Error = io::Error;
     type TryBuf<'a> = BBufTryBuf<'a>;
 
-    fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
+    fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error> {
       Ok(BBufTryBuf {
         bytes: &self.bytes,
         range: 0..self.bytes.len(),

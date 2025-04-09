@@ -4,7 +4,7 @@ use crate::io::TxSlot;
 use crate::io::bytes::ref_bytes::RefTryBuf;
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange,
+  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, SubRange,
   TryBuf, TryGet,
 };
 use std::cmp::Ordering;
@@ -128,18 +128,6 @@ impl<'tx> Hash for SharedTxBytes<'tx> {
   }
 }
 
-impl<'tx> RefIntoTryBuf for SharedTxBytes<'tx> {
-  type Error = OpsError;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
-
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
-    Ok(RefTryBuf::new(self))
-  }
-}
-
 impl<'tx> KvEq for SharedTxBytes<'tx> {}
 impl<'tx> KvOrd for SharedTxBytes<'tx> {}
 impl<'tx> KvDataType for SharedTxBytes<'tx> {}
@@ -237,18 +225,6 @@ impl<'p> GetKvRefSlice for SharedRefSlice<'p> {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
     }
-  }
-}
-
-impl<'tx> RefIntoTryBuf for SharedRefSlice<'tx> {
-  type Error = OpsError;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
-
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
-    Ok(RefTryBuf::new(self.as_ref()))
   }
 }
 
@@ -351,18 +327,6 @@ impl<'tx> GetKvTxSlice<'tx> for SharedTxSlice<'tx> {
 impl<'tx> Hash for SharedTxSlice<'tx> {
   fn hash<H: Hasher>(&self, state: &mut H) {
     self.as_ref().hash(state);
-  }
-}
-
-impl<'tx> RefIntoTryBuf for SharedTxSlice<'tx> {
-  type Error = OpsError;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
-
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
-    Ok(RefTryBuf::new(self.as_ref()))
   }
 }
 
