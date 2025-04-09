@@ -136,7 +136,9 @@ impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T where T: RefIntoTryBuf, Rhs
   type Error = OpsError;
 
   fn try_eq(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
-    // Until it's fixed, don't use Result.change_context(). Some compiler error exists there
+    // Until it's fixed, don't use Result.change_context(). Some compiler bug exists there
+    // I *still* can't create a reproducer
+    // https://users.rust-lang.org/t/how-does-borrowed-data-escapes-outside-of-method-im-truly-confused/128048/2
     let mut s_buf = match self.ref_into_try_buf() {
       Ok(buf) => buf,
       Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
@@ -171,16 +173,22 @@ impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T where T: RefIntoTryBuf, Rhs
     Ok(true)
   }
 }
-/*
+
 // RustRover doesn't like this
 impl<T: ?Sized, Rhs: ?Sized> TryPartialOrd<Rhs> for T
 where
-  Rhs: RefIntoTryBuf<Error = <T as RefIntoTryBuf>::Error>,
+  Rhs: RefIntoTryBuf,
   T: RefIntoTryBuf,
 {
   fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> crate::Result<Option<Ordering>, Self::Error> {
-    let mut s_buf = self.ref_into_try_buf()?;
-    let mut o_buf = other.ref_into_try_buf()?;
+    let mut s_buf = match self.ref_into_try_buf() {
+      Ok(buf) => buf,
+      Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
+    };
+    let mut o_buf = match other.ref_into_try_buf() {
+      Ok(buf) => buf,
+      Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
+    };
     while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
       let s_chunk = s_buf.chunk();
       let o_chunk = o_buf.chunk();
@@ -192,14 +200,20 @@ where
       if cmp != Ordering::Equal {
         return Ok(Some(cmp));
       }
-      s_buf.try_advance(cmp_len)?;
-      o_buf.try_advance(cmp_len)?;
+      match s_buf.try_advance(cmp_len) {
+        Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
+        _ => {}
+      };
+      match o_buf.try_advance(cmp_len) {
+        Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
+        _ => {}
+      };
     }
     Ok(s_buf.remaining().partial_cmp(&o_buf.remaining()))
   }
-}*/
+}
 
-pub trait TryBuf : Sized {
+pub trait TryBuf {
   type Error: Error + Send + Sync;
 
   fn remaining(&self) -> usize;
@@ -336,7 +350,7 @@ mod tests {
     let r = TryPartialEq::try_ne(&abuf, &bbuf);
     println!("r: {:?}", r);
   }
-  /*
+
   #[test]
   fn ord_test() {
     let abuf = ABuf {
@@ -358,7 +372,7 @@ mod tests {
       bytes: vec![1, 2, 3, 4, 5],
       max_chunk_len: 4,
     };
-    let r = TryPartialOrd::try_ge(r.as_slice(), &bbuf);
+    let r = TryPartialOrd::try_ge(&r, &bbuf);
     println!("r: {:?}", r);
-  }*/
+  }
 }
