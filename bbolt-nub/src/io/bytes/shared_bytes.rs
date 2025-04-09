@@ -91,26 +91,6 @@ impl<'tx> PartialOrd for SharedTxBytes<'tx> {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     self.as_ref().partial_cmp(other.as_ref())
   }
-
-  #[inline]
-  fn lt(&self, other: &Self) -> bool {
-    self.as_ref().lt(other.as_ref())
-  }
-
-  #[inline]
-  fn le(&self, other: &Self) -> bool {
-    self.as_ref().le(other.as_ref())
-  }
-
-  #[inline]
-  fn gt(&self, other: &Self) -> bool {
-    self.as_ref().gt(other.as_ref())
-  }
-
-  #[inline]
-  fn ge(&self, other: &Self) -> bool {
-    self.as_ref().ge(other.as_ref())
-  }
 }
 
 impl<'tx> PartialEq for SharedTxBytes<'tx> {

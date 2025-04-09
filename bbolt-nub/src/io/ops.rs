@@ -176,9 +176,9 @@ where
   }
 }
 
-pub trait KvEq: Eq + PartialEq<[u8]> + TryPartialEq + TryPartialEq<[u8]> {}
+pub trait KvEq: Eq + PartialEq<[u8]> /* + TryPartialEq + TryPartialEq<[u8]> */ + Sized {}
 
-pub trait KvOrd: Ord + PartialOrd<[u8]> + TryPartialOrd + TryPartialOrd<[u8]> {}
+pub trait KvOrd: Ord + PartialOrd<[u8]> /* + TryPartialOrd + TryPartialOrd<[u8]> */ + Sized {}
 
 pub trait KvDataType: KvEq + KvOrd + Hash + TryGet<u8> + RefIntoCopiedIter + RefIntoTryBuf {}
 

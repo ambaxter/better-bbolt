@@ -1,13 +1,13 @@
 use crate::io::TxSlot;
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
-use crate::io::ops::{
-  KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf, TryGet,
-};
+use crate::io::ops::{GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf, TryGet};
 use std::cmp::Ordering;
 use std::iter::Copied;
-use std::ops::{Deref, Range};
+use std::ops::{Deref, Range, RangeBounds};
 use std::ptr::slice_from_raw_parts;
 use std::{io, slice};
+use std::hash::{Hash, Hasher};
+use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxSlice};
 
 #[derive(Debug, Clone)]
 pub struct RefBytes {
@@ -95,6 +95,141 @@ impl<'tx> PartialEq<[u8]> for RefTxBytes<'tx> {
 impl<'tx> PartialOrd<[u8]> for RefTxBytes<'tx> {
   fn partial_cmp(&self, other: &[u8]) -> Option<Ordering> {
     self.as_ref().partial_cmp(other)
+  }
+}
+
+impl<'tx> GetKvRefSlice for RefTxBytes<'tx> {
+  type RefKv<'a> = SharedRefSlice<'a>
+  where
+    Self: 'a;
+
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+    SharedRefSlice {
+      inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
+    }
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct RefTxSlice<'tx> {
+  bytes: &'tx [u8],
+  range: Range<usize>
+}
+
+impl<'tx> AsRef<[u8]> for RefTxSlice<'tx> {
+  fn as_ref(&self) -> &[u8] {
+    &self.bytes[self.range.clone()]
+  }
+}
+
+impl<'tx> Hash for RefTxSlice<'tx> {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.as_ref().hash(state);
+  }
+}
+
+impl<'tx> PartialEq for RefTxSlice<'tx> {
+  #[inline]
+  fn eq(&self, other: &Self) -> bool {
+    self.as_ref().eq(other.as_ref())
+  }
+}
+
+impl<'tx> Eq for RefTxSlice<'tx> {}
+
+impl<'tx> PartialOrd for RefTxSlice<'tx> {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self.as_ref().partial_cmp(other.as_ref())
+  }
+}
+
+impl<'tx> Ord for RefTxSlice<'tx> {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.as_ref().cmp(other.as_ref())
+  }
+}
+
+impl<'tx> PartialEq<[u8]> for RefTxSlice<'tx> {
+  #[inline]
+  fn eq(&self, other: &[u8]) -> bool {
+    self.as_ref().eq(other)
+  }
+}
+
+impl<'tx> PartialOrd<[u8]> for RefTxSlice<'tx> {
+  #[inline]
+  fn partial_cmp(&self, other: &[u8]) -> Option<Ordering> {
+    self.as_ref().partial_cmp(other)
+  }
+}
+
+impl<'tx> GetKvTxSlice<'tx> for RefTxBytes<'tx> {
+  type TxKv = RefTxSlice<'tx>;
+
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+    let range = (0..self.bytes.len()).sub_range(range);
+    RefTxSlice {
+      bytes: self.bytes,
+      range,
+    }
+  }
+}
+
+impl<'tx> KvEq for RefTxSlice<'tx> {}
+impl<'tx> KvOrd for RefTxSlice<'tx> {}
+
+impl<'tx> RefIntoCopiedIter for RefTxSlice<'tx> {
+  type Iter<'a> = Copied<slice::Iter<'a, u8>>
+  where
+    Self: 'a;
+
+  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
+    self.as_ref().iter().copied()
+  }
+}
+
+impl<'tx> RefIntoTryBuf for RefTxSlice<'tx> {
+  type Error = io::Error;
+  type TryBuf<'a> = RefTryBuf<'a>
+  where
+    Self: 'a;
+
+  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
+    Ok(RefTryBuf::new(self.as_ref()))
+  }
+}
+
+impl<'tx> TryGet<u8> for RefTxSlice<'tx> {
+  type Error = io::Error;
+
+  fn try_get(&self, index: usize) -> Result<Option<u8>, Self::Error> {
+    Ok(self.as_ref().get(index).copied())
+  }
+}
+
+impl<'tx> KvDataType for RefTxSlice<'tx> {}
+
+impl<'tx> GetKvRefSlice for RefTxSlice<'tx> {
+  type RefKv<'a> = SharedRefSlice<'a>
+  where
+    Self: 'a;
+
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+    SharedRefSlice {
+      inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
+    }
+  }
+}
+
+impl<'tx> GetKvTxSlice<'tx> for RefTxSlice<'tx> {
+  type TxKv = Self;
+
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+    let range = self.range.sub_range(range);
+    RefTxSlice {
+      bytes: self.bytes,
+      range,
+    }
   }
 }
 
