@@ -195,12 +195,8 @@ impl<'tx> RefIntoCopiedIter for RefTxSlice<'tx> {
 
 impl<'tx> RefIntoTryBuf for RefTxSlice<'tx> {
   type Error = io::Error;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<impl TryBuf + 'a, Self::Error> {
     Ok(RefTryBuf::new(self.as_ref()))
   }
 }
@@ -265,24 +261,16 @@ impl<'a> TryBuf for RefTryBuf<'a> {
 
 impl<'tx> RefIntoTryBuf for RefTxBytes<'tx> {
   type Error = io::Error;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<impl TryBuf + 'a, Self::Error> {
     Ok(RefTryBuf::new(self.bytes))
   }
 }
 
 impl RefIntoTryBuf for [u8] {
   type Error = io::Error;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<impl TryBuf + 'a, Self::Error> {
     Ok(RefTryBuf::new(self))
   }
 }

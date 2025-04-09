@@ -1,11 +1,9 @@
 use crate::common::buffer_pool::PoolBuffer;
+use crate::common::errors::OpsError;
 use crate::io::TxSlot;
 use crate::io::bytes::ref_bytes::RefTryBuf;
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
-use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange,
-  TryGet,
-};
+use crate::io::ops::{GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf, TryGet};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::iter::Copied;
@@ -128,13 +126,9 @@ impl<'tx> Hash for SharedTxBytes<'tx> {
 }
 
 impl<'tx> RefIntoTryBuf for SharedTxBytes<'tx> {
-  type Error = io::Error;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
+  type Error = OpsError;
 
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<impl TryBuf + 'a, Self::Error> {
     Ok(RefTryBuf::new(self))
   }
 }
@@ -240,13 +234,8 @@ impl<'p> GetKvRefSlice for SharedRefSlice<'p> {
 }
 
 impl<'tx> RefIntoTryBuf for SharedRefSlice<'tx> {
-  type Error = io::Error;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
-
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
+  type Error = OpsError;
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<impl TryBuf + 'a, Self::Error> {
     Ok(RefTryBuf::new(self.as_ref()))
   }
 }
@@ -354,13 +343,8 @@ impl<'tx> Hash for SharedTxSlice<'tx> {
 }
 
 impl<'tx> RefIntoTryBuf for SharedTxSlice<'tx> {
-  type Error = io::Error;
-  type TryBuf<'a>
-    = RefTryBuf<'a>
-  where
-    Self: 'a;
-
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
+  type Error = OpsError;
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<impl TryBuf + 'a, Self::Error> {
     Ok(RefTryBuf::new(self.as_ref()))
   }
 }

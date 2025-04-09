@@ -1,5 +1,6 @@
 use crate::common::errors::OpsError;
 use crate::io::pages::{TxPage, TxPageType};
+use error_stack::ResultExt;
 use std::cmp::Ordering;
 use std::collections::Bound;
 use std::error::Error;
@@ -117,20 +118,24 @@ pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
 
 pub trait RefIntoTryBuf {
   type Error: Error + Send + Sync;
-  type TryBuf<'a>: TryBuf<Error = Self::Error>
-  where
-    Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error>;
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<impl TryBuf + 'a, Self::Error>;
 }
-/*
-impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T
-{
-  type Error = <T as RefIntoTryBuf>::Error;
 
-  fn try_eq<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
-    let mut s_buf = self.ref_into_try_buf()?;
-    let mut o_buf = other.ref_into_try_buf()?;
+impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T
+where
+  T: RefIntoTryBuf,
+  Rhs: RefIntoTryBuf,
+{
+  type Error = OpsError;
+
+  fn try_eq(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
+    let mut s_buf = self
+      .ref_into_try_buf()
+      .change_context(OpsError::TryPartialEq)?;
+    let mut o_buf = other
+      .ref_into_try_buf()
+      .change_context(OpsError::TryPartialEq)?;
     if s_buf.remaining() != o_buf.remaining() {
       return Ok(false);
     }
@@ -145,13 +150,17 @@ impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T
       if s_cmp != o_cmp {
         return Ok(false);
       }
-      s_buf.try_advance(cmp_len)?;
-      o_buf.try_advance(cmp_len)?;
+      s_buf
+        .try_advance(cmp_len)
+        .change_context(OpsError::TryPartialEq)?;
+      o_buf
+        .try_advance(cmp_len)
+        .change_context(OpsError::TryPartialEq)?;
     }
     Ok(true)
   }
 }
-
+/*
 // RustRover doesn't like this
 impl<T: ?Sized, Rhs: ?Sized> TryPartialOrd<Rhs> for T
 where
@@ -212,6 +221,7 @@ pub trait GetKvTxSlice<'tx>: GetKvRefSlice {
 
 #[cfg(test)]
 mod tests {
+  use crate::common::errors::OpsError;
   use crate::io::ops::SubRange;
   use crate::io::ops::{RefIntoTryBuf, TryBuf, TryPartialEq, TryPartialOrd};
   use std::io;
@@ -248,8 +258,8 @@ mod tests {
   }
 
   impl RefIntoTryBuf for ABuf {
-    type Error = io::Error;
-    type TryBuf<'a> = ABufTryBuf<'a>;
+    type Error = OpsError;
+    type TryBuf = ABufTryBuf<'_>;
 
     fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
       Ok(ABufTryBuf {
