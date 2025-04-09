@@ -21,7 +21,7 @@ impl MetaReader {
   fn first_metadata(&mut self) -> io::Result<Option<HeaderMetaPage>> {
     let mut meta_page = HeaderMetaPage::default();
     self.reader.seek(SeekFrom::Start(0))?;
-    self.reader.read(bytes_of_mut(&mut meta_page))?;
+    self.reader.read_exact(bytes_of_mut(&mut meta_page))?;
     self
       .reader
       .seek_relative(-(size_of::<HeaderMetaPage>() as i64))?;
@@ -41,7 +41,7 @@ impl MetaReader {
         break;
       }
       self.reader.seek_relative((meta_pos - current_pos) as i64)?;
-      self.reader.read(bytes_of_mut(&mut meta_page))?;
+      self.reader.read_exact(bytes_of_mut(&mut meta_page))?;
       if meta_page.meta.is_valid() {
         return Ok(Some(meta_page));
       }

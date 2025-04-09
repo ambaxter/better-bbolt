@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::Bound;
+use std::iter::Copied;
 use std::ops::{Range, RangeBounds};
+use std::{io, slice};
 
 pub trait SubRange {
   fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
@@ -85,25 +87,25 @@ pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
   }
 }
 
-pub trait IntoTryBuf {
+pub trait RefIntoTryBuf {
   type Error;
-  type TryBuf: TryBuf<Error = Self::Error>;
+  type TryBuf<'a>: TryBuf<Error = Self::Error>
+  where
+    Self: 'a;
 
-  fn into_try_buf(self) -> Result<Self::TryBuf, Self::Error>;
+  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error>;
 }
 
-impl<Rhs, T: ?Sized> TryPartialEq<Rhs> for T
+impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T
 where
-  for<'a> Rhs: 'a,
-  for<'a> &'a Rhs: IntoTryBuf<Error = <&'a T as IntoTryBuf>::Error>,
-  for<'a> T: 'a,
-  for<'a> &'a T: IntoTryBuf,
+  for<'a> Rhs: RefIntoTryBuf<Error = <T as RefIntoTryBuf>::Error> + 'a,
+  for<'a> T: RefIntoTryBuf + 'a,
 {
-  type Error<'a> = <&'a T as IntoTryBuf>::Error;
+  type Error<'a> = <T as RefIntoTryBuf>::Error;
 
   fn try_eq<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
-    let mut s_buf = self.into_try_buf()?;
-    let mut o_buf = other.into_try_buf()?;
+    let mut s_buf = self.ref_into_try_buf()?;
+    let mut o_buf = other.ref_into_try_buf()?;
     if s_buf.remaining() != o_buf.remaining() {
       return Ok(false);
     }
@@ -126,16 +128,14 @@ where
 }
 
 // RustRover doesn't like this
-impl<T: ?Sized, Rhs> TryPartialOrd<Rhs> for T
+impl<T: ?Sized, Rhs: ?Sized> TryPartialOrd<Rhs> for T
 where
-  for<'a> Rhs: 'a,
-  for<'a> &'a Rhs: IntoTryBuf<Error = <&'a T as IntoTryBuf>::Error>,
-  for<'a> T: 'a,
-  for<'a> &'a T: IntoTryBuf,
+  for<'a> Rhs: RefIntoTryBuf<Error = <T as RefIntoTryBuf>::Error> + 'a,
+  for<'a> T: RefIntoTryBuf + 'a,
 {
   fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> Result<Option<Ordering>, Self::Error<'a>> {
-    let mut s_buf = self.into_try_buf()?;
-    let mut o_buf = other.into_try_buf()?;
+    let mut s_buf = self.ref_into_try_buf()?;
+    let mut o_buf = other.ref_into_try_buf()?;
     while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
       let s_chunk = s_buf.chunk();
       let o_chunk = o_buf.chunk();
@@ -170,7 +170,7 @@ pub struct RefTryBuf<'a> {
 }
 
 impl<'a> TryBuf for RefTryBuf<'a> {
-  type Error = &'static str;
+  type Error = io::Error;
 
   fn remaining(&self) -> usize {
     self.range.len()
@@ -186,10 +186,10 @@ impl<'a> TryBuf for RefTryBuf<'a> {
   }
 }
 
-impl<'a> IntoTryBuf for &'a [u8] {
-  type Error = &'static str;
-  type TryBuf = RefTryBuf<'a>;
-  fn into_try_buf(self) -> Result<Self::TryBuf, Self::Error> {
+impl RefIntoTryBuf for [u8] {
+  type Error = io::Error;
+  type TryBuf<'a> = RefTryBuf<'a>;
+  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
     Ok(RefTryBuf {
       buf: self,
       range: 0..self.len(),
@@ -201,7 +201,7 @@ impl<T> TryGet<T> for [T]
 where
   T: Copy,
 {
-  type Error = &'static str;
+  type Error = io::Error;
 
   fn try_get(&self, index: usize) -> Result<Option<T>, Self::Error> {
     Ok(self.get(index).copied())
@@ -211,7 +211,8 @@ where
 #[cfg(test)]
 mod tests {
   use crate::io::ops::SubRange;
-  use crate::io::ops::{IntoTryBuf, TryBuf, TryPartialEq, TryPartialOrd};
+  use crate::io::ops::{RefIntoTryBuf, TryBuf, TryPartialEq, TryPartialOrd};
+  use std::io;
   use std::ops::Range;
 
   pub struct ABuf {
@@ -226,7 +227,7 @@ mod tests {
   }
 
   impl<'a> TryBuf for ABufTryBuf<'a> {
-    type Error = &'static str;
+    type Error = io::Error;
 
     fn remaining(&self) -> usize {
       self.range.len()
@@ -244,11 +245,11 @@ mod tests {
     }
   }
 
-  impl<'a> IntoTryBuf for &'a ABuf {
-    type Error = &'static str;
-    type TryBuf = ABufTryBuf<'a>;
+  impl RefIntoTryBuf for ABuf {
+    type Error = io::Error;
+    type TryBuf<'a> = ABufTryBuf<'a>;
 
-    fn into_try_buf(self) -> Result<Self::TryBuf, Self::Error> {
+    fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
       Ok(ABufTryBuf {
         bytes: &self.bytes,
         range: 0..self.bytes.len(),
@@ -269,7 +270,7 @@ mod tests {
   }
 
   impl<'a> TryBuf for BBufTryBuf<'a> {
-    type Error = &'static str;
+    type Error = io::Error;
 
     fn remaining(&self) -> usize {
       self.range.len()
@@ -287,11 +288,11 @@ mod tests {
     }
   }
 
-  impl<'a> IntoTryBuf for &'a BBuf {
-    type Error = &'static str;
-    type TryBuf = BBufTryBuf<'a>;
+  impl RefIntoTryBuf for BBuf {
+    type Error = io::Error;
+    type TryBuf<'a> = BBufTryBuf<'a>;
 
-    fn into_try_buf(self) -> Result<Self::TryBuf, Self::Error> {
+    fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
       Ok(BBufTryBuf {
         bytes: &self.bytes,
         range: 0..self.bytes.len(),

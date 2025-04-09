@@ -1,25 +1,30 @@
 use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxBytes, SharedTxSlice};
 use crate::io::ops::{RefIntoCopiedIter, SubRange};
 use crate::io::pages::lazy::{LazyRefSlice, LazyTxSlice};
-use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, KvDataType, TxReadLazyPageIO};
+use crate::io::pages::{
+  GetKvRefSlice, GetKvTxSlice, KvData, KvDataType, KvEq, KvOrd, TxReadLazyPageIO,
+};
 use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::RangeBounds;
 use std::slice;
 // &'a [u8] //
 
-impl<'p> RefIntoCopiedIter for &'p [u8] {
+impl RefIntoCopiedIter for [u8] {
   type Iter<'a>
     = Copied<slice::Iter<'a, u8>>
   where
-    Self: 'a,
-    'p: 'a;
-
+    Self: 'a;
   #[inline]
   fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
     self.iter().copied()
   }
 }
+
+impl KvOrd for [u8] {}
+impl KvEq for [u8] {}
+
+impl KvData for [u8] {}
 
 impl<'tx> KvDataType for &'tx [u8] {
   fn cmp(&self, other: &[u8]) -> Ordering {

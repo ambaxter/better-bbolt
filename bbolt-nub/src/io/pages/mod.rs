@@ -4,7 +4,7 @@ use crate::common::layout::page::PageHeader;
 use crate::io::TxSlot;
 use crate::io::backends::IOPageReader;
 use crate::io::bytes::TxBytes;
-use crate::io::ops::{TryGet, TryPartialEq, TryPartialOrd};
+use crate::io::ops::{RefIntoCopiedIter, TryGet, TryPartialEq, TryPartialOrd};
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::types::node::NodePage;
@@ -28,7 +28,7 @@ pub trait KvEq: Eq + PartialEq<[u8]> + TryPartialEq + TryPartialEq<[u8]> {}
 
 pub trait KvOrd: Ord + PartialOrd<[u8]> + TryPartialOrd + TryPartialOrd<[u8]> {}
 
-pub trait KvData: KvEq + KvOrd + Hash + TryGet<u8> {}
+pub trait KvData: KvEq + KvOrd + Hash + TryGet<u8> + RefIntoCopiedIter {}
 
 pub trait KvDataType: Ord {
   fn cmp(&self, other: &[u8]) -> cmp::Ordering;
