@@ -4,7 +4,7 @@ use crate::common::id::{FreelistPageId, MetaPageId, NodePageId, TxId};
 use crate::common::layout::meta::Meta;
 use crate::io::TxSlot;
 use crate::io::backends::{IOOverflowPageReader, IOPageReader, IOReader};
-use crate::io::bytes::ref_bytes::RefBytes;
+use crate::io::bytes::ref_bytes::{RefBytes, RefTxBytes};
 use crate::io::bytes::shared_bytes::{SharedBytes, SharedTxBytes};
 use crate::io::bytes::{FromIOBytes, IOBytes, IntoTxBytes, TxBytes};
 use crate::io::pages::lazy::LazyPage;
@@ -94,9 +94,9 @@ pub struct RefTxHandle<'tx, IO> {
 impl<'tx, IO> TxReadPageIO<'tx> for RefTxHandle<'tx, IO>
 where
   IO: IOPageReader,
-  IO::Bytes: IntoTxBytes<'tx, &'tx [u8]>,
+  IO::Bytes: IntoTxBytes<'tx, RefTxBytes<'tx>>,
 {
-  type TxPageType = LoadedPage<'tx, &'tx [u8]>;
+  type TxPageType = LoadedPage<'tx, RefTxBytes<'tx>>;
 
   fn read_meta_page(
     &self, meta_page_id: MetaPageId,
@@ -139,7 +139,7 @@ where
 impl<'tx, IO> TheTx<'tx> for RefTxHandle<'tx, IO>
 where
   IO: IOPageReader,
-  IO::Bytes: IntoTxBytes<'tx, &'tx [u8]>,
+  IO::Bytes: IntoTxBytes<'tx, RefTxBytes<'tx>>,
 {
   #[inline]
   fn stats(&self) -> &TxStats {

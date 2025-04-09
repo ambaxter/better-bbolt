@@ -4,17 +4,17 @@ use crate::common::layout::page::PageHeader;
 use crate::io::TxSlot;
 use crate::io::backends::IOPageReader;
 use crate::io::bytes::TxBytes;
-use crate::io::ops::{RefIntoCopiedIter, TryGet, TryPartialEq, TryPartialOrd};
+use crate::io::ops::{
+  GetKvRefSlice, GetKvTxSlice, RefIntoCopiedIter, RefIntoTryBuf, TryGet, TryPartialEq,
+  TryPartialOrd,
+};
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::types::node::NodePage;
 use bytemuck::from_bytes;
 use delegate::delegate;
-use std::cmp;
 use std::hash::Hash;
 use std::ops::{Deref, RangeBounds};
-
-pub mod kv;
 
 pub mod io;
 
@@ -23,36 +23,6 @@ pub mod loaded;
 pub mod lazy;
 
 pub mod types;
-
-pub trait KvEq: Eq + PartialEq<[u8]> + TryPartialEq + TryPartialEq<[u8]> {}
-
-pub trait KvOrd: Ord + PartialOrd<[u8]> + TryPartialOrd + TryPartialOrd<[u8]> {}
-
-pub trait KvData: KvEq + KvOrd + Hash + TryGet<u8> + RefIntoCopiedIter {}
-
-pub trait KvDataType: Ord {
-  fn cmp(&self, other: &[u8]) -> cmp::Ordering;
-
-  fn eq(&self, other: &[u8]) -> bool;
-
-  fn lt(&self, other: &[u8]) -> bool;
-  fn le(&self, other: &[u8]) -> bool;
-
-  fn gt(&self, other: &[u8]) -> bool;
-  fn ge(&self, other: &[u8]) -> bool;
-}
-
-pub trait GetKvRefSlice {
-  type RefKv<'a>: GetKvRefSlice + KvDataType + 'a
-  where
-    Self: 'a;
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a>;
-}
-
-pub trait GetKvTxSlice<'tx>: GetKvRefSlice {
-  type TxKv: GetKvTxSlice<'tx> + KvDataType + 'tx;
-  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv;
-}
 
 pub trait Page {
   #[inline]

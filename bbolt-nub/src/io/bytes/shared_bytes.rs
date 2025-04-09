@@ -1,9 +1,11 @@
 use crate::common::buffer_pool::PoolBuffer;
 use crate::io::TxSlot;
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
-use crate::io::pages::KvDataType;
+use crate::io::ops::{GetKvRefSlice, GetKvTxSlice, KvDataType, RefIntoCopiedIter, SubRange};
 use std::cmp::Ordering;
+use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
+use std::slice;
 use triomphe::{Arc, UniqueArc};
 
 #[derive(Clone)]
@@ -145,5 +147,157 @@ impl<'tx> AsRef<[u8]> for SharedTxSlice<'tx> {
       self.range.start_bound().cloned(),
       self.range.end_bound().cloned(),
     )]
+  }
+}
+
+// Shared Tx Bytes //
+
+impl<'tx> RefIntoCopiedIter for SharedTxBytes<'tx> {
+  type Iter<'a>
+    = Copied<slice::Iter<'a, u8>>
+  where
+    Self: 'a;
+
+  #[inline]
+  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
+    self.iter().copied()
+  }
+}
+
+impl<'tx> GetKvRefSlice for SharedTxBytes<'tx> {
+  type RefKv<'a>
+    = SharedRefSlice<'a>
+  where
+    Self: 'a;
+
+  #[inline]
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+    SharedRefSlice {
+      inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
+    }
+  }
+}
+
+impl<'tx> GetKvTxSlice<'tx> for SharedTxBytes<'tx> {
+  type TxKv = SharedTxSlice<'tx>;
+
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+    let range = (0..self.len()).sub_range(range);
+    SharedTxSlice {
+      inner: self.clone(),
+      range,
+    }
+  }
+}
+
+// SharedRefSlice<'a> //
+
+impl<'p> RefIntoCopiedIter for SharedRefSlice<'p> {
+  type Iter<'a>
+    = Copied<slice::Iter<'a, u8>>
+  where
+    Self: 'a,
+    'p: 'a;
+
+  #[inline]
+  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
+    self.inner.iter().copied()
+  }
+}
+
+impl<'p> GetKvRefSlice for SharedRefSlice<'p> {
+  type RefKv<'a>
+    = SharedRefSlice<'a>
+  where
+    Self: 'a,
+    'p: 'a;
+
+  #[inline]
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+    SharedRefSlice {
+      inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
+    }
+  }
+}
+
+// SharedTxSlice<'tx> //
+
+impl<'tx> RefIntoCopiedIter for SharedTxSlice<'tx> {
+  type Iter<'a>
+    = Copied<slice::Iter<'a, u8>>
+  where
+    Self: 'a;
+
+  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
+    self.as_ref().iter().copied()
+  }
+}
+
+impl<'tx> PartialEq<Self> for SharedTxSlice<'tx> {
+  #[inline]
+  fn eq(&self, other: &Self) -> bool {
+    self.as_ref().eq(other.as_ref())
+  }
+}
+
+impl<'tx> PartialOrd for SharedTxSlice<'tx> {
+  #[inline]
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self.as_ref().partial_cmp(other.as_ref())
+  }
+
+  #[inline]
+  fn lt(&self, other: &Self) -> bool {
+    self.as_ref().lt(other.as_ref())
+  }
+
+  #[inline]
+  fn le(&self, other: &Self) -> bool {
+    self.as_ref().le(other.as_ref())
+  }
+
+  #[inline]
+  fn gt(&self, other: &Self) -> bool {
+    self.as_ref().gt(other.as_ref())
+  }
+
+  #[inline]
+  fn ge(&self, other: &Self) -> bool {
+    self.as_ref().ge(other.as_ref())
+  }
+}
+
+impl<'tx> Eq for SharedTxSlice<'tx> {}
+
+impl<'tx> Ord for SharedTxSlice<'tx> {
+  #[inline]
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.as_ref().cmp(other.as_ref())
+  }
+}
+
+impl<'tx> GetKvRefSlice for SharedTxSlice<'tx> {
+  type RefKv<'a>
+    = SharedRefSlice<'a>
+  where
+    Self: 'a,
+    'tx: 'a;
+
+  #[inline]
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+    SharedRefSlice {
+      inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
+    }
+  }
+}
+
+impl<'tx> GetKvTxSlice<'tx> for SharedTxSlice<'tx> {
+  type TxKv = Self;
+
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+    SharedTxSlice {
+      inner: self.inner.clone(),
+      range: self.range.sub_range(range),
+    }
   }
 }

@@ -1,8 +1,9 @@
+use crate::io::pages::{TxPage, TxPageType};
 use std::cmp::Ordering;
 use std::collections::Bound;
-use std::iter::Copied;
+use std::hash::Hash;
+use std::io;
 use std::ops::{Range, RangeBounds};
-use std::{io, slice};
 
 pub trait SubRange {
   fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
@@ -62,25 +63,25 @@ pub trait TryEq: TryPartialEq {}
 pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
   fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> Result<Option<Ordering>, Self::Error<'a>>;
 
-  fn lt<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
+  fn try_lt<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Less)))
   }
 
-  fn le<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
+  fn try_le<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Less | Ordering::Equal)))
   }
 
-  fn gt<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
+  fn try_gt<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Greater)))
   }
 
-  fn ge<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
+  fn try_ge<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Greater | Ordering::Equal)))
@@ -164,39 +165,6 @@ pub trait TryBuf {
   fn try_advance(&mut self, cnt: usize) -> Result<(), Self::Error>;
 }
 
-pub struct RefTryBuf<'a> {
-  buf: &'a [u8],
-  range: Range<usize>,
-}
-
-impl<'a> TryBuf for RefTryBuf<'a> {
-  type Error = io::Error;
-
-  fn remaining(&self) -> usize {
-    self.range.len()
-  }
-
-  fn chunk(&self) -> &[u8] {
-    &self.buf[self.range.clone()]
-  }
-
-  fn try_advance(&mut self, cnt: usize) -> Result<(), Self::Error> {
-    self.range = self.range.sub_range(cnt..);
-    Ok(())
-  }
-}
-
-impl RefIntoTryBuf for [u8] {
-  type Error = io::Error;
-  type TryBuf<'a> = RefTryBuf<'a>;
-  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
-    Ok(RefTryBuf {
-      buf: self,
-      range: 0..self.len(),
-    })
-  }
-}
-
 impl<T> TryGet<T> for [T]
 where
   T: Copy,
@@ -206,6 +174,24 @@ where
   fn try_get(&self, index: usize) -> Result<Option<T>, Self::Error> {
     Ok(self.get(index).copied())
   }
+}
+
+pub trait KvEq: Eq + PartialEq<[u8]> + TryPartialEq + TryPartialEq<[u8]> {}
+
+pub trait KvOrd: Ord + PartialOrd<[u8]> + TryPartialOrd + TryPartialOrd<[u8]> {}
+
+pub trait KvDataType: KvEq + KvOrd + Hash + TryGet<u8> + RefIntoCopiedIter + RefIntoTryBuf {}
+
+pub trait GetKvRefSlice {
+  type RefKv<'a>: GetKvRefSlice + KvDataType + 'a
+  where
+    Self: 'a;
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a>;
+}
+
+pub trait GetKvTxSlice<'tx>: GetKvRefSlice {
+  type TxKv: GetKvTxSlice<'tx> + KvDataType + 'tx;
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv;
 }
 
 #[cfg(test)]
@@ -326,7 +312,7 @@ mod tests {
       bytes: vec![1, 2, 3, 4, 5],
       max_chunk_len: 4,
     };
-    let r = TryPartialOrd::ge(&abuf, &bbuf);
+    let r = TryPartialOrd::try_ge(&abuf, &bbuf);
     println!("r: {:?}", r);
   }
 
@@ -337,7 +323,7 @@ mod tests {
       bytes: vec![1, 2, 3, 4, 5],
       max_chunk_len: 4,
     };
-    let r = TryPartialOrd::ge(r.as_slice(), &bbuf);
+    let r = TryPartialOrd::try_ge(r.as_slice(), &bbuf);
     println!("r: {:?}", r);
   }
 }
