@@ -86,7 +86,7 @@ pub trait HasElements<'tx>: Page + GetKvRefSlice + Sync + Send {
         (ptr::from_ref(element).addr() - elements_start) / size_of::<Self::Element>();
       let key_start = element.kv_data_start(element_index);
       let key = self.get_ref_slice(key_start..key_start + element.elem_key_len());
-      KvDataType::cmp(&key, v)
+      PartialOrd::partial_cmp(&key, v).unwrap()
     })
   }
 

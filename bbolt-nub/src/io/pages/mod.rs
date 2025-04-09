@@ -20,7 +20,7 @@ pub mod io;
 
 pub mod loaded;
 
-pub mod lazy;
+//pub mod lazy;
 
 pub mod types;
 

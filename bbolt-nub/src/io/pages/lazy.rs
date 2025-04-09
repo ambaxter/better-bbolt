@@ -2,11 +2,12 @@ use crate::common::errors::PageError;
 use crate::common::id::OverflowPageId;
 use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::SharedTxBytes;
-use crate::io::ops::{GetKvRefSlice, GetKvTxSlice, RefIntoCopiedIter, SubRange};
+use crate::io::ops::{GetKvRefSlice, GetKvTxSlice, RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf};
 use crate::io::pages::{Page, TxPageType, TxReadLazyPageIO, TxReadPageIO};
 use error_stack::ResultExt;
 use std::cmp::Ordering;
-use std::ops::{Range, RangeBounds};
+use std::io;
+use std::ops::{Deref, Range, RangeBounds};
 
 pub struct LazyPage<'tx, L: TxReadLazyPageIO<'tx>> {
   tx: TxSlot<'tx>,
@@ -185,10 +186,18 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> ExactSizeIterator for LazyIter<'a, '
   }
 }
 
-#[derive(Clone)]
 pub struct LazyRefSlice<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
   page: &'a LazyPage<'tx, L>,
   range: Range<usize>,
+}
+
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> Clone for LazyRefSlice<'a, 'tx, L> {
+  fn clone(&self) -> Self {
+    LazyRefSlice {
+      page: self.page,
+      range: self.range.clone(),
+    }
+  }
 }
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> PartialOrd for LazyRefSlice<'a, 'tx, L> {
@@ -309,5 +318,59 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyTxSlice<'tx, L> {
       page: self.page.clone(),
       range,
     }
+  }
+}
+
+pub struct LazyRefTryBuf<'a, 'tx, L: TxReadLazyPageIO<'tx>> {
+  slice: LazyRefSlice<'a, 'tx, L>,
+  range: Range<usize>,
+  page: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes,
+  overflow_index: u32
+}
+
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> LazyRefTryBuf<'a, 'tx, L> {
+  pub fn new(slice: &LazyRefSlice<'a, 'tx, L>) -> crate::Result<Self, PageError> {
+    let range = slice.range.clone();
+    let overflow_index = (range.start / slice.page.root.as_ref().len()) as u32;
+    let page_result = if overflow_index == 0 {
+      Ok(slice.page.root.clone())
+    } else {
+      slice.page.read_overflow_page(overflow_index)
+    };
+    page_result.map(|page| {
+      LazyRefTryBuf {
+      slice: (*slice).clone(),
+      range,
+      page,
+      overflow_index,
+    }})
+  }
+}
+
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> TryBuf for LazyRefTryBuf<'a, 'tx, L> {
+  type Error = PageError;
+
+  fn remaining(&self) -> usize {
+    self.range.len()
+  }
+
+  fn chunk(&self) -> &[u8] {
+    let page_len = self.page.as_ref().len();
+    todo!()
+  }
+
+  fn try_advance(&mut self, cnt: usize) -> Result<(), Self::Error> {
+    todo!()
+  }
+}
+
+impl<'p, 'tx, L: TxReadLazyPageIO<'tx>> RefIntoTryBuf for LazyRefTryBuf<'p, 'tx, L> {
+  type Error = PageError;
+  type TryBuf<'a> = LazyRefTryBuf<'a, 'tx, L>
+  where
+    Self: 'a;
+
+  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
+    todo!()
   }
 }

@@ -105,7 +105,10 @@ pub struct RefTryBuf<'a> {
 
 impl<'a> RefTryBuf<'a> {
   pub fn new(buf: &'a [u8]) -> Self {
-    Self { buf, range: 0..buf.len() }
+    Self {
+      buf,
+      range: 0..buf.len(),
+    }
   }
 }
 

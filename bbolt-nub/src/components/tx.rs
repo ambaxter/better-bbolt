@@ -7,7 +7,7 @@ use crate::io::backends::{IOOverflowPageReader, IOPageReader, IOReader};
 use crate::io::bytes::ref_bytes::{RefBytes, RefTxBytes};
 use crate::io::bytes::shared_bytes::{SharedBytes, SharedTxBytes};
 use crate::io::bytes::{FromIOBytes, IOBytes, IntoTxBytes, TxBytes};
-use crate::io::pages::lazy::LazyPage;
+//use crate::io::pages::lazy::LazyPage;
 use crate::io::pages::loaded::LoadedPage;
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
@@ -150,7 +150,7 @@ where
 pub struct LazyTxHandle<'tx, IO> {
   handle: CoreTxHandle<'tx, IO>,
 }
-
+/*
 impl<'tx, IO> TxReadPageIO<'tx> for LazyTxHandle<'tx, IO>
 where
   IO: IOOverflowPageReader,
@@ -232,3 +232,4 @@ where
     &*self.handle.stats
   }
 }
+*/
