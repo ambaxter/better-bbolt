@@ -1,13 +1,16 @@
 use crate::io::TxSlot;
+use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxSlice};
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
-use crate::io::ops::{GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf, TryGet};
+use crate::io::ops::{
+  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange,
+  TryBuf, TryGet,
+};
 use std::cmp::Ordering;
+use std::hash::{Hash, Hasher};
 use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
 use std::ptr::slice_from_raw_parts;
 use std::{io, slice};
-use std::hash::{Hash, Hasher};
-use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxSlice};
 
 #[derive(Debug, Clone)]
 pub struct RefBytes {
@@ -99,7 +102,8 @@ impl<'tx> PartialOrd<[u8]> for RefTxBytes<'tx> {
 }
 
 impl<'tx> GetKvRefSlice for RefTxBytes<'tx> {
-  type RefKv<'a> = SharedRefSlice<'a>
+  type RefKv<'a>
+    = SharedRefSlice<'a>
   where
     Self: 'a;
 
@@ -113,7 +117,7 @@ impl<'tx> GetKvRefSlice for RefTxBytes<'tx> {
 #[derive(Debug, Clone)]
 pub struct RefTxSlice<'tx> {
   bytes: &'tx [u8],
-  range: Range<usize>
+  range: Range<usize>,
 }
 
 impl<'tx> AsRef<[u8]> for RefTxSlice<'tx> {
@@ -179,7 +183,8 @@ impl<'tx> KvEq for RefTxSlice<'tx> {}
 impl<'tx> KvOrd for RefTxSlice<'tx> {}
 
 impl<'tx> RefIntoCopiedIter for RefTxSlice<'tx> {
-  type Iter<'a> = Copied<slice::Iter<'a, u8>>
+  type Iter<'a>
+    = Copied<slice::Iter<'a, u8>>
   where
     Self: 'a;
 
@@ -190,27 +195,21 @@ impl<'tx> RefIntoCopiedIter for RefTxSlice<'tx> {
 
 impl<'tx> RefIntoTryBuf for RefTxSlice<'tx> {
   type Error = io::Error;
-  type TryBuf<'a> = RefTryBuf<'a>
+  type TryBuf<'a>
+    = RefTryBuf<'a>
   where
     Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
     Ok(RefTryBuf::new(self.as_ref()))
-  }
-}
-
-impl<'tx> TryGet<u8> for RefTxSlice<'tx> {
-  type Error = io::Error;
-
-  fn try_get(&self, index: usize) -> Result<Option<u8>, Self::Error> {
-    Ok(self.as_ref().get(index).copied())
   }
 }
 
 impl<'tx> KvDataType for RefTxSlice<'tx> {}
 
 impl<'tx> GetKvRefSlice for RefTxSlice<'tx> {
-  type RefKv<'a> = SharedRefSlice<'a>
+  type RefKv<'a>
+    = SharedRefSlice<'a>
   where
     Self: 'a;
 
@@ -271,7 +270,7 @@ impl<'tx> RefIntoTryBuf for RefTxBytes<'tx> {
   where
     Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
     Ok(RefTryBuf::new(self.bytes))
   }
 }
@@ -283,21 +282,13 @@ impl RefIntoTryBuf for [u8] {
   where
     Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
     Ok(RefTryBuf::new(self))
   }
 }
 
 impl<'tx> KvEq for RefTxBytes<'tx> {}
 impl<'tx> KvOrd for RefTxBytes<'tx> {}
-
-impl<'tx> TryGet<u8> for RefTxBytes<'tx> {
-  type Error = io::Error;
-
-  fn try_get(&self, index: usize) -> Result<Option<u8>, Self::Error> {
-    Ok(self.as_ref().get(index).copied())
-  }
-}
 
 impl<'tx> KvDataType for RefTxBytes<'tx> {}
 

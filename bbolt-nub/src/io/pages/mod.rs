@@ -16,8 +16,6 @@ use delegate::delegate;
 use std::hash::Hash;
 use std::ops::{Deref, RangeBounds};
 
-pub mod io;
-
 pub mod loaded;
 
 //pub mod lazy;

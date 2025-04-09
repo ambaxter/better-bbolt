@@ -1,7 +1,9 @@
+use crate::common::errors::OpsError;
 use crate::io::pages::{TxPage, TxPageType};
 use std::cmp::Ordering;
 use std::collections::Bound;
-use std::hash::Hash;
+use std::error::Error;
+use std::hash::{Hash, Hasher};
 use std::io;
 use std::ops::{Range, RangeBounds};
 
@@ -41,19 +43,44 @@ pub trait RefIntoCopiedIter {
   fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a>;
 }
 
-pub trait TryGet<T> {
-  type Error;
+pub trait TryHash {
+  type Error: Error + Send + Sync;
 
-  fn try_get(&self, index: usize) -> Result<Option<T>, Self::Error>;
+  fn try_hash<H: Hasher>(&self, state: &mut H) -> Result<(), Self::Error>;
+}
+
+impl<T> TryHash for T
+where
+  T: AsRef<[u8]>,
+{
+  type Error = OpsError;
+
+  fn try_hash<H: Hasher>(&self, state: &mut H) -> Result<(), Self::Error> {
+    Ok(self.as_ref().hash(state))
+  }
+}
+
+pub trait TryGet<T> {
+  type Error: Error + Send + Sync;
+
+  fn try_get(&self, index: usize) -> crate::Result<Option<T>, Self::Error>;
+}
+
+impl<T> TryGet<u8> for T
+where
+  T: AsRef<[u8]>,
+{
+  type Error = OpsError;
+
+  fn try_get(&self, index: usize) -> crate::Result<Option<u8>, Self::Error> {
+    Ok(self.as_ref().get(index).copied())
+  }
 }
 
 pub trait TryPartialEq<Rhs: ?Sized = Self> {
-  type Error<'a>
-  where
-    Self: 'a,
-    Rhs: 'a;
-  fn try_eq<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>>;
-  fn try_ne<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
+  type Error: Error + Send + Sync;
+  fn try_eq<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error>;
+  fn try_ne<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
     self.try_eq(other).map(|ok| !ok)
   }
 }
@@ -61,27 +88,27 @@ pub trait TryPartialEq<Rhs: ?Sized = Self> {
 pub trait TryEq: TryPartialEq {}
 
 pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
-  fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> Result<Option<Ordering>, Self::Error<'a>>;
+  fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> crate::Result<Option<Ordering>, Self::Error>;
 
-  fn try_lt<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
+  fn try_lt<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Less)))
   }
 
-  fn try_le<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
+  fn try_le<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Less | Ordering::Equal)))
   }
 
-  fn try_gt<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
+  fn try_gt<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Greater)))
   }
 
-  fn try_ge<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
+  fn try_ge<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Greater | Ordering::Equal)))
@@ -89,22 +116,19 @@ pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
 }
 
 pub trait RefIntoTryBuf {
-  type Error;
+  type Error: Error + Send + Sync;
   type TryBuf<'a>: TryBuf<Error = Self::Error>
   where
     Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error>;
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error>;
 }
-
+/*
 impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T
-where
-  Rhs: RefIntoTryBuf<Error = <T as RefIntoTryBuf>::Error>,
-  T: RefIntoTryBuf,
 {
-  type Error<'a> = <T as RefIntoTryBuf>::Error where T: 'a, Rhs: 'a;
+  type Error = <T as RefIntoTryBuf>::Error;
 
-  fn try_eq<'a>(&'a self, other: &'a Rhs) -> Result<bool, Self::Error<'a>> {
+  fn try_eq<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
     let mut s_buf = self.ref_into_try_buf()?;
     let mut o_buf = other.ref_into_try_buf()?;
     if s_buf.remaining() != o_buf.remaining() {
@@ -134,7 +158,7 @@ where
   Rhs: RefIntoTryBuf<Error = <T as RefIntoTryBuf>::Error>,
   T: RefIntoTryBuf,
 {
-  fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> Result<Option<Ordering>, Self::Error<'a>> {
+  fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> crate::Result<Option<Ordering>, Self::Error> {
     let mut s_buf = self.ref_into_try_buf()?;
     let mut o_buf = other.ref_into_try_buf()?;
     while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
@@ -153,10 +177,10 @@ where
     }
     Ok(s_buf.remaining().partial_cmp(&o_buf.remaining()))
   }
-}
+}*/
 
 pub trait TryBuf {
-  type Error;
+  type Error: Error + Send + Sync;
 
   fn remaining(&self) -> usize;
 
@@ -165,22 +189,14 @@ pub trait TryBuf {
   fn try_advance(&mut self, cnt: usize) -> Result<(), Self::Error>;
 }
 
-impl<T> TryGet<T> for [T]
-where
-  T: Copy,
+pub trait KvEq: Eq + PartialEq<[u8]> /* + TryPartialEq + TryPartialEq<[u8]> */ +  Sized {}
+
+pub trait KvOrd: Ord + PartialOrd<[u8]> /*+ TryPartialOrd + TryPartialOrd<[u8]> */ + KvEq {}
+
+pub trait KvDataType:
+  KvOrd + TryHash + Hash + TryGet<u8> + RefIntoCopiedIter + RefIntoTryBuf
 {
-  type Error = io::Error;
-
-  fn try_get(&self, index: usize) -> Result<Option<T>, Self::Error> {
-    Ok(self.get(index).copied())
-  }
 }
-
-pub trait KvEq: Eq + PartialEq<[u8]> + TryPartialEq + TryPartialEq<[u8]> + Sized {}
-
-pub trait KvOrd: Ord + PartialOrd<[u8]> + TryPartialOrd + TryPartialOrd<[u8]> + Sized {}
-
-pub trait KvDataType: KvEq + KvOrd + Hash + TryGet<u8> + RefIntoCopiedIter + RefIntoTryBuf {}
 
 pub trait GetKvRefSlice {
   type RefKv<'a>: GetKvRefSlice + KvDataType + 'a
@@ -286,7 +302,7 @@ mod tests {
       })
     }
   }
-/*
+
   #[test]
   fn eq_test() {
     let data = vec![1, 2, 3, 4, 5];
@@ -325,5 +341,5 @@ mod tests {
     };
     let r = TryPartialOrd::try_ge(r.as_slice(), &bbuf);
     println!("r: {:?}", r);
-  }*/
+  }
 }

@@ -39,3 +39,17 @@ pub enum DiskReadError {
   #[error("ReadError: Read at `{0:?}`.")]
   ReadError(DiskPageId),
 }
+
+#[derive(Debug, Error)]
+pub enum OpsError {
+  #[error("Ops Error: `TryGet`")]
+  TryGet,
+  #[error("Ops Error: `TryPartialOrd`")]
+  TryPartialOrd,
+  #[error("Ops Error: `TryPartialEq`")]
+  TryPartialEq,
+  #[error("Ops Error: `TryBuf`")]
+  TryBuf,
+  #[error("Ops Error: `TryHash`")]
+  TryHash,
+}

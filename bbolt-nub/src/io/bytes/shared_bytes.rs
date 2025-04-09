@@ -134,16 +134,8 @@ impl<'tx> RefIntoTryBuf for SharedTxBytes<'tx> {
   where
     Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
     Ok(RefTryBuf::new(self))
-  }
-}
-
-impl<'tx> TryGet<u8> for SharedTxBytes<'tx> {
-  type Error = io::Error;
-
-  fn try_get(&self, index: usize) -> Result<Option<u8>, Self::Error> {
-    Ok(self.as_ref().get(index).copied())
   }
 }
 
@@ -254,16 +246,8 @@ impl<'tx> RefIntoTryBuf for SharedRefSlice<'tx> {
   where
     Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
     Ok(RefTryBuf::new(self.as_ref()))
-  }
-}
-
-impl<'tx> TryGet<u8> for SharedRefSlice<'tx> {
-  type Error = io::Error;
-
-  fn try_get(&self, index: usize) -> Result<Option<u8>, Self::Error> {
-    Ok(self.as_ref().get(index).copied())
   }
 }
 
@@ -376,16 +360,8 @@ impl<'tx> RefIntoTryBuf for SharedTxSlice<'tx> {
   where
     Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
+  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, Self::Error> {
     Ok(RefTryBuf::new(self.as_ref()))
-  }
-}
-
-impl<'tx> TryGet<u8> for SharedTxSlice<'tx> {
-  type Error = io::Error;
-
-  fn try_get(&self, index: usize) -> Result<Option<u8>, Self::Error> {
-    Ok(self.as_ref().get(index).copied())
   }
 }
 
