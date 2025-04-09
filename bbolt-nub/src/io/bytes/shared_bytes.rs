@@ -1,12 +1,14 @@
 use crate::common::buffer_pool::PoolBuffer;
 use crate::io::TxSlot;
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
-use crate::io::ops::{GetKvRefSlice, GetKvTxSlice, KvDataType, RefIntoCopiedIter, SubRange};
+use crate::io::ops::{GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryGet};
 use std::cmp::Ordering;
 use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
-use std::slice;
+use std::{io, slice};
+use std::hash::{Hash, Hasher};
 use triomphe::{Arc, UniqueArc};
+use crate::io::bytes::ref_bytes::RefTryBuf;
 
 #[derive(Clone)]
 pub struct SharedBytes {
@@ -117,12 +119,53 @@ impl<'tx> PartialEq for SharedTxBytes<'tx> {
 
 impl<'tx> Eq for SharedTxBytes<'tx> {}
 
+impl<'tx> PartialEq<[u8]> for SharedTxBytes<'tx> {
+  fn eq(&self, other: &[u8]) -> bool {
+    self.as_ref().eq(other)
+  }
+}
+
+impl<'tx> PartialOrd<[u8]> for SharedTxBytes<'tx> {
+  fn partial_cmp(&self, other: &[u8]) -> Option<Ordering> {
+    self.as_ref().partial_cmp(other)
+  }
+}
+
 impl<'tx> Ord for SharedTxBytes<'tx> {
   #[inline]
   fn cmp(&self, other: &Self) -> Ordering {
     self.as_ref().cmp(other.as_ref())
   }
 }
+
+impl<'tx> Hash for SharedTxBytes<'tx> {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.as_ref().hash(state)
+  }
+}
+
+impl<'tx> RefIntoTryBuf for SharedTxBytes<'tx> {
+  type Error = io::Error;
+  type TryBuf<'a> = RefTryBuf<'a>
+  where
+    Self: 'a;
+
+  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
+    Ok(RefTryBuf::new(self))
+  }
+}
+
+impl<'tx> TryGet<u8> for SharedTxBytes<'tx> {
+  type Error = io::Error;
+
+  fn try_get(&self, index: usize) -> Result<Option<u8>, Self::Error> {
+    Ok(self.as_ref().get(index).copied())
+  }
+}
+
+impl<'tx> KvEq for SharedTxBytes<'tx> {}
+impl<'tx> KvOrd for SharedTxBytes<'tx> {}
+impl<'tx> KvDataType for SharedTxBytes<'tx> {}
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct SharedRefSlice<'a> {
@@ -240,30 +283,22 @@ impl<'tx> PartialEq<Self> for SharedTxSlice<'tx> {
   }
 }
 
+impl<'tx> PartialEq<[u8]> for SharedTxSlice<'tx> {
+  fn eq(&self, other: &[u8]) -> bool {
+    self.as_ref().eq(other)
+  }
+}
+
 impl<'tx> PartialOrd for SharedTxSlice<'tx> {
   #[inline]
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     self.as_ref().partial_cmp(other.as_ref())
   }
+}
 
-  #[inline]
-  fn lt(&self, other: &Self) -> bool {
-    self.as_ref().lt(other.as_ref())
-  }
-
-  #[inline]
-  fn le(&self, other: &Self) -> bool {
-    self.as_ref().le(other.as_ref())
-  }
-
-  #[inline]
-  fn gt(&self, other: &Self) -> bool {
-    self.as_ref().gt(other.as_ref())
-  }
-
-  #[inline]
-  fn ge(&self, other: &Self) -> bool {
-    self.as_ref().ge(other.as_ref())
+impl<'tx> PartialOrd<[u8]> for SharedTxSlice<'tx> {
+  fn partial_cmp(&self, other: &[u8]) -> Option<Ordering> {
+    self.as_ref().partial_cmp(other)
   }
 }
 
@@ -299,5 +334,22 @@ impl<'tx> GetKvTxSlice<'tx> for SharedTxSlice<'tx> {
       inner: self.inner.clone(),
       range: self.range.sub_range(range),
     }
+  }
+}
+
+impl<'tx> Hash for SharedTxSlice<'tx> {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.as_ref().hash(state);
+  }
+}
+
+impl<'tx> RefIntoTryBuf for SharedTxSlice<'tx> {
+  type Error = io::Error;
+  type TryBuf<'a> = RefTryBuf<'a>
+  where
+    Self: 'a;
+
+  fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
+    Ok(RefTryBuf::new(self.as_ref()))
   }
 }

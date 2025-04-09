@@ -198,21 +198,6 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> PartialOrd for LazyRefSlice<'a, 'tx,
       .partial_cmp(other.ref_into_copied_iter())
   }
 
-  fn lt(&self, other: &Self) -> bool {
-    self.ref_into_copied_iter().lt(other.ref_into_copied_iter())
-  }
-
-  fn le(&self, other: &Self) -> bool {
-    self.ref_into_copied_iter().le(other.ref_into_copied_iter())
-  }
-
-  fn gt(&self, other: &Self) -> bool {
-    self.ref_into_copied_iter().gt(other.ref_into_copied_iter())
-  }
-
-  fn ge(&self, other: &Self) -> bool {
-    self.ref_into_copied_iter().ge(other.ref_into_copied_iter())
-  }
 }
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> Ord for LazyRefSlice<'a, 'tx, L> {
@@ -271,21 +256,6 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> PartialOrd for LazyTxSlice<'tx, L> {
       .partial_cmp(other.ref_into_copied_iter())
   }
 
-  fn lt(&self, other: &Self) -> bool {
-    self.ref_into_copied_iter().lt(other.ref_into_copied_iter())
-  }
-
-  fn le(&self, other: &Self) -> bool {
-    self.ref_into_copied_iter().le(other.ref_into_copied_iter())
-  }
-
-  fn gt(&self, other: &Self) -> bool {
-    self.ref_into_copied_iter().gt(other.ref_into_copied_iter())
-  }
-
-  fn ge(&self, other: &Self) -> bool {
-    self.ref_into_copied_iter().ge(other.ref_into_copied_iter())
-  }
 }
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> Ord for LazyTxSlice<'tx, L> {

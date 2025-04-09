@@ -103,6 +103,12 @@ pub struct RefTryBuf<'a> {
   range: Range<usize>,
 }
 
+impl<'a> RefTryBuf<'a> {
+  pub fn new(buf: &'a [u8]) -> Self {
+    Self { buf, range: 0..buf.len() }
+  }
+}
+
 impl<'a> TryBuf for RefTryBuf<'a> {
   type Error = io::Error;
 
@@ -128,10 +134,7 @@ impl<'tx> RefIntoTryBuf for RefTxBytes<'tx> {
     Self: 'a;
 
   fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
-    Ok(RefTryBuf {
-      buf: self.as_ref(),
-      range: 0..self.len(),
-    })
+    Ok(RefTryBuf::new(self.bytes))
   }
 }
 
@@ -143,10 +146,7 @@ impl RefIntoTryBuf for [u8] {
     Self: 'a;
 
   fn ref_into_try_buf<'a>(&'a self) -> Result<Self::TryBuf<'a>, Self::Error> {
-    Ok(RefTryBuf {
-      buf: self,
-      range: 0..self.len(),
-    })
+    Ok(RefTryBuf::new(self))
   }
 }
 
