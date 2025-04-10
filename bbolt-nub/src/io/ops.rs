@@ -236,6 +236,8 @@ pub trait RefIntoTryBuf {
   ) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error>;
 }
 
+pub trait LazyRefIntoTryBuf: RefIntoTryBuf {}
+
 impl<T> RefIntoTryBuf for T
 where
   T: AsRef<[u8]>,
@@ -304,9 +306,7 @@ where
   T: AsRef<[u8]>,
   U: AsRef<[u8]>,
 {
-  fn try_partial_cmp<'a>(
-    &'a self, other: &'a U,
-  ) -> error_stack::Result<Option<Ordering>, Self::Error> {
+  fn try_partial_cmp<'a>(&'a self, other: &'a U) -> crate::Result<Option<Ordering>, Self::Error> {
     Ok(self.as_ref().partial_cmp(other.as_ref()))
   }
 }
@@ -326,87 +326,11 @@ impl<T> TryPartialOrd<T> for [u8]
 where
   T: AsRef<[u8]>,
 {
-  fn try_partial_cmp<'a>(
-    &'a self, other: &'a T,
-  ) -> error_stack::Result<Option<Ordering>, Self::Error> {
+  fn try_partial_cmp<'a>(&'a self, other: &'a T) -> crate::Result<Option<Ordering>, Self::Error> {
     Ok(self.partial_cmp(other.as_ref()))
   }
 }
 
-/*
-impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T
-where
-  T: RefIntoTryBuf,
-  Rhs: RefIntoTryBuf,
-{
-  type Error = OpsError;
-
-  fn try_eq(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
-    let mut s_buf = self
-      .ref_into_try_buf()
-      .change_context(OpsError::TryPartialEq)?;
-    let mut o_buf = other
-      .ref_into_try_buf()
-      .change_context(OpsError::TryPartialEq)?;
-    if s_buf.remaining() != o_buf.remaining() {
-      return Ok(false);
-    }
-    while s_buf.remaining() > 0 {
-      let s_chunk = s_buf.chunk();
-      let o_chunk = o_buf.chunk();
-      let cmp_len = s_chunk.len().min(o_chunk.len());
-      //TODO: What do we do here?
-      assert_ne!(0, cmp_len);
-      let s_cmp = &s_chunk[..cmp_len];
-      let o_cmp = &o_chunk[..cmp_len];
-      if s_cmp != o_cmp {
-        return Ok(false);
-      }
-      s_buf
-        .try_advance(cmp_len)
-        .change_context(OpsError::TryPartialEq)?;
-      o_buf
-        .try_advance(cmp_len)
-        .change_context(OpsError::TryPartialEq)?;
-    }
-    Ok(true)
-  }
-}
-
-impl<T: ?Sized, Rhs: ?Sized> TryPartialOrd<Rhs> for T
-where
-  Rhs: RefIntoTryBuf,
-  T: RefIntoTryBuf,
-{
-  fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> crate::Result<Option<Ordering>, Self::Error> {
-    let mut s_buf = self
-      .ref_into_try_buf()
-      .change_context(OpsError::TryPartialOrd)?;
-    let mut o_buf = other
-      .ref_into_try_buf()
-      .change_context(OpsError::TryPartialOrd)?;
-    while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
-      let s_chunk = s_buf.chunk();
-      let o_chunk = o_buf.chunk();
-      let cmp_len = s_chunk.len().min(o_chunk.len());
-      assert_ne!(0, cmp_len);
-      let s_cmp = &s_chunk[..cmp_len];
-      let o_cmp = &o_chunk[..cmp_len];
-      let cmp = s_cmp.cmp(o_cmp);
-      if cmp != Ordering::Equal {
-        return Ok(Some(cmp));
-      }
-      s_buf
-        .try_advance(cmp_len)
-        .change_context(OpsError::TryPartialOrd)?;
-      o_buf
-        .try_advance(cmp_len)
-        .change_context(OpsError::TryPartialOrd)?;
-    }
-    Ok(s_buf.remaining().partial_cmp(&o_buf.remaining()))
-  }
-}
-*/
 pub trait TryBuf: Sized {
   type Error: Error + Send + Sync + 'static;
 

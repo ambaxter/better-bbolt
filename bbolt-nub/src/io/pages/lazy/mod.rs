@@ -3,8 +3,8 @@ use crate::common::id::OverflowPageId;
 use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::SharedTxBytes;
 use crate::io::ops::{
-  Buf, GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf,
-  SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
+  Buf, GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, LazyRefIntoTryBuf, RefIntoBuf,
+  RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
 };
 use crate::io::pages::lazy::ref_slice::LazyRefTryBuf;
 use crate::io::pages::lazy::tx_slice::LazyTxSlice;
@@ -194,6 +194,7 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> ExactSizeIterator for LazyIter<'a, '
   }
 }
 
+//TODO: Turn these into generic functions... eventually
 pub fn try_partial_eq_try_buf_try_buf<T, U>(
   mut s_buf: T, mut o_buf: U,
 ) -> crate::Result<bool, OpsError>

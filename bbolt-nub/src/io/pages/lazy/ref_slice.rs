@@ -1,9 +1,13 @@
 use crate::common::errors::{OpsError, PageError};
 use crate::io::ops::{
-  GetKvRefSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, RefIntoBuf, RefIntoCopiedIter,
-  RefIntoTryBuf, SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
+  GetKvRefSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, LazyRefIntoTryBuf, RefIntoBuf,
+  RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
 };
-use crate::io::pages::lazy::{LazyIter, LazyPage, try_partial_cmp_try_buf_buf, try_partial_cmp_try_buf_try_buf, try_partial_eq_try_buf_buf, try_partial_eq_try_buf_try_buf, try_partial_eq_buf_try_buf, try_partial_cmp_buf_try_buf};
+use crate::io::pages::lazy::{
+  LazyIter, LazyPage, try_partial_cmp_buf_try_buf, try_partial_cmp_try_buf_buf,
+  try_partial_cmp_try_buf_try_buf, try_partial_eq_buf_try_buf, try_partial_eq_try_buf_buf,
+  try_partial_eq_try_buf_try_buf,
+};
 use crate::io::pages::{TxPageType, TxReadLazyPageIO, TxReadPageIO};
 use error_stack::ResultExt;
 use std::cmp::Ordering;
@@ -108,7 +112,7 @@ impl<'p, 'tx, L: TxReadLazyPageIO<'tx>> hash::Hash for LazyRefSlice<'p, 'tx, L> 
 impl<'p, 'tx, L: TxReadLazyPageIO<'tx>> TryGet<u8> for LazyRefSlice<'p, 'tx, L> {
   type Error = OpsError;
 
-  fn try_get(&self, index: usize) -> error_stack::Result<Option<u8>, Self::Error> {
+  fn try_get(&self, index: usize) -> crate::Result<Option<u8>, Self::Error> {
     todo!()
   }
 }
@@ -125,6 +129,8 @@ impl<'p, 'tx, L: TxReadLazyPageIO<'tx>> RefIntoTryBuf for LazyRefSlice<'p, 'tx, 
     todo!()
   }
 }
+
+impl<'p, 'tx, L: TxReadLazyPageIO<'tx>> LazyRefIntoTryBuf for LazyRefSlice<'p, 'tx, L> {}
 
 pub struct LazyRefTryBuf<'a, 'tx, L: TxReadLazyPageIO<'tx>> {
   slice: LazyRefSlice<'a, 'tx, L>,
@@ -242,7 +248,9 @@ impl<'a, 'tx, L: TxReadLazyPageIO<'tx>, T> TryPartialOrd<LazyRefSlice<'a, 'tx, L
 where
   T: AsRef<[u8]>,
 {
-  fn try_partial_cmp(&self, other: &LazyRefSlice<'a, 'tx, L>) -> crate::Result<Option<Ordering>, Self::Error> {
+  fn try_partial_cmp(
+    &self, other: &LazyRefSlice<'a, 'tx, L>,
+  ) -> crate::Result<Option<Ordering>, Self::Error> {
     let s_buf = self.ref_into_buf();
     let o_buf = other
       .ref_into_try_buf()
