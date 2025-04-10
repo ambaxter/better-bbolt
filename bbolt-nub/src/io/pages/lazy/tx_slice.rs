@@ -1,12 +1,12 @@
-use crate::common::errors::OpsError;
+use crate::common::errors::{OpsError, PageError};
 use crate::io::ops::RefIntoCopiedIter;
 use crate::io::pages::lazy::ops::{
-  KvTryDataType, KvTryEq, KvTryOrd, LazyRefIntoTryBuf, RefIntoTryBuf, TryBuf, TryEq, TryGet,
-  TryHash, TryPartialEq, TryPartialOrd,
+  KvTryDataType, KvTryEq, KvTryOrd, LazyRefIntoTryBuf, RefIntoTryBuf, RefIntoTryCopiedIter, TryBuf,
+  TryEq, TryGet, TryHash, TryPartialEq, TryPartialOrd,
 };
 use crate::io::pages::lazy::ref_slice::{LazyRefSlice, LazyRefTryBuf};
 use crate::io::pages::lazy::{
-  LazyIter, LazyPage, try_partial_cmp_buf_lazy_buf, try_partial_cmp_lazy_buf_buf,
+  LazyIter, LazyPage, LazyTryIter, try_partial_cmp_buf_lazy_buf, try_partial_cmp_lazy_buf_buf,
   try_partial_cmp_lazy_buf_lazy_buf, try_partial_eq_buf_lazy_buf, try_partial_eq_lazy_buf_buf,
   try_partial_eq_lazy_buf_lazy_buf,
 };
@@ -216,6 +216,19 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> TryPartialOrd<LazyTxSlice<'tx, L>> for [u8] 
     &self, other: &LazyTxSlice<'tx, L>,
   ) -> crate::Result<Option<Ordering>, Self::Error> {
     try_partial_cmp_buf_lazy_buf(self, other)
+  }
+}
+
+impl<'tx, L: TxReadLazyPageIO<'tx>> RefIntoTryCopiedIter for LazyTxSlice<'tx, L> {
+  type Error = PageError;
+
+  fn ref_into_try_copied_iter<'a>(
+    &'a self,
+  ) -> crate::Result<
+    impl Iterator<Item = crate::Result<u8, Self::Error>> + DoubleEndedIterator + 'a,
+    Self::Error,
+  > {
+    LazyTryIter::new(&self.page, self.range.clone())
   }
 }
 

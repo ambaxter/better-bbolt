@@ -3,7 +3,7 @@ use crate::common::id::OverflowPageId;
 use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::SharedTxBytes;
 use crate::io::ops::RefIntoBuf;
-use crate::io::pages::lazy::ops::{LazyRefIntoTryBuf, TryBuf};
+use crate::io::pages::lazy::ops::{LazyRefIntoTryBuf, RefIntoTryCopiedIter, TryBuf};
 use crate::io::pages::lazy::ref_slice::LazyRefTryBuf;
 use crate::io::pages::lazy::tx_slice::LazyTxSlice;
 use crate::io::pages::{
@@ -118,9 +118,8 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> TxPageType<'tx> for LazyPage<'tx, L> {
   type TxPageBytes = SharedTxBytes<'tx>;
 }
 
-// TODO: Change this to TryCopyIter by default and then panicable
 #[derive(Clone)]
-pub struct LazyIter<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
+pub struct LazyTryIter<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
   page: &'a LazyPage<'tx, L>,
   range: Range<usize>,
   next_overflow_index: u32,
@@ -129,70 +128,132 @@ pub struct LazyIter<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
   next_back_page: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes,
 }
 
-impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> LazyIter<'a, 'tx, L> {
-  pub fn new<R: RangeBounds<usize>>(page: &'a LazyPage<'tx, L>, range: R) -> LazyIter<'a, 'tx, L> {
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> LazyTryIter<'a, 'tx, L> {
+  pub fn new<R: RangeBounds<usize>>(
+    page: &'a LazyPage<'tx, L>, range: R,
+  ) -> crate::Result<LazyTryIter<'a, 'tx, L>, PageError> {
     let page_size = page.root_page().len();
     let overflow_count = page.page_header().get_overflow();
     let range = (0..page.len()).sub_range(range);
     let next_overflow_index = (range.start / page_size) as u32;
-    let next_page = page
-      .read_overflow_page(next_overflow_index)
-      .expect("unable to read next overflow page");
+    let next_page = page.read_overflow_page(next_overflow_index)?;
     let next_back_overflow_index = (range.end / page_size) as u32;
-    let next_back_page = page
-      .read_overflow_page(next_back_overflow_index)
-      .expect("unable to read next_back overflow page");
+    let next_back_page = page.read_overflow_page(next_back_overflow_index)?;
 
-    LazyIter {
+    Ok(LazyTryIter {
       page,
       range,
       next_overflow_index,
       next_page,
       next_back_overflow_index,
       next_back_page,
+    })
+  }
+}
+
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> Iterator for LazyTryIter<'a, 'tx, L> {
+  type Item = crate::Result<u8, PageError>;
+  fn next(&mut self) -> Option<Self::Item> {
+    let index = self.range.next()?;
+    let page_size = self.page.root_page().len();
+    let next_overflow_index = (index / page_size) as u32;
+    if next_overflow_index != self.next_overflow_index {
+      let load_page = self.page.read_overflow_page(next_overflow_index);
+      self.next_page = match load_page {
+        Ok(page) => page,
+        Err(err) => return Some(Err(err)),
+      };
+      self.next_overflow_index = next_overflow_index;
     }
+    let page_index = index % page_size;
+    self
+      .next_page
+      .as_ref()
+      .get(page_index)
+      .copied()
+      .map(|b| Ok(b))
+  }
+}
+
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> DoubleEndedIterator for LazyTryIter<'a, 'tx, L> {
+  fn next_back(&mut self) -> Option<Self::Item> {
+    let index = self.range.next_back()?;
+    let page_size = self.page.root_page().len();
+    let next_back_overflow_index = (index / page_size) as u32;
+    if next_back_overflow_index != self.next_back_overflow_index {
+      let load_page = self.page.read_overflow_page(next_back_overflow_index);
+      self.next_back_page = match load_page {
+        Ok(page) => page,
+        Err(err) => return Some(Err(err)),
+      };
+      self.next_back_overflow_index = next_back_overflow_index;
+    }
+    let page_index = index % page_size;
+    self
+      .next_back_page
+      .as_ref()
+      .get(page_index)
+      .copied()
+      .map(|b| Ok(b))
+  }
+}
+
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> ExactSizeIterator for LazyTryIter<'a, 'tx, L> {
+  #[inline]
+  fn len(&self) -> usize {
+    self.range.len()
+  }
+}
+
+impl<'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> RefIntoTryCopiedIter for LazyRefSlice<'p, 'tx, L> {
+  type Error = PageError;
+
+  fn ref_into_try_copied_iter<'a>(
+    &'a self,
+  ) -> crate::Result<
+    impl Iterator<Item = crate::Result<u8, Self::Error>> + DoubleEndedIterator + 'a,
+    Self::Error,
+  > {
+    LazyTryIter::new(self.page, self.range.clone())
+  }
+}
+
+// TODO: Change this to TryCopyIter by default and then panicable
+#[derive(Clone)]
+pub struct LazyIter<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
+  iter: LazyTryIter<'a, 'tx, L>,
+}
+
+impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> LazyIter<'a, 'tx, L> {
+  pub fn new<R: RangeBounds<usize>>(page: &'a LazyPage<'tx, L>, range: R) -> LazyIter<'a, 'tx, L> {
+    let iter = LazyTryIter::new(page, range).expect("lazy iter");
+    LazyIter { iter }
   }
 }
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> Iterator for LazyIter<'a, 'tx, L> {
   type Item = u8;
   fn next(&mut self) -> Option<Self::Item> {
-    let index = self.range.next()?;
-    let page_size = self.page.root_page().len();
-    let next_overflow_index = (index / page_size) as u32;
-    if next_overflow_index != self.next_overflow_index {
-      self.next_page = self
-        .page
-        .read_overflow_page(next_overflow_index)
-        .expect("unable to read next overflow page");
-      self.next_overflow_index = next_overflow_index;
+    match self.iter.next() {
+      Some(r) => Some(r.expect("lazy iter")),
+      None => None,
     }
-    let page_index = index % page_size;
-    self.next_page.as_ref().get(page_index).copied()
   }
 }
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> DoubleEndedIterator for LazyIter<'a, 'tx, L> {
   fn next_back(&mut self) -> Option<Self::Item> {
-    let index = self.range.next_back()?;
-    let page_size = self.page.root_page().len();
-    let next_back_overflow_index = (index / page_size) as u32;
-    if next_back_overflow_index != self.next_back_overflow_index {
-      self.next_back_page = self
-        .page
-        .read_overflow_page(next_back_overflow_index)
-        .expect("unable to read next overflow page");
-      self.next_back_overflow_index = next_back_overflow_index;
+    match self.iter.next_back() {
+      Some(r) => Some(r.expect("lazy iter")),
+      None => None,
     }
-    let page_index = index % page_size;
-    self.next_back_page.as_ref().get(page_index).copied()
   }
 }
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> ExactSizeIterator for LazyIter<'a, 'tx, L> {
   #[inline]
   fn len(&self) -> usize {
-    self.range.len()
+    self.iter.len()
   }
 }
 

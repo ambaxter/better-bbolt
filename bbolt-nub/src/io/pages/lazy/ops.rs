@@ -8,7 +8,10 @@ pub trait RefIntoTryCopiedIter {
   // TODO: Impl trait is not allowed for associated types. Fix this when possible
   fn ref_into_try_copied_iter<'a>(
     &'a self,
-  ) -> Result<impl Iterator<Item = Result<u8, Self::Error>> + DoubleEndedIterator + 'a, Self::Error>;
+  ) -> crate::Result<
+    impl Iterator<Item = crate::Result<u8, Self::Error>> + DoubleEndedIterator + 'a,
+    Self::Error,
+  >;
 }
 
 pub trait TryGet<T> {

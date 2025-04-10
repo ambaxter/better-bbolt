@@ -16,8 +16,8 @@ use std::hash;
 use std::ops::{Range, RangeBounds};
 
 pub struct LazyRefSlice<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
-  page: &'a LazyPage<'tx, L>,
-  range: Range<usize>,
+  pub(crate) page: &'a LazyPage<'tx, L>,
+  pub(crate) range: Range<usize>,
 }
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> LazyRefSlice<'a, 'tx, L> {
