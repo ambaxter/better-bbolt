@@ -18,7 +18,7 @@ use std::ops::{Deref, RangeBounds};
 
 pub mod loaded;
 
-//pub mod lazy;
+pub mod lazy;
 
 pub mod types;
 
