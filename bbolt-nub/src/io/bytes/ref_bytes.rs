@@ -79,17 +79,6 @@ impl<'tx> FromIOBytes<'tx, RefBytes> for RefTxBytes<'tx> {
   }
 }
 
-impl<'tx> RefIntoCopiedIter for RefTxBytes<'tx> {
-  type Iter<'a>
-    = Copied<slice::Iter<'a, u8>>
-  where
-    Self: 'a;
-
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
-    self.as_ref().iter().copied()
-  }
-}
-
 impl<'tx> PartialEq<[u8]> for RefTxBytes<'tx> {
   fn eq(&self, other: &[u8]) -> bool {
     self.as_ref().eq(other)
@@ -188,17 +177,6 @@ impl<'tx> KvTryOrd for RefTxSlice<'tx> {}
 
 impl<'tx> KvOrd for RefTxSlice<'tx> {}
 
-impl<'tx> RefIntoCopiedIter for RefTxSlice<'tx> {
-  type Iter<'a>
-    = Copied<slice::Iter<'a, u8>>
-  where
-    Self: 'a;
-
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
-    self.as_ref().iter().copied()
-  }
-}
-
 impl<'tx> KvDataType for RefTxSlice<'tx> {}
 
 impl<'tx> GetKvRefSlice for RefTxSlice<'tx> {
@@ -266,14 +244,3 @@ impl<'tx> KvTryOrd for RefTxBytes<'tx> {}
 impl<'tx> KvOrd for RefTxBytes<'tx> {}
 
 impl<'tx> KvDataType for RefTxBytes<'tx> {}
-
-impl RefIntoCopiedIter for [u8] {
-  type Iter<'a>
-    = Copied<slice::Iter<'a, u8>>
-  where
-    Self: 'a;
-  #[inline]
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
-    self.iter().copied()
-  }
-}

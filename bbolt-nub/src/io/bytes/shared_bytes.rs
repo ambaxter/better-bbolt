@@ -161,19 +161,6 @@ impl<'tx> AsRef<[u8]> for SharedTxSlice<'tx> {
 }
 
 // Shared Tx Bytes //
-
-impl<'tx> RefIntoCopiedIter for SharedTxBytes<'tx> {
-  type Iter<'a>
-    = Copied<slice::Iter<'a, u8>>
-  where
-    Self: 'a;
-
-  #[inline]
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
-    self.iter().copied()
-  }
-}
-
 impl<'tx> GetKvRefSlice for SharedTxBytes<'tx> {
   type RefKv<'a>
     = SharedRefSlice<'a>
@@ -201,19 +188,6 @@ impl<'tx> GetKvTxSlice<'tx> for SharedTxBytes<'tx> {
 }
 
 // SharedRefSlice<'a> //
-
-impl<'p> RefIntoCopiedIter for SharedRefSlice<'p> {
-  type Iter<'a>
-    = Copied<slice::Iter<'a, u8>>
-  where
-    Self: 'a,
-    'p: 'a;
-
-  #[inline]
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
-    self.inner.iter().copied()
-  }
-}
 
 impl<'p> GetKvRefSlice for SharedRefSlice<'p> {
   type RefKv<'a>
@@ -255,17 +229,6 @@ impl<'tx> KvOrd for SharedRefSlice<'tx> {}
 impl<'tx> KvDataType for SharedRefSlice<'tx> {}
 
 // SharedTxSlice<'tx> //
-
-impl<'tx> RefIntoCopiedIter for SharedTxSlice<'tx> {
-  type Iter<'a>
-    = Copied<slice::Iter<'a, u8>>
-  where
-    Self: 'a;
-
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
-    self.as_ref().iter().copied()
-  }
-}
 
 impl<'tx> PartialEq<Self> for SharedTxSlice<'tx> {
   #[inline]

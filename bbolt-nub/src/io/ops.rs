@@ -6,7 +6,8 @@ use std::cmp::Ordering;
 use std::collections::Bound;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
-use std::io;
+use std::{io, slice};
+use std::iter::Copied;
 use std::ops::{Range, RangeBounds};
 
 pub trait SubRange {
@@ -38,6 +39,16 @@ impl SubRange for Range<usize> {
   }
 }
 
+pub trait RefIntoTryCopiedIter {
+  type Error: Error + Send + Sync + 'static;
+
+  type Iter<'a>: Iterator<Item = Result<u8, Self::Error>> + DoubleEndedIterator + ExactSizeIterator + 'a
+  where
+    Self: 'a;
+
+  fn ref_into_try_copied_iter<'a>(&'a self) -> Self::Iter<'a>;
+}
+
 pub trait RefIntoCopiedIter {
   type Iter<'a>: Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator + 'a
   where
@@ -45,8 +56,31 @@ pub trait RefIntoCopiedIter {
   fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a>;
 }
 
+impl<T> RefIntoCopiedIter for T where T: AsRef<[u8]> {
+  type Iter<'a>
+  = Copied<slice::Iter<'a, u8>>
+  where
+    Self: 'a;
+
+  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
+    self.as_ref().iter().copied()
+  }
+}
+
+impl RefIntoCopiedIter for [u8] {
+  type Iter<'a>
+  = Copied<slice::Iter<'a, u8>>
+  where
+    Self: 'a;
+  #[inline]
+  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
+    self.iter().copied()
+  }
+}
+
+
 pub trait TryHash {
-  type Error: Error + Send + Sync;
+  type Error: Error + Send + Sync + 'static;
 
   fn try_hash<H: Hasher>(&self, state: &mut H) -> Result<(), Self::Error>;
 }
@@ -63,7 +97,7 @@ where
 }
 
 pub trait TryGet<T> {
-  type Error: Error + Send + Sync;
+  type Error: Error + Send + Sync + 'static;
 
   fn try_get(&self, index: usize) -> crate::Result<Option<T>, Self::Error>;
 }
@@ -80,7 +114,7 @@ where
 }
 
 pub trait TryPartialEq<Rhs: ?Sized = Self> {
-  type Error: Error + Send + Sync;
+  type Error: Error + Send + Sync + 'static;
   fn try_eq(&self, other: &Rhs) -> crate::Result<bool, Self::Error>;
   fn try_ne(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
     self.try_eq(other).map(|ok| !ok)
@@ -240,7 +274,7 @@ where
 }
 
 pub trait TryBuf: Sized {
-  type Error: Error + Send + Sync;
+  type Error: Error + Send + Sync + 'static;
 
   fn remaining(&self) -> usize;
 
