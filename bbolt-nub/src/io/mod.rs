@@ -11,8 +11,3 @@ pub mod transmogrify;
 pub struct TxSlot<'tx> {
   tx: PhantomData<&'tx [u8]>,
 }
-
-pub trait AsCopiedIter {
-  type Iter: Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator;
-  fn as_copied_iter(&self) -> Self::Iter;
-}

@@ -15,7 +15,7 @@ pub struct Meta {
   pub magic: u32,
   /// Database version number
   pub version: u32,
-  /// Database page size where page address = [PageId] * meta.page_size
+  /// Database page size where page address = `PageId` * meta.page_size
   pub page_size: u32,
   pub flags: u32,
   /// Root bucket header

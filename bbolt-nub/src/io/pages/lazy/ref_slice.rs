@@ -3,10 +3,7 @@ use crate::io::ops::{
   GetKvRefSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, RefIntoBuf, RefIntoCopiedIter,
   RefIntoTryBuf, SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
 };
-use crate::io::pages::lazy::{
-  LazyIter, LazyPage, try_partial_cmp_try_buf_buf, try_partial_cmp_try_buf_try_buf,
-  try_partial_eq_try_buf_buf, try_partial_eq_try_buf_try_buf,
-};
+use crate::io::pages::lazy::{LazyIter, LazyPage, try_partial_cmp_try_buf_buf, try_partial_cmp_try_buf_try_buf, try_partial_eq_try_buf_buf, try_partial_eq_try_buf_try_buf, try_partial_eq_buf_try_buf, try_partial_cmp_buf_try_buf};
 use crate::io::pages::{TxPageType, TxReadLazyPageIO, TxReadPageIO};
 use error_stack::ResultExt;
 use std::cmp::Ordering;
@@ -212,6 +209,22 @@ where
   }
 }
 
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>, T> TryPartialEq<LazyRefSlice<'a, 'tx, L>> for T
+where
+  T: AsRef<[u8]>,
+{
+  type Error = OpsError;
+
+  fn try_eq(&self, other: &LazyRefSlice<'a, 'tx, L>) -> crate::Result<bool, Self::Error> {
+    let s_buf = self.ref_into_buf();
+    let o_buf = other
+      .ref_into_try_buf()
+      .change_context(OpsError::TryPartialEq)?;
+
+    try_partial_eq_buf_try_buf(s_buf, o_buf)
+  }
+}
+
 impl<'a, 'tx, L: TxReadLazyPageIO<'tx>, T> TryPartialOrd<T> for LazyRefSlice<'a, 'tx, L>
 where
   T: AsRef<[u8]>,
@@ -225,6 +238,19 @@ where
   }
 }
 
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>, T> TryPartialOrd<LazyRefSlice<'a, 'tx, L>> for T
+where
+  T: AsRef<[u8]>,
+{
+  fn try_partial_cmp(&self, other: &LazyRefSlice<'a, 'tx, L>) -> crate::Result<Option<Ordering>, Self::Error> {
+    let s_buf = self.ref_into_buf();
+    let o_buf = other
+      .ref_into_try_buf()
+      .change_context(OpsError::TryPartialEq)?;
+    try_partial_cmp_buf_try_buf(s_buf, o_buf)
+  }
+}
+
 impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> TryPartialEq<[u8]> for LazyRefSlice<'a, 'tx, L> {
   type Error = OpsError;
 
@@ -234,6 +260,18 @@ impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> TryPartialEq<[u8]> for LazyRefSlice<'a, 
       .change_context(OpsError::TryPartialEq)?;
     let o_buf = other.ref_into_buf();
     try_partial_eq_try_buf_buf(s_buf, o_buf)
+  }
+}
+
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> TryPartialEq<LazyRefSlice<'a, 'tx, L>> for [u8] {
+  type Error = OpsError;
+
+  fn try_eq(&self, other: &LazyRefSlice<'a, 'tx, L>) -> crate::Result<bool, Self::Error> {
+    let s_buf = self.ref_into_buf();
+    let o_buf = other
+      .ref_into_try_buf()
+      .change_context(OpsError::TryPartialEq)?;
+    try_partial_eq_buf_try_buf(s_buf, o_buf)
   }
 }
 

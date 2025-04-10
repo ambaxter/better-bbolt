@@ -50,6 +50,7 @@ dashmap = "6.1.0"
 hashbrown = "0.15.2"
 moka = { version = "0.12", features = ["sync"] }
 bumpalo = "3.17.0"
+bytes = "1.10.1"
 
 # Operating System / IO Support
 page_size = "0.6.0"
