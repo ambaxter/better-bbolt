@@ -2,13 +2,14 @@ use crate::common::errors::{OpsError, PageError};
 use crate::common::id::OverflowPageId;
 use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::SharedTxBytes;
-use crate::io::ops::{
-  Buf, GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, LazyRefIntoTryBuf, RefIntoBuf,
-  RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
-};
+use crate::io::ops::RefIntoBuf;
+use crate::io::pages::lazy::ops::{LazyRefIntoTryBuf, TryBuf};
 use crate::io::pages::lazy::ref_slice::LazyRefTryBuf;
 use crate::io::pages::lazy::tx_slice::LazyTxSlice;
-use crate::io::pages::{Page, TxPageType, TxReadLazyPageIO, TxReadPageIO};
+use crate::io::pages::{
+  GetKvRefSlice, GetKvTxSlice, Page, SubRange, TxPageType, TxReadLazyPageIO, TxReadPageIO,
+};
+use bytes::Buf;
 use error_stack::{FutureExt, ResultExt};
 use ref_slice::LazyRefSlice;
 use std::cmp::Ordering;
@@ -16,6 +17,7 @@ use std::hash;
 use std::ops::{Deref, Range, RangeBounds};
 use tracing::warn;
 
+pub mod ops;
 pub mod ref_slice;
 pub mod tx_slice;
 
@@ -194,15 +196,17 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> ExactSizeIterator for LazyIter<'a, '
   }
 }
 
-pub fn try_partial_eq_lazy_buf_lazy_buf<T, U>(
-  s: &T, mut o: &U,
-) -> crate::Result<bool, OpsError>
+pub fn try_partial_eq_lazy_buf_lazy_buf<T, U>(s: &T, mut o: &U) -> crate::Result<bool, OpsError>
 where
   T: LazyRefIntoTryBuf,
   U: LazyRefIntoTryBuf,
 {
-  let mut s_buf = s.ref_into_try_buf().change_context(OpsError::TryPartialEq)?;
-  let mut o_buf = o.ref_into_try_buf().change_context(OpsError::TryPartialEq)?;
+  let mut s_buf = s
+    .ref_into_try_buf()
+    .change_context(OpsError::TryPartialEq)?;
+  let mut o_buf = o
+    .ref_into_try_buf()
+    .change_context(OpsError::TryPartialEq)?;
   if s_buf.remaining() != o_buf.remaining() {
     return Ok(false);
   }
@@ -227,14 +231,14 @@ where
   Ok(true)
 }
 
-pub fn try_partial_eq_lazy_buf_buf<T, U: ?Sized>(
-  s: &T, mut o: &U,
-) -> crate::Result<bool, OpsError>
+pub fn try_partial_eq_lazy_buf_buf<T, U: ?Sized>(s: &T, mut o: &U) -> crate::Result<bool, OpsError>
 where
   T: LazyRefIntoTryBuf,
   U: RefIntoBuf,
 {
-  let mut s_buf = s.ref_into_try_buf().change_context(OpsError::TryPartialEq)?;
+  let mut s_buf = s
+    .ref_into_try_buf()
+    .change_context(OpsError::TryPartialEq)?;
   let mut o_buf = o.ref_into_buf();
   if s_buf.remaining() != o_buf.remaining() {
     return Ok(false);
@@ -264,7 +268,9 @@ where
   U: LazyRefIntoTryBuf,
 {
   let mut s_buf = s.ref_into_buf();
-  let mut o_buf = o.ref_into_try_buf().change_context(OpsError::TryPartialEq)?;
+  let mut o_buf = o
+    .ref_into_try_buf()
+    .change_context(OpsError::TryPartialEq)?;
   if s_buf.remaining() != o_buf.remaining() {
     return Ok(false);
   }
@@ -288,14 +294,18 @@ where
 }
 
 pub fn try_partial_cmp_lazy_buf_lazy_buf<T, U>(
-  s: &T,  o: &U,
+  s: &T, o: &U,
 ) -> crate::Result<Option<Ordering>, OpsError>
 where
   T: LazyRefIntoTryBuf,
   U: LazyRefIntoTryBuf,
 {
-  let mut s_buf = s.ref_into_try_buf().change_context(OpsError::TryPartialEq)?;
-  let mut o_buf = o.ref_into_try_buf().change_context(OpsError::TryPartialEq)?;
+  let mut s_buf = s
+    .ref_into_try_buf()
+    .change_context(OpsError::TryPartialEq)?;
+  let mut o_buf = o
+    .ref_into_try_buf()
+    .change_context(OpsError::TryPartialEq)?;
   while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
     let s_chunk = s_buf.chunk();
     let o_chunk = o_buf.chunk();
@@ -317,15 +327,16 @@ where
   Ok(s_buf.remaining().partial_cmp(&o_buf.remaining()))
 }
 
-
 pub fn try_partial_cmp_lazy_buf_buf<T, U: ?Sized>(
-  s: &T,  o: &U,
+  s: &T, o: &U,
 ) -> crate::Result<Option<Ordering>, OpsError>
 where
   T: LazyRefIntoTryBuf,
   U: RefIntoBuf,
 {
-  let mut s_buf = s.ref_into_try_buf().change_context(OpsError::TryPartialEq)?;
+  let mut s_buf = s
+    .ref_into_try_buf()
+    .change_context(OpsError::TryPartialEq)?;
   let mut o_buf = o.ref_into_buf();
   while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
     let s_chunk = s_buf.chunk();
@@ -341,22 +352,22 @@ where
     s_buf
       .try_advance(cmp_len)
       .change_context(OpsError::TryPartialOrd)?;
-    o_buf
-      .advance(cmp_len);
+    o_buf.advance(cmp_len);
   }
   Ok(s_buf.remaining().partial_cmp(&o_buf.remaining()))
 }
 
-
-pub fn try_partial_cmp_buf_lazy_buf<T:?Sized, U>(
-  s: &T,  o: &U,
+pub fn try_partial_cmp_buf_lazy_buf<T: ?Sized, U>(
+  s: &T, o: &U,
 ) -> crate::Result<Option<Ordering>, OpsError>
 where
   T: RefIntoBuf,
   U: LazyRefIntoTryBuf,
 {
   let mut s_buf = s.ref_into_buf();
-  let mut o_buf = o.ref_into_try_buf().change_context(OpsError::TryPartialEq)?;
+  let mut o_buf = o
+    .ref_into_try_buf()
+    .change_context(OpsError::TryPartialEq)?;
 
   while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
     let s_chunk = s_buf.chunk();
@@ -369,8 +380,7 @@ where
     if cmp != Ordering::Equal {
       return Ok(Some(cmp));
     }
-    s_buf
-      .advance(cmp_len);
+    s_buf.advance(cmp_len);
     o_buf
       .try_advance(cmp_len)
       .change_context(OpsError::TryPartialOrd)?;

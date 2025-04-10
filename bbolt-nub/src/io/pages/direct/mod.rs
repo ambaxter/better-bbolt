@@ -1,31 +1,32 @@
 use crate::io::TxSlot;
 use crate::io::bytes::TxBytes;
-use crate::io::ops::{GetKvRefSlice, GetKvTxSlice};
-use crate::io::pages::{Page, TxPageType, TxReadPageIO};
+use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPageType};
 use std::ops::RangeBounds;
 
+pub mod ops;
+
 #[derive(Clone)]
-pub struct LoadedPage<'tx, P: TxBytes<'tx>> {
+pub struct DirectPage<'tx, P: TxBytes<'tx>> {
   tx: TxSlot<'tx>,
   root: P,
 }
 
-impl<'tx, P: TxBytes<'tx>> LoadedPage<'tx, P> {
+impl<'tx, P: TxBytes<'tx>> DirectPage<'tx, P> {
   pub fn new(root: P) -> Self {
-    LoadedPage {
+    DirectPage {
       tx: Default::default(),
       root,
     }
   }
 }
 
-impl<'tx, P: TxBytes<'tx>> Page for LoadedPage<'tx, P> {
+impl<'tx, P: TxBytes<'tx>> Page for DirectPage<'tx, P> {
   fn root_page(&self) -> &[u8] {
     &self.root
   }
 }
 
-impl<'tx, P: TxBytes<'tx>> GetKvRefSlice for LoadedPage<'tx, P>
+impl<'tx, P: TxBytes<'tx>> GetKvRefSlice for DirectPage<'tx, P>
 where
   P: GetKvRefSlice,
 {
@@ -39,7 +40,7 @@ where
   }
 }
 
-impl<'tx, P: TxBytes<'tx>> GetKvTxSlice<'tx> for LoadedPage<'tx, P>
+impl<'tx, P: TxBytes<'tx>> GetKvTxSlice<'tx> for DirectPage<'tx, P>
 where
   P: GetKvTxSlice<'tx>,
 {
@@ -50,7 +51,7 @@ where
   }
 }
 
-impl<'tx, P: TxBytes<'tx>> TxPageType<'tx> for LoadedPage<'tx, P>
+impl<'tx, P: TxBytes<'tx>> TxPageType<'tx> for DirectPage<'tx, P>
 where
   P: GetKvTxSlice<'tx>,
 {

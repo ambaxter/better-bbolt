@@ -10,45 +10,10 @@ use std::iter::{Copied, Map};
 use std::ops::{Range, RangeBounds};
 use std::{io, slice};
 
+use crate::io::pages::lazy::ops::{
+  RefIntoTryBuf, RefIntoTryCopiedIter, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
+};
 pub use bytes::Buf;
-
-pub trait SubRange {
-  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
-}
-
-impl SubRange for Range<usize> {
-  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self {
-    let start = match range.start_bound().cloned() {
-      Bound::Included(start) => self.start + start,
-      Bound::Excluded(start) => self.start + start + 1,
-      Bound::Unbounded => self.start,
-    };
-    let end = match range.end_bound().cloned() {
-      Bound::Included(end) => self.start + end + 1,
-      Bound::Excluded(end) => self.start + end,
-      Bound::Unbounded => self.end,
-    };
-    assert!(
-      start <= end,
-      "New start ({start}) should be <= new end ({end})"
-    );
-    assert!(
-      end <= self.end,
-      "New end ({end}) should be <= current end ({0})",
-      self.end
-    );
-    start..end
-  }
-}
-
-pub trait RefIntoTryCopiedIter {
-  type Error: Error + Send + Sync + 'static;
-
-  // TODO: Impl trait is not allowed for associated types. Fix this when possible
-  fn ref_into_try_copied_iter<'a>(
-    &'a self,
-  ) -> Result<impl Iterator<Item = Result<u8, Self::Error>> + DoubleEndedIterator + 'a, Self::Error>;
-}
 
 impl<T> RefIntoTryCopiedIter for T
 where
@@ -107,12 +72,6 @@ impl RefIntoCopiedIter for [u8] {
   }
 }
 
-pub trait TryHash {
-  type Error: Error + Send + Sync + 'static;
-
-  fn try_hash<H: Hasher>(&self, state: &mut H) -> Result<(), Self::Error>;
-}
-
 impl<T> TryHash for T
 where
   T: AsRef<[u8]>,
@@ -131,12 +90,6 @@ impl TryHash for [u8] {
   }
 }
 
-pub trait TryGet<T> {
-  type Error: Error + Send + Sync + 'static;
-
-  fn try_get(&self, index: usize) -> crate::Result<Option<T>, Self::Error>;
-}
-
 impl<T> TryGet<u8> for T
 where
   T: AsRef<[u8]>,
@@ -152,44 +105,6 @@ impl TryGet<u8> for [u8] {
   type Error = OpsError;
   fn try_get(&self, index: usize) -> crate::Result<Option<u8>, Self::Error> {
     Ok(self.as_ref().get(index).copied())
-  }
-}
-
-pub trait TryPartialEq<Rhs: ?Sized = Self> {
-  type Error: Error + Send + Sync + 'static;
-  fn try_eq(&self, other: &Rhs) -> crate::Result<bool, Self::Error>;
-  fn try_ne(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
-    self.try_eq(other).map(|ok| !ok)
-  }
-}
-
-pub trait TryEq: TryPartialEq<Self> {}
-
-pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
-  fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> crate::Result<Option<Ordering>, Self::Error>;
-
-  fn try_lt<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
-    self
-      .try_partial_cmp(other)
-      .map(|ok| matches!(ok, Some(Ordering::Less)))
-  }
-
-  fn try_le<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
-    self
-      .try_partial_cmp(other)
-      .map(|ok| matches!(ok, Some(Ordering::Less | Ordering::Equal)))
-  }
-
-  fn try_gt<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
-    self
-      .try_partial_cmp(other)
-      .map(|ok| matches!(ok, Some(Ordering::Greater)))
-  }
-
-  fn try_ge<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
-    self
-      .try_partial_cmp(other)
-      .map(|ok| matches!(ok, Some(Ordering::Greater | Ordering::Equal)))
   }
 }
 
@@ -225,18 +140,6 @@ impl RefIntoBuf for [u8] {
     RefBuf::new(self)
   }
 }
-
-pub trait RefIntoTryBuf {
-  type TryBuf<'a>: TryBuf + 'a
-  where
-    Self: 'a;
-
-  fn ref_into_try_buf<'a>(
-    &'a self,
-  ) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error>;
-}
-
-pub trait LazyRefIntoTryBuf: RefIntoTryBuf {}
 
 impl<T> RefIntoTryBuf for T
 where
@@ -331,40 +234,7 @@ where
   }
 }
 
-pub trait TryBuf: Sized {
-  type Error: Error + Send + Sync + 'static;
-
-  fn remaining(&self) -> usize;
-
-  fn chunk(&self) -> &[u8];
-
-  fn try_advance(&mut self, cnt: usize) -> crate::Result<(), Self::Error>;
-}
-
-pub trait KvTryEq: TryPartialEq + TryPartialEq<[u8]> {}
-pub trait KvTryOrd: TryPartialOrd + TryPartialOrd<[u8]> {}
-
-pub trait KvEq: Eq + PartialEq<[u8]> + KvTryEq {}
-
-pub trait KvOrd: Ord + PartialOrd<[u8]> + KvTryOrd + KvEq {}
-
-pub trait KvDataType:
-  KvOrd + TryHash + Hash + TryGet<u8> + RefIntoCopiedIter + RefIntoTryBuf + Sized
-{
-}
-
-pub trait GetKvRefSlice {
-  type RefKv<'a>: GetKvRefSlice + KvDataType + 'a
-  where
-    Self: 'a;
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a>;
-}
-
-pub trait GetKvTxSlice<'tx>: GetKvRefSlice {
-  type TxKv: GetKvTxSlice<'tx> + KvDataType + 'tx;
-  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv;
-}
-
+/*
 #[cfg(test)]
 mod tests {
   use crate::common::errors::OpsError;
@@ -503,3 +373,4 @@ mod tests {
     println!("r: {:?}", r);
   }
 }
+*/

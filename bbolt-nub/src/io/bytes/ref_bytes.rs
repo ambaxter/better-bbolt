@@ -2,10 +2,10 @@ use crate::common::errors::OpsError;
 use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxSlice};
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
-use crate::io::ops::{
-  Buf, GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, RefIntoCopiedIter,
-  SubRange, TryBuf, TryGet,
-};
+use crate::io::ops::{Buf, RefIntoCopiedIter};
+use crate::io::pages::direct::ops::{Get, KvDataType, KvEq, KvOrd};
+use crate::io::pages::lazy::ops::{KvTryEq, KvTryOrd, TryBuf, TryEq, TryPartialEq};
+use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, SubRange};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::iter::Copied;
@@ -169,6 +169,14 @@ impl<'tx> GetKvTxSlice<'tx> for RefTxBytes<'tx> {
   }
 }
 
+impl<'tx> Get<u8> for RefTxSlice<'tx> {
+  fn get<'a>(&'a self, index: usize) -> Option<u8> {
+    self.bytes.get(index).copied()
+  }
+}
+
+impl<'tx> TryEq for RefTxSlice<'tx> {}
+
 impl<'tx> KvTryEq for RefTxSlice<'tx> {}
 
 impl<'tx> KvEq for RefTxSlice<'tx> {}
@@ -260,6 +268,14 @@ impl<'a> TryBuf for RefTryBuf<'a> {
     Ok(())
   }
 }
+
+impl<'tx> Get<u8> for RefTxBytes<'tx> {
+  fn get<'a>(&'a self, index: usize) -> Option<u8> {
+    self.bytes.get(index).copied()
+  }
+}
+
+impl<'tx> TryEq for RefTxBytes<'tx> {}
 
 impl<'tx> KvTryEq for RefTxBytes<'tx> {}
 

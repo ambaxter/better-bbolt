@@ -1,10 +1,15 @@
 use crate::common::errors::{OpsError, PageError};
-use crate::io::ops::{
-  GetKvRefSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, LazyRefIntoTryBuf, RefIntoBuf,
-  RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
+use crate::io::ops::RefIntoCopiedIter;
+use crate::io::pages::lazy::ops::{
+  KvTryDataType, KvTryEq, KvTryOrd, LazyRefIntoTryBuf, RefIntoTryBuf, TryBuf, TryEq, TryGet,
+  TryHash, TryPartialEq, TryPartialOrd,
 };
-use crate::io::pages::lazy::{LazyIter, LazyPage, try_partial_eq_lazy_buf_lazy_buf, try_partial_eq_lazy_buf_buf, try_partial_eq_buf_lazy_buf, try_partial_cmp_buf_lazy_buf, try_partial_cmp_lazy_buf_buf, try_partial_cmp_lazy_buf_lazy_buf};
-use crate::io::pages::{TxPageType, TxReadLazyPageIO, TxReadPageIO};
+use crate::io::pages::lazy::{
+  LazyIter, LazyPage, try_partial_cmp_buf_lazy_buf, try_partial_cmp_lazy_buf_buf,
+  try_partial_cmp_lazy_buf_lazy_buf, try_partial_eq_buf_lazy_buf, try_partial_eq_lazy_buf_buf,
+  try_partial_eq_lazy_buf_lazy_buf,
+};
+use crate::io::pages::{GetKvRefSlice, SubRange, TxPageType, TxReadLazyPageIO, TxReadPageIO};
 use error_stack::ResultExt;
 use std::cmp::Ordering;
 use std::hash;
@@ -248,12 +253,10 @@ impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> TryPartialOrd<[u8]> for LazyRefSlice<'a,
   }
 }
 
-impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvTryEq for LazyRefSlice<'a, 'tx, L> {}
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> TryEq for LazyRefSlice<'a, 'tx, L> {}
 
-impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvEq for LazyRefSlice<'a, 'tx, L> {}
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvTryEq for LazyRefSlice<'a, 'tx, L> {}
 
 impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvTryOrd for LazyRefSlice<'a, 'tx, L> {}
 
-impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvOrd for LazyRefSlice<'a, 'tx, L> {}
-
-impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L> {}
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvTryDataType for LazyRefSlice<'a, 'tx, L> {}

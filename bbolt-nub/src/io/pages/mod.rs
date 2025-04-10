@@ -4,22 +4,61 @@ use crate::common::layout::page::PageHeader;
 use crate::io::TxSlot;
 use crate::io::backends::IOPageReader;
 use crate::io::bytes::TxBytes;
-use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, RefIntoCopiedIter, TryGet, TryPartialEq, TryPartialOrd,
-};
+use crate::io::ops::RefIntoCopiedIter;
+use crate::io::pages::direct::ops::KvDataType;
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::types::node::NodePage;
 use bytemuck::from_bytes;
 use delegate::delegate;
+use std::collections::Bound;
 use std::hash::Hash;
-use std::ops::{Deref, RangeBounds};
+use std::ops::{Deref, Range, RangeBounds};
 
-pub mod loaded;
-
+pub mod direct;
 pub mod lazy;
-
 pub mod types;
+
+pub trait SubRange {
+  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
+}
+
+impl SubRange for Range<usize> {
+  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self {
+    let start = match range.start_bound().cloned() {
+      Bound::Included(start) => self.start + start,
+      Bound::Excluded(start) => self.start + start + 1,
+      Bound::Unbounded => self.start,
+    };
+    let end = match range.end_bound().cloned() {
+      Bound::Included(end) => self.start + end + 1,
+      Bound::Excluded(end) => self.start + end,
+      Bound::Unbounded => self.end,
+    };
+    assert!(
+      start <= end,
+      "New start ({start}) should be <= new end ({end})"
+    );
+    assert!(
+      end <= self.end,
+      "New end ({end}) should be <= current end ({0})",
+      self.end
+    );
+    start..end
+  }
+}
+
+pub trait GetKvRefSlice {
+  type RefKv<'a>: GetKvRefSlice + 'a
+  where
+    Self: 'a;
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a>;
+}
+
+pub trait GetKvTxSlice<'tx>: GetKvRefSlice {
+  type TxKv: GetKvTxSlice<'tx> + 'tx;
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv;
+}
 
 pub trait Page {
   #[inline]

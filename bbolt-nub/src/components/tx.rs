@@ -7,8 +7,7 @@ use crate::io::backends::{IOOverflowPageReader, IOPageReader, IOReader};
 use crate::io::bytes::ref_bytes::{RefBytes, RefTxBytes};
 use crate::io::bytes::shared_bytes::{SharedBytes, SharedTxBytes};
 use crate::io::bytes::{FromIOBytes, IOBytes, IntoTxBytes, TxBytes};
-//use crate::io::pages::lazy::LazyPage;
-use crate::io::pages::loaded::LoadedPage;
+use crate::io::pages::direct::DirectPage;
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::types::node::NodePage;
@@ -36,7 +35,7 @@ where
   IO: IOPageReader,
   IO::Bytes: IntoTxBytes<'tx, SharedTxBytes<'tx>>,
 {
-  type TxPageType = LoadedPage<'tx, SharedTxBytes<'tx>>;
+  type TxPageType = DirectPage<'tx, SharedTxBytes<'tx>>;
 
   fn read_meta_page(
     &self, meta_page_id: MetaPageId,
@@ -45,7 +44,7 @@ where
       .handle
       .io
       .read_meta_page(meta_page_id)
-      .map(|bytes| LoadedPage::new(bytes.into_tx()))
+      .map(|bytes| DirectPage::new(bytes.into_tx()))
       .change_context(PageError::InvalidMeta(meta_page_id))?;
     MetaPage::try_from(TxPage::new(page)).change_context(PageError::InvalidMeta(meta_page_id))
   }
@@ -57,7 +56,7 @@ where
       .handle
       .io
       .read_freelist_page(freelist_page_id)
-      .map(|bytes| LoadedPage::new(bytes.into_tx()))
+      .map(|bytes| DirectPage::new(bytes.into_tx()))
       .change_context(PageError::InvalidFreelist(freelist_page_id))?;
     FreelistPage::try_from(TxPage::new(page))
       .change_context(PageError::InvalidFreelist(freelist_page_id))
@@ -70,7 +69,7 @@ where
       .handle
       .io
       .read_node_page(node_page_id)
-      .map(|bytes| LoadedPage::new(bytes.into_tx()))
+      .map(|bytes| DirectPage::new(bytes.into_tx()))
       .change_context(PageError::InvalidNode(node_page_id))?;
     NodePage::try_from(TxPage::new(page)).change_context(PageError::InvalidNode(node_page_id))
   }
@@ -96,7 +95,7 @@ where
   IO: IOPageReader,
   IO::Bytes: IntoTxBytes<'tx, RefTxBytes<'tx>>,
 {
-  type TxPageType = LoadedPage<'tx, RefTxBytes<'tx>>;
+  type TxPageType = DirectPage<'tx, RefTxBytes<'tx>>;
 
   fn read_meta_page(
     &self, meta_page_id: MetaPageId,
@@ -105,7 +104,7 @@ where
       .handle
       .io
       .read_meta_page(meta_page_id)
-      .map(|bytes| LoadedPage::new(bytes.into_tx()))
+      .map(|bytes| DirectPage::new(bytes.into_tx()))
       .change_context(PageError::InvalidMeta(meta_page_id))?;
     MetaPage::try_from(TxPage::new(page)).change_context(PageError::InvalidMeta(meta_page_id))
   }
@@ -117,7 +116,7 @@ where
       .handle
       .io
       .read_freelist_page(freelist_page_id)
-      .map(|bytes| LoadedPage::new(bytes.into_tx()))
+      .map(|bytes| DirectPage::new(bytes.into_tx()))
       .change_context(PageError::InvalidFreelist(freelist_page_id))?;
     FreelistPage::try_from(TxPage::new(page))
       .change_context(PageError::InvalidFreelist(freelist_page_id))
@@ -130,7 +129,7 @@ where
       .handle
       .io
       .read_node_page(node_page_id)
-      .map(|bytes| LoadedPage::new(bytes.into_tx()))
+      .map(|bytes| DirectPage::new(bytes.into_tx()))
       .change_context(PageError::InvalidNode(node_page_id))?;
     NodePage::try_from(TxPage::new(page)).change_context(PageError::InvalidNode(node_page_id))
   }

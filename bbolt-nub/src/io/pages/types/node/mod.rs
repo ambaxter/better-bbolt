@@ -2,10 +2,9 @@ use crate::common::errors::PageError;
 use crate::common::id::NodePageId;
 use crate::common::layout::node::{BranchElement, LeafElement};
 use crate::common::layout::page::PageHeader;
-use crate::io::ops::{GetKvRefSlice, GetKvTxSlice, KvDataType};
 use crate::io::pages::types::node::branch::BranchPage;
 use crate::io::pages::types::node::leaf::LeafPage;
-use crate::io::pages::{Page, TxPage, TxPageType};
+use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use bytemuck::{Pod, cast_slice};
 use std::ops::Range;
 use std::ptr;
@@ -14,10 +13,10 @@ pub mod branch;
 pub mod leaf;
 
 pub trait HasKeys<'tx> {
-  type RefKv<'a>: GetKvRefSlice + KvDataType + 'a
+  type RefKv<'a>: GetKvRefSlice + 'a
   where
     Self: 'a;
-  type TxKv: GetKvTxSlice<'tx> + KvDataType + 'tx;
+  type TxKv: GetKvTxSlice<'tx> + 'tx;
 
   fn key_ref<'a>(&'a self, index: usize) -> Option<Self::RefKv<'a>>;
   fn key(&self, index: usize) -> Option<Self::TxKv>;
