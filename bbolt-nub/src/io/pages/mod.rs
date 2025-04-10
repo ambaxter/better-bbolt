@@ -5,8 +5,7 @@ use crate::io::TxSlot;
 use crate::io::backends::IOPageReader;
 use crate::io::bytes::TxBytes;
 use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, RefIntoCopiedIter, TryGet, TryPartialEq,
-  TryPartialOrd,
+  GetKvRefSlice, GetKvTxSlice, RefIntoCopiedIter, TryGet, TryPartialEq, TryPartialOrd,
 };
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;

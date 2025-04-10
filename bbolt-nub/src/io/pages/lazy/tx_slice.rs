@@ -1,12 +1,14 @@
-use std::ops::{Range, RangeBounds};
+use crate::common::errors::OpsError;
+use crate::io::ops::{
+  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange,
+  TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
+};
+use crate::io::pages::TxReadLazyPageIO;
+use crate::io::pages::lazy::ref_slice::{LazyRefSlice, LazyRefTryBuf};
+use crate::io::pages::lazy::{LazyIter, LazyPage};
 use std::cmp::Ordering;
 use std::hash;
-use crate::common::errors::OpsError;
-use crate::io::ops::{GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd};
-use crate::io::pages::lazy::{LazyIter, LazyPage};
-use crate::io::pages::lazy::ref_slice::{LazyRefSlice, LazyRefTryBuf};
-use crate::io::pages::TxReadLazyPageIO;
-
+use std::ops::{Range, RangeBounds};
 
 #[derive(Clone)]
 pub struct LazyTxSlice<'tx, L: TxReadLazyPageIO<'tx>> {
@@ -43,15 +45,17 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> TryGet<u8> for LazyTxSlice<'tx, L> {
 }
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> RefIntoTryBuf for LazyTxSlice<'tx, L> {
-  type TryBuf<'a> = LazyRefTryBuf<'a, 'tx, L>
+  type TryBuf<'a>
+    = LazyRefTryBuf<'a, 'tx, L>
   where
     Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error> {
+  fn ref_into_try_buf<'a>(
+    &'a self,
+  ) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error> {
     todo!()
   }
 }
-
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> PartialEq for LazyTxSlice<'tx, L> {
   fn eq(&self, other: &Self) -> bool {
@@ -63,9 +67,7 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> PartialEq<[u8]> for LazyTxSlice<'tx, L> {
   fn eq(&self, other: &[u8]) -> bool {
     TryPartialEq::try_eq(self, &other).expect("partial_eq error")
   }
-
 }
-
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> Eq for LazyTxSlice<'tx, L> {}
 
@@ -122,7 +124,6 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyTxSlice<'tx, L> {
     }
   }
 }
-
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> KvEq for LazyTxSlice<'tx, L> {}
 

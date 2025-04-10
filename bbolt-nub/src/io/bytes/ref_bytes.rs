@@ -1,9 +1,9 @@
+use crate::common::errors::OpsError;
 use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxSlice};
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, SubRange,
-  TryBuf, TryGet,
+  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, SubRange, TryBuf, TryGet,
 };
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
@@ -11,7 +11,6 @@ use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
 use std::ptr::slice_from_raw_parts;
 use std::{io, slice};
-use crate::common::errors::OpsError;
 
 #[derive(Debug, Clone)]
 pub struct RefBytes {

@@ -1,10 +1,13 @@
-use std::cmp::Ordering;
-use std::ops::{Range, RangeBounds};
-use std::hash;
 use crate::common::errors::{OpsError, PageError};
-use crate::io::ops::{GetKvRefSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd};
+use crate::io::ops::{
+  GetKvRefSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf,
+  TryGet, TryHash, TryPartialEq, TryPartialOrd,
+};
 use crate::io::pages::lazy::{LazyIter, LazyPage};
 use crate::io::pages::{TxPageType, TxReadLazyPageIO, TxReadPageIO};
+use std::cmp::Ordering;
+use std::hash;
+use std::ops::{Range, RangeBounds};
 
 pub struct LazyRefSlice<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
   page: &'a LazyPage<'tx, L>,
@@ -25,7 +28,6 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> Clone for LazyRefSlice<'a, 'tx, L> {
     }
   }
 }
-
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> PartialEq for LazyRefSlice<'a, 'tx, L> {
   fn eq(&self, other: &Self) -> bool {
@@ -111,20 +113,25 @@ impl<'p, 'tx, L: TxReadLazyPageIO<'tx>> TryGet<u8> for LazyRefSlice<'p, 'tx, L> 
 }
 
 impl<'p, 'tx, L: TxReadLazyPageIO<'tx>> RefIntoTryBuf for LazyRefSlice<'p, 'tx, L> {
-  type TryBuf<'a> = LazyRefTryBuf<'a, 'tx, L>
+  type TryBuf<'a>
+    = LazyRefTryBuf<'a, 'tx, L>
   where
     Self: 'a;
 
-  fn ref_into_try_buf<'a>(&'a self) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error> {
+  fn ref_into_try_buf<'a>(
+    &'a self,
+  ) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error> {
     todo!()
   }
 }
 
-impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvEq for LazyRefSlice<'a, 'tx, L> {}
 
-impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvOrd for LazyRefSlice<'a, 'tx, L> {}
-
-impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L> {}
+pub struct LazyRefTryBuf<'a, 'tx, L: TxReadLazyPageIO<'tx>> {
+  slice: LazyRefSlice<'a, 'tx, L>,
+  range: Range<usize>,
+  page: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes,
+  overflow_index: u32,
+}
 
 impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> LazyRefTryBuf<'a, 'tx, L> {
   pub fn new(slice: &LazyRefSlice<'a, 'tx, L>) -> crate::Result<Self, PageError> {
@@ -135,13 +142,12 @@ impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> LazyRefTryBuf<'a, 'tx, L> {
     } else {
       slice.page.read_overflow_page(overflow_index)
     };
-    page_result.map(|page| {
-      LazyRefTryBuf {
+    page_result.map(|page| LazyRefTryBuf {
       slice: (*slice).clone(),
       range,
       page,
       overflow_index,
-    }})
+    })
   }
 }
 
@@ -162,9 +168,9 @@ impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> TryBuf for LazyRefTryBuf<'a, 'tx, L> {
   }
 }
 
-pub struct LazyRefTryBuf<'a, 'tx, L: TxReadLazyPageIO<'tx>> {
-  slice: LazyRefSlice<'a, 'tx, L>,
-  range: Range<usize>,
-  page: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes,
-  overflow_index: u32
-}
+
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvEq for LazyRefSlice<'a, 'tx, L> {}
+
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvOrd for LazyRefSlice<'a, 'tx, L> {}
+
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvDataType for LazyRefSlice<'a, 'tx, L> {}

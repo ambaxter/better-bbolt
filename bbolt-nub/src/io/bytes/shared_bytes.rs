@@ -4,8 +4,7 @@ use crate::io::TxSlot;
 use crate::io::bytes::ref_bytes::RefTryBuf;
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, SubRange,
-  TryBuf, TryGet,
+  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, SubRange, TryBuf, TryGet,
 };
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
