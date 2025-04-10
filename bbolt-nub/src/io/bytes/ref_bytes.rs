@@ -3,7 +3,7 @@ use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxSlice};
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, RefIntoCopiedIter,
+  Buf, GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, RefIntoCopiedIter,
   SubRange, TryBuf, TryGet,
 };
 use std::cmp::Ordering;
@@ -204,12 +204,12 @@ impl<'tx> GetKvTxSlice<'tx> for RefTxSlice<'tx> {
   }
 }
 
-pub struct RefTryBuf<'a> {
+pub struct RefBuf<'a> {
   buf: &'a [u8],
   range: Range<usize>,
 }
 
-impl<'a> RefTryBuf<'a> {
+impl<'a> RefBuf<'a> {
   pub fn new(buf: &'a [u8]) -> Self {
     Self {
       buf,
@@ -218,9 +218,7 @@ impl<'a> RefTryBuf<'a> {
   }
 }
 
-impl<'a> TryBuf for RefTryBuf<'a> {
-  type Error = OpsError;
-
+impl<'a> Buf for RefBuf<'a> {
   fn remaining(&self) -> usize {
     self.range.len()
   }
@@ -229,8 +227,36 @@ impl<'a> TryBuf for RefTryBuf<'a> {
     &self.buf[self.range.clone()]
   }
 
-  fn try_advance(&mut self, cnt: usize) -> crate::Result<(), Self::Error> {
+  fn advance(&mut self, cnt: usize) {
     self.range = self.range.sub_range(cnt..);
+  }
+}
+
+pub struct RefTryBuf<'a> {
+  ref_buf: RefBuf<'a>,
+}
+
+impl<'a> RefTryBuf<'a> {
+  pub fn new(buf: &'a [u8]) -> Self {
+    Self {
+      ref_buf: RefBuf::new(buf),
+    }
+  }
+}
+
+impl<'a> TryBuf for RefTryBuf<'a> {
+  type Error = OpsError;
+
+  fn remaining(&self) -> usize {
+    self.ref_buf.remaining()
+  }
+
+  fn chunk(&self) -> &[u8] {
+    self.ref_buf.chunk()
+  }
+
+  fn try_advance(&mut self, cnt: usize) -> crate::Result<(), Self::Error> {
+    self.ref_buf.advance(cnt);
     Ok(())
   }
 }

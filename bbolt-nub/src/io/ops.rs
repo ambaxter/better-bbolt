@@ -1,5 +1,5 @@
 use crate::common::errors::OpsError;
-use crate::io::bytes::ref_bytes::RefTryBuf;
+use crate::io::bytes::ref_bytes::{RefBuf, RefTryBuf};
 use crate::io::pages::{TxPage, TxPageType};
 use error_stack::{FutureExt, ResultExt};
 use std::cmp::Ordering;
@@ -9,6 +9,8 @@ use std::hash::{Hash, Hasher};
 use std::iter::{Copied, Map};
 use std::ops::{Range, RangeBounds};
 use std::{io, slice};
+
+pub use bytes::Buf;
 
 pub trait SubRange {
   fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
@@ -122,6 +124,13 @@ where
   }
 }
 
+impl TryHash for [u8] {
+  type Error = OpsError;
+  fn try_hash<H: Hasher>(&self, state: &mut H) -> Result<(), Self::Error> {
+    Ok(self.hash(state))
+  }
+}
+
 pub trait TryGet<T> {
   type Error: Error + Send + Sync + 'static;
 
@@ -134,6 +143,13 @@ where
 {
   type Error = OpsError;
 
+  fn try_get(&self, index: usize) -> crate::Result<Option<u8>, Self::Error> {
+    Ok(self.as_ref().get(index).copied())
+  }
+}
+
+impl TryGet<u8> for [u8] {
+  type Error = OpsError;
   fn try_get(&self, index: usize) -> crate::Result<Option<u8>, Self::Error> {
     Ok(self.as_ref().get(index).copied())
   }
@@ -177,6 +193,39 @@ pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
   }
 }
 
+pub trait RefIntoBuf {
+  type Buf<'a>: Buf + 'a
+  where
+    Self: 'a;
+
+  fn ref_into_buf<'a>(&'a self) -> Self::Buf<'a>;
+}
+
+impl<T> RefIntoBuf for T
+where
+  T: AsRef<[u8]>,
+{
+  type Buf<'a>
+    = RefBuf<'a>
+  where
+    Self: 'a;
+
+  fn ref_into_buf<'a>(&'a self) -> Self::Buf<'a> {
+    RefBuf::new(self.as_ref())
+  }
+}
+
+impl RefIntoBuf for [u8] {
+  type Buf<'a>
+    = RefBuf<'a>
+  where
+    Self: 'a;
+
+  fn ref_into_buf<'a>(&'a self) -> Self::Buf<'a> {
+    RefBuf::new(self)
+  }
+}
+
 pub trait RefIntoTryBuf {
   type TryBuf<'a>: TryBuf + 'a
   where
@@ -215,6 +264,76 @@ impl RefIntoTryBuf for [u8] {
     Ok(RefTryBuf::new(self.as_ref()))
   }
 }
+
+impl<T, U> TryPartialEq<U> for T
+where
+  T: AsRef<[u8]>,
+  U: AsRef<[u8]>,
+{
+  type Error = OpsError;
+
+  fn try_eq(&self, other: &U) -> crate::Result<bool, Self::Error> {
+    Ok(self.as_ref().eq(other.as_ref()))
+  }
+}
+
+impl<T> TryPartialEq<[u8]> for T
+where
+  T: AsRef<[u8]>,
+{
+  type Error = OpsError;
+
+  fn try_eq(&self, other: &[u8]) -> crate::Result<bool, Self::Error> {
+    Ok(self.as_ref().eq(other))
+  }
+}
+
+impl<T> TryPartialEq<T> for [u8]
+where
+  T: AsRef<[u8]>,
+{
+  type Error = OpsError;
+
+  fn try_eq(&self, other: &T) -> crate::Result<bool, Self::Error> {
+    Ok(self.eq(other.as_ref()))
+  }
+}
+
+impl<T, U> TryPartialOrd<U> for T
+where
+  T: AsRef<[u8]>,
+  U: AsRef<[u8]>,
+{
+  fn try_partial_cmp<'a>(
+    &'a self, other: &'a U,
+  ) -> error_stack::Result<Option<Ordering>, Self::Error> {
+    Ok(self.as_ref().partial_cmp(other.as_ref()))
+  }
+}
+
+impl<T> TryPartialOrd<[u8]> for T
+where
+  T: AsRef<[u8]>,
+{
+  fn try_partial_cmp<'a>(
+    &'a self, other: &'a [u8],
+  ) -> crate::Result<Option<Ordering>, Self::Error> {
+    Ok(self.as_ref().partial_cmp(other))
+  }
+}
+
+impl<T> TryPartialOrd<T> for [u8]
+where
+  T: AsRef<[u8]>,
+{
+  fn try_partial_cmp<'a>(
+    &'a self, other: &'a T,
+  ) -> error_stack::Result<Option<Ordering>, Self::Error> {
+    Ok(self.partial_cmp(other.as_ref()))
+  }
+}
+
+/*
 impl<Rhs: ?Sized, T: ?Sized> TryPartialEq<Rhs> for T
 where
   T: RefIntoTryBuf,
@@ -223,17 +342,12 @@ where
   type Error = OpsError;
 
   fn try_eq(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
-    // Until it's fixed, don't use Result.change_context(). Some compiler bug exists there
-    // I *still* can't create a reproducer
-    // https://users.rust-lang.org/t/how-does-borrowed-data-escapes-outside-of-method-im-truly-confused/128048/2
-    let mut s_buf = match self.ref_into_try_buf() {
-      Ok(buf) => buf,
-      Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
-    };
-    let mut o_buf = match other.ref_into_try_buf() {
-      Ok(buf) => buf,
-      Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
-    };
+    let mut s_buf = self
+      .ref_into_try_buf()
+      .change_context(OpsError::TryPartialEq)?;
+    let mut o_buf = other
+      .ref_into_try_buf()
+      .change_context(OpsError::TryPartialEq)?;
     if s_buf.remaining() != o_buf.remaining() {
       return Ok(false);
     }
@@ -248,14 +362,12 @@ where
       if s_cmp != o_cmp {
         return Ok(false);
       }
-      match s_buf.try_advance(cmp_len) {
-        Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
-        _ => {}
-      };
-      match o_buf.try_advance(cmp_len) {
-        Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
-        _ => {}
-      };
+      s_buf
+        .try_advance(cmp_len)
+        .change_context(OpsError::TryPartialEq)?;
+      o_buf
+        .try_advance(cmp_len)
+        .change_context(OpsError::TryPartialEq)?;
     }
     Ok(true)
   }
@@ -267,14 +379,12 @@ where
   T: RefIntoTryBuf,
 {
   fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> crate::Result<Option<Ordering>, Self::Error> {
-    let mut s_buf = match self.ref_into_try_buf() {
-      Ok(buf) => buf,
-      Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
-    };
-    let mut o_buf = match other.ref_into_try_buf() {
-      Ok(buf) => buf,
-      Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
-    };
+    let mut s_buf = self
+      .ref_into_try_buf()
+      .change_context(OpsError::TryPartialOrd)?;
+    let mut o_buf = other
+      .ref_into_try_buf()
+      .change_context(OpsError::TryPartialOrd)?;
     while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
       let s_chunk = s_buf.chunk();
       let o_chunk = o_buf.chunk();
@@ -286,19 +396,17 @@ where
       if cmp != Ordering::Equal {
         return Ok(Some(cmp));
       }
-      match s_buf.try_advance(cmp_len) {
-        Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
-        _ => {}
-      };
-      match o_buf.try_advance(cmp_len) {
-        Err(e) => return Err(e.change_context(OpsError::TryPartialEq)),
-        _ => {}
-      };
+      s_buf
+        .try_advance(cmp_len)
+        .change_context(OpsError::TryPartialOrd)?;
+      o_buf
+        .try_advance(cmp_len)
+        .change_context(OpsError::TryPartialOrd)?;
     }
     Ok(s_buf.remaining().partial_cmp(&o_buf.remaining()))
   }
 }
-
+*/
 pub trait TryBuf: Sized {
   type Error: Error + Send + Sync + 'static;
 

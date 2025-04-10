@@ -3,16 +3,18 @@ use crate::common::id::OverflowPageId;
 use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::SharedTxBytes;
 use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange,
-  TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
+  Buf, GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf,
+  SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
 };
 use crate::io::pages::lazy::ref_slice::LazyRefTryBuf;
 use crate::io::pages::lazy::tx_slice::LazyTxSlice;
 use crate::io::pages::{Page, TxPageType, TxReadLazyPageIO, TxReadPageIO};
 use error_stack::ResultExt;
 use ref_slice::LazyRefSlice;
+use std::cmp::Ordering;
 use std::hash;
 use std::ops::{Deref, Range, RangeBounds};
+use tracing::warn;
 
 pub mod ref_slice;
 pub mod tx_slice;
@@ -190,4 +192,169 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> ExactSizeIterator for LazyIter<'a, '
   fn len(&self) -> usize {
     self.range.len()
   }
+}
+
+pub fn try_partial_eq_try_buf_try_buf<T, U>(
+  mut s_buf: T, mut o_buf: U,
+) -> crate::Result<bool, OpsError>
+where
+  T: TryBuf,
+  U: TryBuf,
+{
+  if s_buf.remaining() != o_buf.remaining() {
+    return Ok(false);
+  }
+  while s_buf.remaining() > 0 {
+    let s_chunk = s_buf.chunk();
+    let o_chunk = o_buf.chunk();
+    let cmp_len = s_chunk.len().min(o_chunk.len());
+    //TODO: What do we do here?
+    assert_ne!(0, cmp_len);
+    let s_cmp = &s_chunk[..cmp_len];
+    let o_cmp = &o_chunk[..cmp_len];
+    if s_cmp != o_cmp {
+      return Ok(false);
+    }
+    s_buf
+      .try_advance(cmp_len)
+      .change_context(OpsError::TryPartialEq)?;
+    o_buf
+      .try_advance(cmp_len)
+      .change_context(OpsError::TryPartialEq)?;
+  }
+  Ok(true)
+}
+
+pub fn try_partial_eq_try_buf_buf<T, U>(mut s_buf: T, mut o_buf: U) -> crate::Result<bool, OpsError>
+where
+  T: TryBuf,
+  U: Buf,
+{
+  if s_buf.remaining() != o_buf.remaining() {
+    return Ok(false);
+  }
+  while s_buf.remaining() > 0 {
+    let s_chunk = s_buf.chunk();
+    let o_chunk = o_buf.chunk();
+    let cmp_len = s_chunk.len().min(o_chunk.len());
+    //TODO: What do we do here?
+    assert_ne!(0, cmp_len);
+    let s_cmp = &s_chunk[..cmp_len];
+    let o_cmp = &o_chunk[..cmp_len];
+    if s_cmp != o_cmp {
+      return Ok(false);
+    }
+    s_buf
+      .try_advance(cmp_len)
+      .change_context(OpsError::TryPartialEq)?;
+    o_buf.advance(cmp_len);
+  }
+  Ok(true)
+}
+
+pub fn try_partial_eq_buf_try_buf<T, U>(mut s_buf: T, mut o_buf: U) -> crate::Result<bool, OpsError>
+where
+  T: Buf,
+  U: TryBuf,
+{
+  if s_buf.remaining() != o_buf.remaining() {
+    return Ok(false);
+  }
+  while s_buf.remaining() > 0 {
+    let s_chunk = s_buf.chunk();
+    let o_chunk = o_buf.chunk();
+    let cmp_len = s_chunk.len().min(o_chunk.len());
+    //TODO: What do we do here?
+    assert_ne!(0, cmp_len);
+    let s_cmp = &s_chunk[..cmp_len];
+    let o_cmp = &o_chunk[..cmp_len];
+    if s_cmp != o_cmp {
+      return Ok(false);
+    }
+    s_buf.advance(cmp_len);
+    o_buf
+      .try_advance(cmp_len)
+      .change_context(OpsError::TryPartialEq)?;
+  }
+  Ok(true)
+}
+
+pub fn try_partial_cmp_try_buf_try_buf<T, U>(
+  mut s_buf: T, mut o_buf: U,
+) -> crate::Result<Option<Ordering>, OpsError>
+where
+  T: TryBuf,
+  U: TryBuf,
+{
+  while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
+    let s_chunk = s_buf.chunk();
+    let o_chunk = o_buf.chunk();
+    let cmp_len = s_chunk.len().min(o_chunk.len());
+    assert_ne!(0, cmp_len);
+    let s_cmp = &s_chunk[..cmp_len];
+    let o_cmp = &o_chunk[..cmp_len];
+    let cmp = s_cmp.cmp(o_cmp);
+    if cmp != Ordering::Equal {
+      return Ok(Some(cmp));
+    }
+    s_buf
+      .try_advance(cmp_len)
+      .change_context(OpsError::TryPartialOrd)?;
+    o_buf
+      .try_advance(cmp_len)
+      .change_context(OpsError::TryPartialOrd)?;
+  }
+  Ok(s_buf.remaining().partial_cmp(&o_buf.remaining()))
+}
+
+pub fn try_partial_cmp_try_buf_buf<T, U>(
+  mut s_buf: T, mut o_buf: U,
+) -> crate::Result<Option<Ordering>, OpsError>
+where
+  T: TryBuf,
+  U: Buf,
+{
+  while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
+    let s_chunk = s_buf.chunk();
+    let o_chunk = o_buf.chunk();
+    let cmp_len = s_chunk.len().min(o_chunk.len());
+    assert_ne!(0, cmp_len);
+    let s_cmp = &s_chunk[..cmp_len];
+    let o_cmp = &o_chunk[..cmp_len];
+    let cmp = s_cmp.cmp(o_cmp);
+    if cmp != Ordering::Equal {
+      return Ok(Some(cmp));
+    }
+    s_buf
+      .try_advance(cmp_len)
+      .change_context(OpsError::TryPartialOrd)?;
+    o_buf.advance(cmp_len);
+  }
+  Ok(s_buf.remaining().partial_cmp(&o_buf.remaining()))
+}
+
+fn try_partial_cmp_buf_try_buf<T, U>(
+  mut s_buf: T, mut o_buf: U,
+) -> crate::Result<Option<Ordering>, OpsError>
+where
+  T: Buf,
+  U: TryBuf,
+{
+  while s_buf.remaining() > 0 && o_buf.remaining() > 0 {
+    let s_chunk = s_buf.chunk();
+    let o_chunk = o_buf.chunk();
+    let cmp_len = s_chunk.len().min(o_chunk.len());
+    assert_ne!(0, cmp_len);
+    let s_cmp = &s_chunk[..cmp_len];
+    let o_cmp = &o_chunk[..cmp_len];
+    let cmp = s_cmp.cmp(o_cmp);
+    if cmp != Ordering::Equal {
+      return Ok(Some(cmp));
+    }
+    s_buf.advance(cmp_len);
+    o_buf
+      .try_advance(cmp_len)
+      .change_context(OpsError::TryPartialOrd)?;
+  }
+  Ok(s_buf.remaining().partial_cmp(&o_buf.remaining()))
 }

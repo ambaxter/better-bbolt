@@ -36,3 +36,4 @@ tracing.workspace = true
 error-stack.workspace = true
 bumpalo.workspace = true
 rayon = {workspace = true, optional = true}
+bytes.workspace = true
