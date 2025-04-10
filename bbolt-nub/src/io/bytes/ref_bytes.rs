@@ -3,7 +3,8 @@ use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxSlice};
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, SubRange, TryBuf, TryGet,
+  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, RefIntoCopiedIter,
+  SubRange, TryBuf, TryGet,
 };
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
@@ -179,7 +180,12 @@ impl<'tx> GetKvTxSlice<'tx> for RefTxBytes<'tx> {
   }
 }
 
+impl<'tx> KvTryEq for RefTxSlice<'tx> {}
+
 impl<'tx> KvEq for RefTxSlice<'tx> {}
+
+impl<'tx> KvTryOrd for RefTxSlice<'tx> {}
+
 impl<'tx> KvOrd for RefTxSlice<'tx> {}
 
 impl<'tx> RefIntoCopiedIter for RefTxSlice<'tx> {
@@ -251,7 +257,12 @@ impl<'a> TryBuf for RefTryBuf<'a> {
   }
 }
 
+impl<'tx> KvTryEq for RefTxBytes<'tx> {}
+
 impl<'tx> KvEq for RefTxBytes<'tx> {}
+
+impl<'tx> KvTryOrd for RefTxBytes<'tx> {}
+
 impl<'tx> KvOrd for RefTxBytes<'tx> {}
 
 impl<'tx> KvDataType for RefTxBytes<'tx> {}

@@ -1,7 +1,7 @@
 use crate::common::errors::{OpsError, PageError};
 use crate::io::ops::{
-  GetKvRefSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange, TryBuf,
-  TryGet, TryHash, TryPartialEq, TryPartialOrd,
+  GetKvRefSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, RefIntoCopiedIter, RefIntoTryBuf,
+  SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
 };
 use crate::io::pages::lazy::{LazyIter, LazyPage};
 use crate::io::pages::{TxPageType, TxReadLazyPageIO, TxReadPageIO};
@@ -37,7 +37,7 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> PartialEq for LazyRefSlice<'a, 'tx, 
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> PartialEq<[u8]> for LazyRefSlice<'a, 'tx, L> {
   fn eq(&self, other: &[u8]) -> bool {
-    TryPartialEq::try_eq(self, &other).expect("partial_eq error")
+    TryPartialEq::try_eq(self, other).expect("partial_eq error")
   }
 }
 
@@ -51,15 +51,15 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> PartialOrd for LazyRefSlice<'a, 'tx,
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> PartialOrd<[u8]> for LazyRefSlice<'a, 'tx, L> {
   fn partial_cmp(&self, other: &[u8]) -> Option<Ordering> {
-    TryPartialOrd::try_partial_cmp(self, &other).expect("partial_ord error")
+    TryPartialOrd::try_partial_cmp(self, other).expect("partial_ord error")
   }
 }
 
 impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> Ord for LazyRefSlice<'a, 'tx, L> {
   fn cmp(&self, other: &Self) -> Ordering {
-    self
-      .ref_into_copied_iter()
-      .cmp(other.ref_into_copied_iter())
+    TryPartialOrd::try_partial_cmp(self, other)
+      .expect("partial_ord error")
+      .expect("cannot be empty")
   }
 }
 
@@ -125,7 +125,6 @@ impl<'p, 'tx, L: TxReadLazyPageIO<'tx>> RefIntoTryBuf for LazyRefSlice<'p, 'tx, 
   }
 }
 
-
 pub struct LazyRefTryBuf<'a, 'tx, L: TxReadLazyPageIO<'tx>> {
   slice: LazyRefSlice<'a, 'tx, L>,
   range: Range<usize>,
@@ -168,8 +167,11 @@ impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> TryBuf for LazyRefTryBuf<'a, 'tx, L> {
   }
 }
 
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvTryEq for LazyRefSlice<'a, 'tx, L> {}
 
 impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvEq for LazyRefSlice<'a, 'tx, L> {}
+
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvTryOrd for LazyRefSlice<'a, 'tx, L> {}
 
 impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> KvOrd for LazyRefSlice<'a, 'tx, L> {}
 

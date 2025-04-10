@@ -87,7 +87,7 @@ pub trait TryPartialEq<Rhs: ?Sized = Self> {
   }
 }
 
-pub trait TryEq: TryPartialEq {}
+pub trait TryEq: TryPartialEq<Self> {}
 
 pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
   fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> crate::Result<Option<Ordering>, Self::Error>;
@@ -131,6 +131,19 @@ impl<T> RefIntoTryBuf for T
 where
   T: AsRef<[u8]>,
 {
+  type TryBuf<'a>
+    = RefTryBuf<'a>
+  where
+    Self: 'a;
+
+  fn ref_into_try_buf<'a>(
+    &'a self,
+  ) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error> {
+    Ok(RefTryBuf::new(self.as_ref()))
+  }
+}
+
+impl RefIntoTryBuf for [u8] {
   type TryBuf<'a>
     = RefTryBuf<'a>
   where
@@ -188,7 +201,6 @@ where
   }
 }
 
-// RustRover doesn't like this
 impl<T: ?Sized, Rhs: ?Sized> TryPartialOrd<Rhs> for T
 where
   Rhs: RefIntoTryBuf,
@@ -227,7 +239,7 @@ where
   }
 }
 
-pub trait TryBuf {
+pub trait TryBuf: Sized {
   type Error: Error + Send + Sync;
 
   fn remaining(&self) -> usize;
@@ -237,12 +249,15 @@ pub trait TryBuf {
   fn try_advance(&mut self, cnt: usize) -> crate::Result<(), Self::Error>;
 }
 
-pub trait KvEq: Eq + PartialEq<[u8]> /* + TryPartialEq + TryPartialEq<[u8]> */ +  Sized {}
+pub trait KvTryEq: TryPartialEq + TryPartialEq<[u8]> {}
+pub trait KvTryOrd: TryPartialOrd + TryPartialOrd<[u8]> {}
 
-pub trait KvOrd: Ord + PartialOrd<[u8]> /*+ TryPartialOrd + TryPartialOrd<[u8]> */ + KvEq {}
+pub trait KvEq: Eq + PartialEq<[u8]> + KvTryEq {}
+
+pub trait KvOrd: Ord + PartialOrd<[u8]> + KvTryOrd + KvEq {}
 
 pub trait KvDataType:
-  KvOrd + TryHash + Hash + TryGet<u8> + RefIntoCopiedIter + RefIntoTryBuf
+  KvOrd + TryHash + Hash + TryGet<u8> + RefIntoCopiedIter + RefIntoTryBuf + Sized
 {
 }
 

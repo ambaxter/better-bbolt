@@ -4,7 +4,8 @@ use crate::io::TxSlot;
 use crate::io::bytes::ref_bytes::RefTryBuf;
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, SubRange, TryBuf, TryGet,
+  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, RefIntoCopiedIter,
+  SubRange, TryBuf, TryGet,
 };
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
@@ -127,7 +128,9 @@ impl<'tx> Hash for SharedTxBytes<'tx> {
   }
 }
 
+impl<'tx> KvTryEq for SharedTxBytes<'tx> {}
 impl<'tx> KvEq for SharedTxBytes<'tx> {}
+impl<'tx> KvTryOrd for SharedTxBytes<'tx> {}
 impl<'tx> KvOrd for SharedTxBytes<'tx> {}
 impl<'tx> KvDataType for SharedTxBytes<'tx> {}
 
@@ -245,7 +248,9 @@ impl<'tx> PartialOrd<[u8]> for SharedRefSlice<'tx> {
   }
 }
 
+impl<'tx> KvTryEq for SharedRefSlice<'tx> {}
 impl<'tx> KvEq for SharedRefSlice<'tx> {}
+impl<'tx> KvTryOrd for SharedRefSlice<'tx> {}
 impl<'tx> KvOrd for SharedRefSlice<'tx> {}
 impl<'tx> KvDataType for SharedRefSlice<'tx> {}
 
@@ -329,6 +334,8 @@ impl<'tx> Hash for SharedTxSlice<'tx> {
   }
 }
 
+impl<'tx> KvTryEq for SharedTxSlice<'tx> {}
 impl<'tx> KvEq for SharedTxSlice<'tx> {}
+impl<'tx> KvTryOrd for SharedTxSlice<'tx> {}
 impl<'tx> KvOrd for SharedTxSlice<'tx> {}
 impl<'tx> KvDataType for SharedTxSlice<'tx> {}

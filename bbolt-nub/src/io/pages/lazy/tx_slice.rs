@@ -1,7 +1,7 @@
 use crate::common::errors::OpsError;
 use crate::io::ops::{
-  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, RefIntoCopiedIter, RefIntoTryBuf, SubRange,
-  TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
+  GetKvRefSlice, GetKvTxSlice, KvDataType, KvEq, KvOrd, KvTryEq, KvTryOrd, RefIntoCopiedIter,
+  RefIntoTryBuf, SubRange, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
 };
 use crate::io::pages::TxReadLazyPageIO;
 use crate::io::pages::lazy::ref_slice::{LazyRefSlice, LazyRefTryBuf};
@@ -79,7 +79,7 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> PartialOrd for LazyTxSlice<'tx, L> {
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> PartialOrd<[u8]> for LazyTxSlice<'tx, L> {
   fn partial_cmp(&self, other: &[u8]) -> Option<Ordering> {
-    TryPartialOrd::try_partial_cmp(self, &other).expect("partialord failure")
+    TryPartialOrd::try_partial_cmp(self, other).expect("partialord failure")
   }
 }
 
@@ -125,7 +125,11 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyTxSlice<'tx, L> {
   }
 }
 
+impl<'tx, L: TxReadLazyPageIO<'tx>> KvTryEq for LazyTxSlice<'tx, L> {}
+
 impl<'tx, L: TxReadLazyPageIO<'tx>> KvEq for LazyTxSlice<'tx, L> {}
+
+impl<'tx, L: TxReadLazyPageIO<'tx>> KvTryOrd for LazyTxSlice<'tx, L> {}
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> KvOrd for LazyTxSlice<'tx, L> {}
 impl<'tx, L: TxReadLazyPageIO<'tx>> KvDataType for LazyTxSlice<'tx, L> {}
