@@ -114,6 +114,7 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> TxPageType<'tx> for LazyPage<'tx, L> {
   type TxPageBytes = SharedTxBytes<'tx>;
 }
 
+// TODO: Change this to TryCopyIter by default and then panicable
 #[derive(Clone)]
 pub struct LazyIter<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> {
   page: &'a LazyPage<'tx, L>,

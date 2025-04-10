@@ -6,9 +6,9 @@ use std::cmp::Ordering;
 use std::collections::Bound;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
-use std::{io, slice};
-use std::iter::Copied;
+use std::iter::{Copied, Map};
 use std::ops::{Range, RangeBounds};
+use std::{io, slice};
 
 pub trait SubRange {
   fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
@@ -42,11 +42,35 @@ impl SubRange for Range<usize> {
 pub trait RefIntoTryCopiedIter {
   type Error: Error + Send + Sync + 'static;
 
-  type Iter<'a>: Iterator<Item = Result<u8, Self::Error>> + DoubleEndedIterator + ExactSizeIterator + 'a
-  where
-    Self: 'a;
+  // TODO: Impl trait is not allowed for associated types. Fix this when possible
+  fn ref_into_try_copied_iter<'a>(
+    &'a self,
+  ) -> Result<impl Iterator<Item = Result<u8, Self::Error>> + DoubleEndedIterator + 'a, Self::Error>;
+}
 
-  fn ref_into_try_copied_iter<'a>(&'a self) -> Self::Iter<'a>;
+impl<T> RefIntoTryCopiedIter for T
+where
+  T: AsRef<[u8]>,
+{
+  type Error = OpsError;
+
+  fn ref_into_try_copied_iter<'a>(
+    &'a self,
+  ) -> Result<impl Iterator<Item = Result<u8, Self::Error>> + DoubleEndedIterator + 'a, Self::Error>
+  {
+    Ok(self.as_ref().iter().copied().map(|b| Ok(b)))
+  }
+}
+
+impl RefIntoTryCopiedIter for [u8] {
+  type Error = OpsError;
+
+  fn ref_into_try_copied_iter<'a>(
+    &'a self,
+  ) -> Result<impl Iterator<Item = Result<u8, Self::Error>> + DoubleEndedIterator + 'a, Self::Error>
+  {
+    Ok(self.as_ref().iter().copied().map(|b| Ok(b)))
+  }
 }
 
 pub trait RefIntoCopiedIter {
@@ -56,9 +80,12 @@ pub trait RefIntoCopiedIter {
   fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a>;
 }
 
-impl<T> RefIntoCopiedIter for T where T: AsRef<[u8]> {
+impl<T> RefIntoCopiedIter for T
+where
+  T: AsRef<[u8]>,
+{
   type Iter<'a>
-  = Copied<slice::Iter<'a, u8>>
+    = Copied<slice::Iter<'a, u8>>
   where
     Self: 'a;
 
@@ -69,7 +96,7 @@ impl<T> RefIntoCopiedIter for T where T: AsRef<[u8]> {
 
 impl RefIntoCopiedIter for [u8] {
   type Iter<'a>
-  = Copied<slice::Iter<'a, u8>>
+    = Copied<slice::Iter<'a, u8>>
   where
     Self: 'a;
   #[inline]
@@ -77,7 +104,6 @@ impl RefIntoCopiedIter for [u8] {
     self.iter().copied()
   }
 }
-
 
 pub trait TryHash {
   type Error: Error + Send + Sync + 'static;
