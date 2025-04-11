@@ -152,15 +152,15 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
   }
 
   fn move_to_first_element_on_stack(&mut self) -> crate::Result<(), CursorError> {
+    assert!(!self.stack.is_empty());
     loop {
-      assert!(!self.stack.is_empty());
-      let r = self.stack.last().expect("stack empty");
-      if r.is_leaf() {
+      let entry = self.stack.last().expect("stack empty");
+      if entry.is_leaf() {
         break;
       }
 
-      let node_page_id = match &r.page {
-        NodePage::Branch(branch) => branch.elements()[r.index].page_id(),
+      let node_page_id = match &entry.page {
+        NodePage::Branch(branch) => branch.elements()[entry.index].page_id(),
         NodePage::Leaf(_) => unreachable!("Cannot be leaf"),
       };
 
@@ -171,7 +171,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
         .change_context(CursorError::GoToFirstElement)?;
       self.stack.push(StackEntry::new(node));
     }
-
+    self.location = CursorLocation::Inside;
     Ok(())
   }
 
@@ -204,24 +204,86 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
 
       // If this is an empty page then restart and move back up the stack.
       // https://github.com/boltdb/bolt/issues/450
-      if let Some(entry) = self.stack.last() {
-        if entry.element_count() == 0 {
-          continue;
-        } else {
-          match &entry.page {
-            NodePage::Branch(_) => unreachable!("cannot be branch"),
-            NodePage::Leaf(leaf) => return Ok(leaf.leaf_flag(entry.index)),
-          }
-        }
+      let entry = self.stack.last_mut().expect("stack empty");
+      if entry.element_count() == 0 {
+        continue;
+      }
+      match &entry.page {
+        NodePage::Branch(_) => unreachable!("cannot be branch"),
+        NodePage::Leaf(leaf) => return Ok(leaf.leaf_flag(entry.index)),
       }
     }
   }
 
   fn move_to_prev_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
-    todo!()
+    // Attempt to move back one element until we're successful.
+    // Move up the stack as we hit the beginning of each page in our stack.
+    let mut new_stack_depth = 0;
+    let mut stack_exhausted = true;
+    for (depth, entry) in self.stack.iter_mut().enumerate().rev() {
+      new_stack_depth = depth + 1;
+      if entry.index > 0 {
+        entry.index -= 1;
+        stack_exhausted = false;
+        break;
+      }
+      // If we've hit the beginning, we should stop moving the cursor,
+      // and stay at the first element, so that users can continue to
+      // iterate over the elements in reverse direction by calling `Next`.
+      // We should return nil in such case.
+      // Refer to https://github.com/etcd-io/bbolt/issues/733
+      if new_stack_depth == 1 {
+        self.move_to_first_element_on_stack()?;
+        self.location = CursorLocation::Begin;
+        return Ok(None);
+      }
+    }
+    if stack_exhausted {
+      self.stack.truncate(0);
+    } else {
+      self.stack.truncate(new_stack_depth);
+    }
+
+    // If we've hit the end then return None
+    if self.stack.is_empty() {
+      self.location = CursorLocation::Begin;
+      return Ok(None);
+    }
+
+    // Move down the stack to find the last element of the last leaf under this branch.
+    self.move_to_last_element_on_stack()?;
+
+    let entry = self.stack.last_mut().expect("stack empty");
+    match &entry.page {
+      NodePage::Branch(_) => unreachable!("cannot be branch"),
+      NodePage::Leaf(leaf) => Ok(leaf.leaf_flag(entry.index)),
+    }
   }
 
-  fn move_to_last_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
-    todo!()
+  fn move_to_last_element_on_stack(&mut self) -> crate::Result<(), CursorError> {
+    assert!(!self.stack.is_empty());
+    loop {
+      // Exit when we hit a leaf page.
+      let entry = self.stack.last_mut().expect("stack empty");
+      if entry.is_leaf() {
+        break;
+      }
+      let node_page_id = match &entry.page {
+        NodePage::Branch(branch) => branch.elements()[entry.index].page_id(),
+        NodePage::Leaf(_) => unreachable!("Cannot be leaf"),
+      };
+
+      let node = self
+        .bucket
+        .tx
+        .read_node_page(node_page_id)
+        .change_context(CursorError::GoToFirstElement)?;
+      let element_index = node.element_count().saturating_sub(1);
+      self
+        .stack
+        .push(StackEntry::new_with_index(node, element_index));
+    }
+    self.location = CursorLocation::Inside;
+    Ok(())
   }
 }
