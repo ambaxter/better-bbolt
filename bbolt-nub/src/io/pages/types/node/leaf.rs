@@ -1,4 +1,4 @@
-use crate::common::layout::node::LeafElement;
+use crate::common::layout::node::{LeafElement, LeafFlag};
 use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
 use crate::io::pages::types::node::{HasElements, HasKeyPosLen, HasKeys, HasValues};
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
@@ -108,6 +108,10 @@ impl<'tx, T: 'tx> HasValues<'tx> for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
+  fn leaf_flag(&self, index: usize) -> Option<LeafFlag> {
+    self.elements().get(index).map(|element| element.flags())
+  }
+
   fn value_ref<'a>(&'a self, index: usize) -> Option<Self::RefKv<'a>> {
     self
       .value_range(index)

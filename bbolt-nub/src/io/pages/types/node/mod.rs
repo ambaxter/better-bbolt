@@ -1,6 +1,6 @@
 use crate::common::errors::{OpsError, PageError};
 use crate::common::id::NodePageId;
-use crate::common::layout::node::{BranchElement, LeafElement};
+use crate::common::layout::node::{BranchElement, LeafElement, LeafFlag};
 use crate::common::layout::page::PageHeader;
 use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
 use crate::io::pages::types::node::branch::BranchPage;
@@ -233,6 +233,8 @@ pub trait HasNodes<'tx>: HasKeys<'tx> {
 }
 
 pub trait HasValues<'tx>: HasKeys<'tx> {
+  fn leaf_flag(&self, index: usize) -> Option<LeafFlag>;
+
   fn value_ref<'a>(&'a self, index: usize) -> Option<Self::RefKv<'a>>;
 
   fn key_value_ref<'a>(&'a self, index: usize) -> Option<(Self::RefKv<'a>, Self::RefKv<'a>)>;
