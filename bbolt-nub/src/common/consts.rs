@@ -7,12 +7,12 @@ pub struct DbTag {
   pub magic: u32,
 }
 
-pub const BBOLT_COMPATIBLE_TAG: DbTag = DbTag {
+pub const BBOLT_TAG: DbTag = DbTag {
   version: 2,
   magic: 0xED0CDAED,
 };
 
-pub const ORIG_BBOLT_RS_TAG: DbTag = DbTag {
+pub const BBOLT_RS_TAG: DbTag = DbTag {
   version: 2,
   // Chosen from https://nedbatchelder.com/text/hexwords.html
   // as we are using the Go BBolt project code as a scaffold

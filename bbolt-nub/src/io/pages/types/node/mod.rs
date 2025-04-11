@@ -130,6 +130,11 @@ impl HasKeyPosLen for LeafElement {
 pub trait HasElements<'tx>: Page + GetKvRefSlice + Sync + Send {
   type Element: HasKeyPosLen + Sync;
 
+  #[inline]
+  fn element_count(&self) -> usize {
+    self.page_header().count() as usize
+  }
+
   fn elements(&self) -> &[Self::Element] {
     let elements_len = self.page_header().count() as usize;
     let elements_start = size_of::<PageHeader>();
@@ -229,7 +234,12 @@ pub trait HasNodes<'tx>: HasKeys<'tx> {
 
 pub trait HasValues<'tx>: HasKeys<'tx> {
   fn value_ref<'a>(&'a self, index: usize) -> Option<Self::RefKv<'a>>;
+
+  fn key_value_ref<'a>(&'a self, index: usize) -> Option<(Self::RefKv<'a>, Self::RefKv<'a>)>;
+
   fn value(&self, index: usize) -> Option<Self::TxKv>;
+
+  fn key_value(&self, index: usize) -> Option<(Self::TxKv, Self::TxKv)>;
 }
 
 #[derive(Clone)]
@@ -269,7 +279,7 @@ impl<'tx, T: 'tx> NodePage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  pub fn len(&self) -> usize {
+  pub fn element_count(&self) -> usize {
     let len = match self {
       NodePage::Branch(branch) => branch.page_header().count(),
       NodePage::Leaf(leaf) => leaf.page_header().count(),

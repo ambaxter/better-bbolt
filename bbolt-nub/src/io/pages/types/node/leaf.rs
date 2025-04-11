@@ -114,9 +114,27 @@ where
       .map(|value_range| self.page.get_ref_slice(value_range))
   }
 
+  fn key_value_ref<'a>(&'a self, index: usize) -> Option<(Self::RefKv<'a>, Self::RefKv<'a>)> {
+    let key_range = self.key_range(index)?;
+    let value_range = self.value_range(index)?;
+    Some((
+      self.page.get_ref_slice(key_range),
+      self.page.get_ref_slice(value_range),
+    ))
+  }
+
   fn value(&self, index: usize) -> Option<Self::TxKv> {
     self
       .value_range(index)
       .map(|value_range| self.page.get_tx_slice(value_range))
+  }
+
+  fn key_value(&self, index: usize) -> Option<(Self::TxKv, Self::TxKv)> {
+    let key_range = self.key_range(index)?;
+    let value_range = self.value_range(index)?;
+    Some((
+      self.page.get_tx_slice(key_range),
+      self.page.get_tx_slice(value_range),
+    ))
   }
 }

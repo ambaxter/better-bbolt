@@ -74,7 +74,6 @@ impl PageHeader {
   }
 
   #[inline(always)]
-
   pub fn is_meta(&self) -> bool {
     (self.flags & PageFlag::PAGE_TYPE_MASK) == PageFlag::META
   }

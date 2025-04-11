@@ -53,3 +53,11 @@ pub enum OpsError {
   #[error("Ops Error: `TryHash`")]
   TryHash,
 }
+
+#[derive(Debug, Error)]
+pub enum CursorError {
+  #[error("Cursor Error: `Unknown`")]
+  Unknown,
+  #[error("Cursor Error: `GoToFirstElement`")]
+  GoToFirstElement,
+}
