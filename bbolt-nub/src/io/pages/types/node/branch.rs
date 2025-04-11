@@ -1,5 +1,6 @@
 use crate::common::id::NodePageId;
 use crate::common::layout::node::BranchElement;
+use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
 use crate::io::pages::types::node::{HasElements, HasKeys, HasNodes};
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use delegate::delegate;
@@ -49,10 +50,24 @@ impl<'tx, T: 'tx> BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  fn search_branch(&self, v: &[u8]) -> usize {
+  fn search_branch<'a>(&'a self, v: &'a [u8]) -> usize
+  where
+    <Self as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
+  {
     self
       .search(v)
       .unwrap_or_else(|next_index| next_index.saturating_sub(1))
+  }
+
+  fn try_search_branch<'a>(
+    &'a self, v: &'a [u8],
+  ) -> crate::Result<usize, <<Self as GetKvRefSlice>::RefKv<'a> as TryPartialEq<[u8]>>::Error>
+  where
+    <Self as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
+  {
+    self
+      .try_search(v)
+      .map(|r| r.unwrap_or_else(|next_index| next_index.saturating_sub(1)))
   }
 }
 

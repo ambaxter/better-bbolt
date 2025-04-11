@@ -1,4 +1,5 @@
 use crate::common::layout::node::LeafElement;
+use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
 use crate::io::pages::types::node::{HasElements, HasKeyPosLen, HasKeys, HasValues};
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use delegate::delegate;
@@ -48,8 +49,20 @@ impl<'tx, T: 'tx> LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  pub fn search_leaf(&self, v: &[u8]) -> Option<usize> {
+  pub fn search_leaf<'a>(&'a self, v: &'a [u8]) -> Option<usize>
+  where
+    <Self as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
+  {
     self.search(v).ok()
+  }
+
+  pub fn try_search_leaf<'a>(
+    &'a self, v: &'a [u8],
+  ) -> crate::Result<Option<usize>, <<Self as GetKvRefSlice>::RefKv<'a> as TryPartialEq<[u8]>>::Error>
+  where
+    <Self as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
+  {
+    self.try_search(v).map(|r| r.ok())
   }
 
   fn value_range(&self, index: usize) -> Option<Range<usize>> {

@@ -73,7 +73,7 @@ uninit = "0.6.2"
 
 # Multi-threading
 rayon = "1.10.0"
-crossbeam-channel = "0.5.14"
+crossbeam-channel = "0.5"
 
 # CLI
 bon = { version = "3.5", features = ["implied-bounds"] }
