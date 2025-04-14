@@ -62,4 +62,6 @@ pub enum CursorError {
   GoToFirstElement,
   #[error("Cursor Error: `GoToLastElement`")]
   GoToLastElement,
+  #[error("Cursor Error: `Seek`")]
+  Seek,
 }

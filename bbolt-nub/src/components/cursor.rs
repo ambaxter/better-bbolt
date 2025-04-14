@@ -3,6 +3,7 @@ use crate::common::id::NodePageId;
 use crate::common::layout::node::LeafFlag;
 use crate::components::bucket::CoreBucket;
 use crate::components::tx::TheTx;
+use crate::io::pages::lazy::ops::TryPartialOrd;
 use crate::io::pages::types::node::{HasElements, HasValues, NodePage};
 use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, TxPageType, TxReadPageIO};
 use error_stack::ResultExt;
@@ -277,7 +278,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
         .bucket
         .tx
         .read_node_page(node_page_id)
-        .change_context(CursorError::GoToFirstElement)?;
+        .change_context(CursorError::GoToLastElement)?;
       let element_index = node.element_count().saturating_sub(1);
       self
         .stack
@@ -285,5 +286,117 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     }
     self.location = CursorLocation::Inside;
     Ok(())
+  }
+
+  fn seek<'a>(&'a mut self, v: &'a [u8]) -> crate::Result<Option<LeafFlag>, CursorError>
+  where
+    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
+  {
+    self.stack.clear();
+    self.stack.push(StackEntry::new(self.bucket.root.clone()));
+    self.seek_branches(v)?;
+    Ok(self.seek_leaf(v))
+  }
+
+  fn seek_branches<'a>(&'a mut self, v: &'a [u8]) -> crate::Result<(), CursorError>
+  where
+    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
+  {
+    assert!(!self.stack.is_empty());
+    loop {
+      let node_page_id = {
+        // Exit when we hit a leaf page.
+        let entry = self.stack.last_mut().expect("stack empty");
+        if entry.is_leaf() {
+          break;
+        }
+        let branch = match &entry.page {
+          NodePage::Branch(branch) => branch,
+          NodePage::Leaf(_) => unreachable!("Cannot be leaf"),
+        };
+        let node_index = branch.search_branch(v);
+        entry.index = node_index;
+        branch.elements()[node_index].page_id()
+      };
+
+      let node = self
+        .bucket
+        .tx
+        .read_node_page(node_page_id)
+        .change_context(CursorError::Seek)?;
+      self.stack.push(StackEntry::new(node));
+    }
+    Ok(())
+  }
+
+  fn seek_leaf<'a>(&'a mut self, v: &'a [u8]) -> Option<LeafFlag>
+  where
+    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
+  {
+    assert!(!self.stack.is_empty());
+    let entry = self.stack.last_mut().expect("stack empty");
+    assert!(entry.is_leaf());
+    let leaf = match &entry.page {
+      NodePage::Branch(_) => unreachable!("cannot be branch"),
+      NodePage::Leaf(leaf) => leaf,
+    };
+    match leaf.search_leaf(v) {
+      Ok(exact) => {
+        entry.index = exact;
+        leaf.leaf_flag(entry.index)
+      }
+      Err(closest) => {
+        entry.index = closest;
+        None
+      }
+    }
+  }
+
+  fn try_seek<'a>(&'a self, v: &'a [u8]) -> crate::Result<Option<LeafFlag>, CursorError>
+  where
+    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
+  {
+    todo!()
+  }
+
+  fn try_seek_branch<'a>(&'a mut self, v: &'a [u8]) -> crate::Result<(), CursorError>
+  where
+    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
+  {
+    assert!(!self.stack.is_empty());
+    loop {
+      let node_page_id = {
+        // Exit when we hit a leaf page.
+        let entry = self.stack.last_mut().expect("stack empty");
+        if entry.is_leaf() {
+          break;
+        }
+        let branch = match &entry.page {
+          NodePage::Branch(branch) => branch,
+          NodePage::Leaf(_) => unreachable!("Cannot be leaf"),
+        };
+        let node_index = branch
+          .try_search_branch(v)
+          .change_context(CursorError::Seek)?;
+        let node_index = 0;
+        entry.index = node_index;
+        branch.elements()[node_index].page_id()
+      };
+
+      let node = self
+        .bucket
+        .tx
+        .read_node_page(node_page_id)
+        .change_context(CursorError::Seek)?;
+      self.stack.push(StackEntry::new(node));
+    }
+    Ok(())
+  }
+
+  fn try_seek_leaf<'a>(&'a self) -> crate::Result<Option<LeafFlag>, CursorError>
+  where
+    <T::TxPageType as GetKvRefSlice>::RefKv<'p>: TryPartialOrd<[u8]>,
+  {
+    todo!()
   }
 }

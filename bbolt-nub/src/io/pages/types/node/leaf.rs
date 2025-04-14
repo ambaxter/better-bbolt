@@ -49,20 +49,27 @@ impl<'tx, T: 'tx> LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  pub fn search_leaf<'a>(&'a self, v: &'a [u8]) -> Option<usize>
+  pub(crate) fn search_leaf<'a>(&'a self, v: &'a [u8]) -> Result<usize, usize>
   where
     <Self as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
   {
-    self.search(v).ok()
+    self
+      .search(v)
+      .map_err(|next_index| next_index.saturating_sub(1))
   }
 
-  pub fn try_search_leaf<'a>(
+  pub(crate) fn try_search_leaf<'a>(
     &'a self, v: &'a [u8],
-  ) -> crate::Result<Option<usize>, <<Self as GetKvRefSlice>::RefKv<'a> as TryPartialEq<[u8]>>::Error>
+  ) -> crate::Result<
+    Result<usize, usize>,
+    <<Self as GetKvRefSlice>::RefKv<'a> as TryPartialEq<[u8]>>::Error,
+  >
   where
     <Self as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
   {
-    self.try_search(v).map(|r| r.ok())
+    self
+      .try_search(v)
+      .map(|r| r.map_err(|next_index| next_index.saturating_sub(1)))
   }
 
   fn value_range(&self, index: usize) -> Option<Range<usize>> {

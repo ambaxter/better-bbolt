@@ -47,7 +47,9 @@ impl<T> TrySliceExt<T> for [T] {
       // Binary search interacts poorly with branch prediction, so force
       // the compiler to use conditional moves if supported by the target
       // architecture.
-      // select_unpredictable is unstable so I can't use it here
+      // TODO: select_unpredictable is unstable so I can't use it here, yet
+      // Hopefully, soooooon!
+      // https://github.com/rust-lang/rust/issues/133962
       //base = (cmp == Greater).select_unpredictable(base, mid);
       base = if cmp == Greater { base } else { mid };
 

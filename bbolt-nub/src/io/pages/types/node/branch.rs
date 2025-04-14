@@ -50,7 +50,7 @@ impl<'tx, T: 'tx> BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  fn search_branch<'a>(&'a self, v: &'a [u8]) -> usize
+  pub(crate) fn search_branch<'a>(&'a self, v: &'a [u8]) -> usize
   where
     <Self as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
   {
@@ -59,7 +59,7 @@ where
       .unwrap_or_else(|next_index| next_index.saturating_sub(1))
   }
 
-  fn try_search_branch<'a>(
+  pub(crate) fn try_search_branch<'a>(
     &'a self, v: &'a [u8],
   ) -> crate::Result<usize, <<Self as GetKvRefSlice>::RefKv<'a> as TryPartialEq<[u8]>>::Error>
   where
