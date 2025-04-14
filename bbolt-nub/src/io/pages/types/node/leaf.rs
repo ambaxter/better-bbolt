@@ -49,7 +49,7 @@ impl<'tx, T: 'tx> LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  pub(crate) fn search_leaf<'a>(&'a self, v: &'a [u8]) -> Result<usize, usize>
+  pub(crate) fn search_leaf<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
   where
     <Self as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
   {
@@ -59,7 +59,7 @@ where
   }
 
   pub(crate) fn try_search_leaf<'a>(
-    &'a self, v: &'a [u8],
+    &'a self, v: &[u8],
   ) -> crate::Result<
     Result<usize, usize>,
     <<Self as GetKvRefSlice>::RefKv<'a> as TryPartialEq<[u8]>>::Error,

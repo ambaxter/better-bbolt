@@ -153,7 +153,7 @@ pub trait HasElements<'tx>: Page + GetKvRefSlice + Sync + Send {
   }
 
   #[cfg(not(feature = "mt_search"))]
-  fn search<'a>(&'a self, v: &'a [u8]) -> Result<usize, usize>
+  fn search<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
   where
     <Self as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
   {
@@ -170,7 +170,7 @@ pub trait HasElements<'tx>: Page + GetKvRefSlice + Sync + Send {
 
   #[cfg(not(feature = "mt_search"))]
   fn try_search<'a>(
-    &'a self, v: &'a [u8],
+    &'a self, v: &[u8],
   ) -> crate::Result<
     Result<usize, usize>,
     <<Self as GetKvRefSlice>::RefKv<'a> as TryPartialEq<[u8]>>::Error,

@@ -288,9 +288,9 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     Ok(())
   }
 
-  fn seek<'a>(&'a mut self, v: &'a [u8]) -> crate::Result<Option<LeafFlag>, CursorError>
-  where
-    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
+  fn seek<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
+  where for<'b>
+    <T::TxPageType as GetKvRefSlice>::RefKv<'b>: PartialOrd<[u8]>,
   {
     self.stack.clear();
     self.stack.push(StackEntry::new(self.bucket.root.clone()));
@@ -298,9 +298,9 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     Ok(self.seek_leaf(v))
   }
 
-  fn seek_branches<'a>(&'a mut self, v: &'a [u8]) -> crate::Result<(), CursorError>
-  where
-    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
+  fn seek_branches<'a>(&'a mut self, v: &[u8]) -> crate::Result<(), CursorError>
+  where for<'b>
+    <T::TxPageType as GetKvRefSlice>::RefKv<'b>: PartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
     loop {
@@ -329,9 +329,9 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     Ok(())
   }
 
-  fn seek_leaf<'a>(&'a mut self, v: &'a [u8]) -> Option<LeafFlag>
-  where
-    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
+  fn seek_leaf<'a>(&'a mut self, v: &[u8]) -> Option<LeafFlag>
+  where for<'b>
+    <T::TxPageType as GetKvRefSlice>::RefKv<'b>: PartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
     let entry = self.stack.last_mut().expect("stack empty");
@@ -352,9 +352,9 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     }
   }
 
-  fn try_seek<'a>(&'a mut self, v: &'a [u8]) -> crate::Result<Option<LeafFlag>, CursorError>
-  where
-    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
+  fn try_seek<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
+  where for<'b>
+    <T::TxPageType as GetKvRefSlice>::RefKv<'b>: TryPartialOrd<[u8]>,
   {
     self.stack.clear();
     self.stack.push(StackEntry::new(self.bucket.root.clone()));
@@ -362,9 +362,9 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     self.try_seek_leaf(v)
   }
 
-  fn try_seek_branches<'a>(&'a mut self, v: &'a [u8]) -> crate::Result<(), CursorError>
-  where
-    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
+  fn try_seek_branches<'a>(&'a mut self, v: &[u8]) -> crate::Result<(), CursorError>
+  where for<'b>
+    <T::TxPageType as GetKvRefSlice>::RefKv<'b>: TryPartialOrd<[u8]>
   {
     assert!(!self.stack.is_empty());
     /*loop {
