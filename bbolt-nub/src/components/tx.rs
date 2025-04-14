@@ -8,6 +8,7 @@ use crate::io::bytes::ref_bytes::{RefBytes, RefTxBytes};
 use crate::io::bytes::shared_bytes::{SharedBytes, SharedTxBytes};
 use crate::io::bytes::{FromIOBytes, IOBytes, IntoTxBytes, TxBytes};
 use crate::io::pages::direct::DirectPage;
+use crate::io::pages::lazy::LazyPage;
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::types::node::NodePage;
@@ -19,6 +20,8 @@ use std::sync::Arc;
 pub trait TheTx<'tx>: TxReadPageIO<'tx> {
   fn stats(&self) -> &TxStats;
 }
+
+pub trait TheLazyTx<'tx>: TheTx<'tx> + TxReadLazyPageIO<'tx> {}
 
 pub struct CoreTxHandle<'tx, IO> {
   io: RwLockReadGuard<'tx, IO>,
@@ -149,7 +152,7 @@ where
 pub struct LazyTxHandle<'tx, IO> {
   handle: CoreTxHandle<'tx, IO>,
 }
-/*
+
 impl<'tx, IO> TxReadPageIO<'tx> for LazyTxHandle<'tx, IO>
 where
   IO: IOOverflowPageReader,
@@ -231,4 +234,10 @@ where
     &*self.handle.stats
   }
 }
-*/
+
+impl<'tx, IO> TheLazyTx<'tx> for LazyTxHandle<'tx, IO>
+where
+  IO: IOOverflowPageReader,
+  IO::Bytes: IntoTxBytes<'tx, SharedTxBytes<'tx>>,
+{
+}
