@@ -1,7 +1,7 @@
 use crate::common::errors::CursorError;
 use crate::common::id::NodePageId;
 use crate::common::layout::node::LeafFlag;
-use crate::components::bucket::CoreBucket;
+use crate::components::bucket::{BucketApi, CoreBucket};
 use crate::components::tx::TheTx;
 use crate::io::pages::lazy::ops::TryPartialOrd;
 use crate::io::pages::types::node::{HasElements, HasValues, NodePage};
@@ -438,4 +438,40 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
       }
     }
   }
+}
+
+pub trait CursorRefApi<'tx> {
+  type RefKv<'a> where Self: 'a;
+
+  fn first_ref<'a>(&'a self) -> crate::Result<Option<(Self::RefKv<'a>, Self::RefKv<'a>)>, CursorError>;
+  fn next_ref<'a>(&'a self) -> crate::Result<Option<(Self::RefKv<'a>, Self::RefKv<'a>)>, CursorError>;
+  fn prev_ref<'a>(&'a self) -> crate::Result<Option<(Self::RefKv<'a>, Self::RefKv<'a>)>, CursorError>;
+  fn last_ref<'a>(&'a self) -> crate::Result<Option<(Self::RefKv<'a>, Self::RefKv<'a>)>, CursorError>;
+
+}
+
+pub trait CursorSeekRefApi<'tx> : CursorRefApi<'tx> where for<'b> Self::RefKv<'b>: PartialOrd<[u8]> {
+  fn seek_ref<'a>(&'a self, v: &[u8]) -> crate::Result<Option<(Self::RefKv<'a>, Self::RefKv<'a>)>, CursorError>;
+}
+
+pub trait CursorTrySeekRefApi<'tx> : CursorRefApi<'tx> where for<'b> Self::RefKv<'b>: TryPartialOrd<[u8]> {
+  fn try_seek_ref<'a>(&'a self, v: &[u8]) -> crate::Result<Option<(Self::RefKv<'a>, Self::RefKv<'a>)>, CursorError>;
+}
+
+
+pub trait CursorApi<'tx>: CursorRefApi<'tx> {
+  type TxKv;
+
+  fn first(&self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
+  fn next(&self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
+  fn prev(&self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
+  fn last(&self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
+}
+
+pub trait CursorSeekApi<'tx> : CursorApi<'tx> where for<'b> Self::RefKv<'b>: PartialOrd<[u8]> {
+  fn seek(&self, v: &[u8]) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
+}
+
+pub trait CursorTrySeekApi<'tx> : CursorApi<'tx> where for<'b> Self::RefKv<'b>: TryPartialOrd<[u8]> {
+  fn try_seek(&self, v: &[u8]) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
 }
