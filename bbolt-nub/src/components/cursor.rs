@@ -73,8 +73,8 @@ impl CursorLocation {
   }
 }
 
-pub struct CoreCursor<'a, 'tx: 'a, T: TheTx<'tx>> {
-  bucket: &'a CoreBucket<'tx, T>,
+pub struct CoreCursor<'p, 'tx: 'p, T: TheTx<'tx>> {
+  bucket: &'p CoreBucket<'tx, T>,
   stack: Vec<StackEntry<'tx, T::TxPageType>>,
   location: CursorLocation,
 }
@@ -352,19 +352,22 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     }
   }
 
-  fn try_seek<'a>(&'a self, v: &'a [u8]) -> crate::Result<Option<LeafFlag>, CursorError>
+  fn try_seek<'a>(&'a mut self, v: &'a [u8]) -> crate::Result<Option<LeafFlag>, CursorError>
   where
     <T::TxPageType as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
   {
-    todo!()
+    self.stack.clear();
+    self.stack.push(StackEntry::new(self.bucket.root.clone()));
+    self.try_seek_branches(v)?;
+    self.try_seek_leaf(v)
   }
 
-  fn try_seek_branch<'a>(&'a mut self, v: &'a [u8]) -> crate::Result<(), CursorError>
+  fn try_seek_branches<'a>(&'a mut self, v: &'a [u8]) -> crate::Result<(), CursorError>
   where
     <T::TxPageType as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
-    loop {
+    /*loop {
       let node_page_id = {
         // Exit when we hit a leaf page.
         let entry = self.stack.last_mut().expect("stack empty");
@@ -389,13 +392,13 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
         .read_node_page(node_page_id)
         .change_context(CursorError::Seek)?;
       self.stack.push(StackEntry::new(node));
-    }
+    }*/
     Ok(())
   }
 
-  fn try_seek_leaf<'a>(&'a self) -> crate::Result<Option<LeafFlag>, CursorError>
+  fn try_seek_leaf<'a>(&'a self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
   where
-    <T::TxPageType as GetKvRefSlice>::RefKv<'p>: TryPartialOrd<[u8]>,
+    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
   {
     todo!()
   }
