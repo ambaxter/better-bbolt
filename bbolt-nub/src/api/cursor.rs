@@ -3,7 +3,7 @@ use crate::api::bytes::TxSlice;
 use crate::api::errors::DbError;
 
 pub trait CursorApi<'tx>: Sized {
-  type KvType: TxSlice<'tx>;
+  type KvType: ;
 
   fn first(&mut self) -> Option<(Self::KvType, Self::KvType)>;
   fn last(&mut self) -> Option<(Self::KvType, Self::KvType)>;

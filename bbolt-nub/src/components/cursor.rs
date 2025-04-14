@@ -152,6 +152,26 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     }
   }
 
+  fn move_to_last_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
+    self.stack.clear();
+    self.stack.push(StackEntry::new(self.bucket.root.clone()));
+
+    self.move_to_last_element_on_stack()?;
+    if self.stack.last().expect("stack empty").element_count() == 0 {
+      self.move_to_prev_element()?;
+    }
+
+    if self.location.is_inside() {
+      let last = self.stack.last().expect("stack empty");
+      match &last.page {
+        NodePage::Branch(_) => unreachable!("cannot be branch"),
+        NodePage::Leaf(leaf) => Ok(leaf.leaf_flag(last.index)),
+      }
+    } else {
+      Ok(None)
+    }
+  }
+
   fn move_to_first_element_on_stack(&mut self) -> crate::Result<(), CursorError> {
     assert!(!self.stack.is_empty());
     loop {
@@ -367,7 +387,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     <T::TxPageType as GetKvRefSlice>::RefKv<'b>: TryPartialOrd<[u8]>
   {
     assert!(!self.stack.is_empty());
-    /*loop {
+    loop {
       let node_page_id = {
         // Exit when we hit a leaf page.
         let entry = self.stack.last_mut().expect("stack empty");
@@ -392,14 +412,30 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
         .read_node_page(node_page_id)
         .change_context(CursorError::Seek)?;
       self.stack.push(StackEntry::new(node));
-    }*/
+    }
     Ok(())
   }
 
   fn try_seek_leaf<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
-  where
-    <T::TxPageType as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
+  where for<'b>
+    <T::TxPageType as GetKvRefSlice>::RefKv<'b>: TryPartialOrd<[u8]>,
   {
-    todo!()
+    assert!(!self.stack.is_empty());
+    let entry = self.stack.last_mut().expect("stack empty");
+    assert!(entry.is_leaf());
+    let leaf = match &entry.page {
+      NodePage::Branch(_) => unreachable!("cannot be branch"),
+      NodePage::Leaf(leaf) => leaf,
+    };
+    match leaf.try_search_leaf(v).change_context(CursorError::Seek)? {
+      Ok(exact) => {
+        entry.index = exact;
+        Ok(leaf.leaf_flag(entry.index))
+      }
+      Err(closest) => {
+        entry.index = closest;
+        Ok(None)
+      }
+    }
   }
 }
