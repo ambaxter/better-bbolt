@@ -396,7 +396,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     Ok(())
   }
 
-  fn try_seek_leaf<'a>(&'a self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
+  fn try_seek_leaf<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
   where
     <T::TxPageType as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
   {
