@@ -445,7 +445,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
 }
 
 pub trait CursorRefApi<'tx> {
-  type RefKv<'a>
+  type RefKv<'a>: GetKvRefSlice + 'a
   where
     Self: 'a;
 
