@@ -59,35 +59,37 @@ pub trait TryPartialEq<Rhs: ?Sized = Self> {
 pub trait TryEq: TryPartialEq<Self> {}
 
 pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
-  fn try_partial_cmp<'a>(&'a self, other: &'a Rhs) -> crate::Result<Option<Ordering>, Self::Error>;
+  fn try_partial_cmp(&self, other: &Rhs) -> crate::Result<Option<Ordering>, Self::Error>;
 
-  fn try_lt<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
+  fn try_lt(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Less)))
   }
 
-  fn try_le<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
+  fn try_le(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Less | Ordering::Equal)))
   }
 
-  fn try_gt<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
+  fn try_gt<'a>(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Greater)))
   }
 
-  fn try_ge<'a>(&'a self, other: &'a Rhs) -> crate::Result<bool, Self::Error> {
+  fn try_ge(&self, other: &Rhs) -> crate::Result<bool, Self::Error> {
     self
       .try_partial_cmp(other)
       .map(|ok| matches!(ok, Some(Ordering::Greater | Ordering::Equal)))
   }
 }
 
-pub trait KvTryEq: TryEq + TryPartialEq + TryPartialEq<[u8]> {}
-pub trait KvTryOrd: TryPartialOrd + TryPartialOrd<[u8]> {}
+
+pub trait KvTryEq: TryEq + TryPartialEq<[u8]> {}
+
+pub trait KvTryOrd: TryPartialOrd + TryPartialOrd<[u8]> + KvTryEq {}
 
 pub trait KvTryDataType:
   KvTryOrd + TryHash + TryGet<u8> + RefIntoTryCopiedIter + RefIntoTryBuf + Sized
