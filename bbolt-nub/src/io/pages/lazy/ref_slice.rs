@@ -9,7 +9,9 @@ use crate::io::pages::lazy::{
   try_partial_cmp_lazy_buf_lazy_buf, try_partial_eq_buf_lazy_buf, try_partial_eq_lazy_buf_buf,
   try_partial_eq_lazy_buf_lazy_buf,
 };
-use crate::io::pages::{GetKvRefSlice, SubRange, TxPageType, TxReadLazyPageIO, TxReadPageIO};
+use crate::io::pages::{
+  GatRefKv, GetGatKvRefSlice, SubRange, TxPageType, TxReadLazyPageIO, TxReadPageIO,
+};
 use error_stack::ResultExt;
 use std::cmp::Ordering;
 use std::hash;
@@ -69,14 +71,12 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> Ord for LazyRefSlice<'a, 'tx, L> {
   }
 }
 
-impl<'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> GetKvRefSlice for LazyRefSlice<'p, 'tx, L> {
-  type RefKv<'a>
-    = LazyRefSlice<'a, 'tx, L>
-  where
-    Self: 'a,
-    'p: 'a;
+impl<'a, 'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> GatRefKv<'a> for LazyRefSlice<'p, 'tx, L> {
+  type RefKv = LazyRefSlice<'a, 'tx, L>;
+}
 
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+impl<'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> GetGatKvRefSlice for LazyRefSlice<'p, 'tx, L> {
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
     LazyRefSlice {
       page: self.page,
       range: self.range.sub_range(range),

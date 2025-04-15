@@ -48,14 +48,15 @@ impl SubRange for Range<usize> {
   }
 }
 
-pub trait GetKvRefSlice {
-  type RefKv<'a>: GetKvRefSlice + 'a
-  where
-    Self: 'a;
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a>;
+pub trait GatRefKv<'a, Implied = &'a Self> {
+  type RefKv: GetGatKvRefSlice;
 }
 
-pub trait GetKvTxSlice<'tx>: GetKvRefSlice {
+pub trait GetGatKvRefSlice: for<'a> GatRefKv<'a> {
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv;
+}
+
+pub trait GetKvTxSlice<'tx>: GetGatKvRefSlice {
   type TxKv: GetKvTxSlice<'tx> + 'tx;
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv;
 }
@@ -69,7 +70,7 @@ pub trait Page {
   fn root_page(&self) -> &[u8];
 }
 
-pub trait TxPageType<'tx>: Page + GetKvTxSlice<'tx> + GetKvRefSlice + Clone + Sync + Send {
+pub trait TxPageType<'tx>: Page + GetKvTxSlice<'tx> + Clone + Sync + Send {
   type TxPageBytes: TxBytes<'tx>;
 }
 
@@ -102,17 +103,18 @@ where
   }
 }
 
-impl<'tx, T: 'tx> GetKvRefSlice for TxPage<'tx, T>
+impl<'a, 'tx, T: 'tx> GatRefKv<'a> for TxPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  type RefKv<'a>
-    = T::RefKv<'a>
-  where
-    Self: 'a;
+  type RefKv = <T as GatRefKv<'a>>::RefKv;
+}
 
-  #[inline]
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+impl<'tx, T: 'tx> GetGatKvRefSlice for TxPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
     self.page.get_ref_slice(range)
   }
 }

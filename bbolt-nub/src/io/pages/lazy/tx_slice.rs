@@ -10,7 +10,7 @@ use crate::io::pages::lazy::{
   try_partial_cmp_lazy_buf_lazy_buf, try_partial_eq_buf_lazy_buf, try_partial_eq_lazy_buf_buf,
   try_partial_eq_lazy_buf_lazy_buf,
 };
-use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, SubRange, TxReadLazyPageIO};
+use crate::io::pages::{GatRefKv, GetGatKvRefSlice, GetKvTxSlice, SubRange, TxReadLazyPageIO};
 use error_stack::ResultExt;
 use std::cmp::Ordering;
 use std::hash;
@@ -109,13 +109,12 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> RefIntoCopiedIter for LazyTxSlice<'tx, L> {
   }
 }
 
-impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvRefSlice for LazyTxSlice<'tx, L> {
-  type RefKv<'a>
-    = LazyRefSlice<'a, 'tx, L>
-  where
-    Self: 'a;
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> GatRefKv<'a> for LazyTxSlice<'tx, L> {
+  type RefKv = LazyRefSlice<'a, 'tx, L>;
+}
 
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+impl<'tx, L: TxReadLazyPageIO<'tx>> GetGatKvRefSlice for LazyTxSlice<'tx, L> {
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
     let range = self.range.sub_range(range);
     LazyRefSlice::new(&self.page, range)
   }

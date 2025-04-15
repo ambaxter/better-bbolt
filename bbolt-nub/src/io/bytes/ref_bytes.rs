@@ -5,7 +5,7 @@ use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use crate::io::ops::{Buf, RefIntoCopiedIter};
 use crate::io::pages::direct::ops::{Get, KvDataType, KvEq, KvOrd};
 use crate::io::pages::lazy::ops::{KvTryEq, KvTryOrd, TryBuf, TryEq, TryPartialEq};
-use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, SubRange};
+use crate::io::pages::{GatRefKv, GetGatKvRefSlice, GetKvTxSlice, SubRange};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::iter::Copied;
@@ -91,13 +91,12 @@ impl<'tx> PartialOrd<[u8]> for RefTxBytes<'tx> {
   }
 }
 
-impl<'tx> GetKvRefSlice for RefTxBytes<'tx> {
-  type RefKv<'a>
-    = SharedRefSlice<'a>
-  where
-    Self: 'a;
+impl<'a, 'tx> GatRefKv<'a> for RefTxBytes<'tx> {
+  type RefKv = SharedRefSlice<'a>;
+}
 
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+impl<'tx> GetGatKvRefSlice for RefTxBytes<'tx> {
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
     }
@@ -187,13 +186,12 @@ impl<'tx> KvOrd for RefTxSlice<'tx> {}
 
 impl<'tx> KvDataType for RefTxSlice<'tx> {}
 
-impl<'tx> GetKvRefSlice for RefTxSlice<'tx> {
-  type RefKv<'a>
-    = SharedRefSlice<'a>
-  where
-    Self: 'a;
+impl<'a, 'tx> GatRefKv<'a> for RefTxSlice<'tx> {
+  type RefKv = SharedRefSlice<'a>;
+}
 
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+impl<'tx> GetGatKvRefSlice for RefTxSlice<'tx> {
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
     }

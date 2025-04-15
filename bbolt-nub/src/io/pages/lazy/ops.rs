@@ -1,3 +1,4 @@
+use crate::io::pages::GetGatKvRefSlice;
 use std::cmp::Ordering;
 use std::error::Error;
 use std::hash::Hasher;
@@ -86,12 +87,11 @@ pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
   }
 }
 
-
 pub trait KvTryEq: TryEq + TryPartialEq<[u8]> {}
 
 pub trait KvTryOrd: TryPartialOrd + TryPartialOrd<[u8]> + KvTryEq {}
 
 pub trait KvTryDataType:
-  KvTryOrd + TryHash + TryGet<u8> + RefIntoTryCopiedIter + RefIntoTryBuf + Sized
+  KvTryOrd + TryHash + TryGet<u8> + RefIntoTryCopiedIter + RefIntoTryBuf + GetGatKvRefSlice + Sized
 {
 }

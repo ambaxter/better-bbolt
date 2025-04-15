@@ -1,7 +1,8 @@
 use crate::common::layout::node::{LeafElement, LeafFlag};
+use crate::io::bytes::shared_bytes::SharedRefSlice;
 use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
-use crate::io::pages::types::node::{HasElements, HasKeyPosLen, HasKeys, HasValues};
-use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
+use crate::io::pages::types::node::{HasElements, HasKeyPosLen, HasKeyRefs, HasKeys, HasValues};
+use crate::io::pages::{GatRefKv, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use delegate::delegate;
 use std::ops::{Range, RangeBounds};
 
@@ -30,17 +31,18 @@ where
   }
 }
 
-impl<'tx, T: 'tx> GetKvRefSlice for LeafPage<'tx, T>
+impl<'a, 'tx, T: 'tx> GatRefKv<'a> for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  type RefKv<'a>
-    = T::RefKv<'a>
-  where
-    Self: 'a;
+  type RefKv = <T as GatRefKv<'a>>::RefKv;
+}
 
-  #[inline]
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+impl<'tx, T: 'tx> GetGatKvRefSlice for LeafPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
     self.page.get_ref_slice(range)
   }
 }
@@ -51,7 +53,7 @@ where
 {
   pub(crate) fn search_leaf<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
   where
-    <Self as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
+    <Self::RefKv as GatRefKv<'a>>::RefKv: PartialOrd<[u8]>,
   {
     self
       .search(v)
@@ -62,10 +64,10 @@ where
     &'a self, v: &[u8],
   ) -> crate::Result<
     Result<usize, usize>,
-    <<Self as GetKvRefSlice>::RefKv<'a> as TryPartialEq<[u8]>>::Error,
+    <<Self::RefKv as GatRefKv<'a>>::RefKv as TryPartialEq<[u8]>>::Error,
   >
   where
-    <Self as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
+    <Self::RefKv as GatRefKv<'a>>::RefKv: TryPartialOrd<[u8]>,
   {
     self
       .try_search(v)
@@ -88,21 +90,24 @@ where
   type Element = LeafElement;
 }
 
-impl<'tx, T: 'tx> HasKeys<'tx> for LeafPage<'tx, T>
+impl<'tx, T: 'tx> HasKeyRefs for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  type RefKv<'a>
-    = T::RefKv<'a>
-  where
-    Self: 'a;
-  type TxKv = T::TxKv;
+  type RefKv = T::RefKv;
 
-  fn key_ref<'a>(&'a self, index: usize) -> Option<Self::RefKv<'a>> {
+  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self::RefKv as GatRefKv<'a>>::RefKv> {
     self
       .key_range(index)
       .map(|key_range| self.page.get_ref_slice(key_range))
   }
+}
+
+impl<'tx, T: 'tx> HasKeys<'tx> for LeafPage<'tx, T>
+where
+  T: TxPageType<'tx>,
+{
+  type TxKv = T::TxKv;
 
   fn key(&self, index: usize) -> Option<Self::TxKv> {
     self
@@ -119,13 +124,18 @@ where
     self.elements().get(index).map(|element| element.flags())
   }
 
-  fn value_ref<'a>(&'a self, index: usize) -> Option<Self::RefKv<'a>> {
+  fn value_ref<'a>(&'a self, index: usize) -> Option<<Self::RefKv as GatRefKv<'a>>::RefKv> {
     self
       .value_range(index)
       .map(|value_range| self.page.get_ref_slice(value_range))
   }
 
-  fn key_value_ref<'a>(&'a self, index: usize) -> Option<(Self::RefKv<'a>, Self::RefKv<'a>)> {
+  fn key_value_ref<'a>(
+    &'a self, index: usize,
+  ) -> Option<(
+    <Self::RefKv as GatRefKv<'a>>::RefKv,
+    <Self::RefKv as GatRefKv<'a>>::RefKv,
+  )> {
     let key_range = self.key_range(index)?;
     let value_range = self.value_range(index)?;
     Some((

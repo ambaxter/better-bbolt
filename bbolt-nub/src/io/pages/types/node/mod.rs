@@ -5,7 +5,7 @@ use crate::common::layout::page::PageHeader;
 use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
 use crate::io::pages::types::node::branch::BranchPage;
 use crate::io::pages::types::node::leaf::LeafPage;
-use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
+use crate::io::pages::{GatRefKv, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use bytemuck::{Pod, cast_slice};
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
@@ -83,13 +83,15 @@ impl<T> TrySliceExt<T> for [T] {
 pub mod branch;
 pub mod leaf;
 
-pub trait HasKeys<'tx> {
-  type RefKv<'a>: GetKvRefSlice + 'a
-  where
-    Self: 'a;
+pub trait HasKeyRefs {
+  type RefKv: GetGatKvRefSlice;
+
+  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self::RefKv as GatRefKv<'a>>::RefKv>;
+}
+
+pub trait HasKeys<'tx>: HasKeyRefs {
   type TxKv: GetKvTxSlice<'tx> + 'tx;
 
-  fn key_ref<'a>(&'a self, index: usize) -> Option<Self::RefKv<'a>>;
   fn key(&self, index: usize) -> Option<Self::TxKv>;
 }
 
@@ -129,7 +131,7 @@ impl HasKeyPosLen for LeafElement {
   }
 }
 
-pub trait HasElements<'tx>: Page + GetKvRefSlice + Sync + Send {
+pub trait HasElements<'tx>: Page + GetGatKvRefSlice + Sync + Send {
   type Element: HasKeyPosLen + Sync;
 
   #[inline]
@@ -155,7 +157,7 @@ pub trait HasElements<'tx>: Page + GetKvRefSlice + Sync + Send {
   #[cfg(not(feature = "mt_search"))]
   fn search<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
   where
-    <Self as GetKvRefSlice>::RefKv<'a>: PartialOrd<[u8]>,
+    <Self::RefKv as GatRefKv<'a>>::RefKv: PartialOrd<[u8]>,
   {
     let elements = self.elements();
     let elements_start = elements.as_ptr().addr();
@@ -173,10 +175,10 @@ pub trait HasElements<'tx>: Page + GetKvRefSlice + Sync + Send {
     &'a self, v: &[u8],
   ) -> crate::Result<
     Result<usize, usize>,
-    <<Self as GetKvRefSlice>::RefKv<'a> as TryPartialEq<[u8]>>::Error,
+    <<Self::RefKv as GatRefKv<'a>>::RefKv as TryPartialEq<[u8]>>::Error,
   >
   where
-    <Self as GetKvRefSlice>::RefKv<'a>: TryPartialOrd<[u8]>,
+    <Self::RefKv as GatRefKv<'a>>::RefKv: TryPartialOrd<[u8]>,
   {
     let elements = self.elements();
     let elements_start = elements.as_ptr().addr();
@@ -237,9 +239,14 @@ pub trait HasNodes<'tx>: HasKeys<'tx> {
 pub trait HasValues<'tx>: HasKeys<'tx> {
   fn leaf_flag(&self, index: usize) -> Option<LeafFlag>;
 
-  fn value_ref<'a>(&'a self, index: usize) -> Option<Self::RefKv<'a>>;
+  fn value_ref<'a>(&'a self, index: usize) -> Option<<Self::RefKv as GatRefKv<'a>>::RefKv>;
 
-  fn key_value_ref<'a>(&'a self, index: usize) -> Option<(Self::RefKv<'a>, Self::RefKv<'a>)>;
+  fn key_value_ref<'a>(
+    &'a self, index: usize,
+  ) -> Option<(
+    <Self::RefKv as GatRefKv<'a>>::RefKv,
+    <Self::RefKv as GatRefKv<'a>>::RefKv,
+  )>;
 
   fn value(&self, index: usize) -> Option<Self::TxKv>;
 

@@ -1,6 +1,6 @@
 use crate::io::TxSlot;
 use crate::io::bytes::TxBytes;
-use crate::io::pages::{GetKvRefSlice, GetKvTxSlice, Page, TxPageType};
+use crate::io::pages::{GatRefKv, GetGatKvRefSlice, GetKvTxSlice, Page, TxPageType};
 use std::ops::RangeBounds;
 
 pub mod ops;
@@ -26,16 +26,18 @@ impl<'tx, P: TxBytes<'tx>> Page for DirectPage<'tx, P> {
   }
 }
 
-impl<'tx, P: TxBytes<'tx>> GetKvRefSlice for DirectPage<'tx, P>
+impl<'a, 'tx, P: TxBytes<'tx>> GatRefKv<'a> for DirectPage<'tx, P>
 where
-  P: GetKvRefSlice,
+  P: GetGatKvRefSlice,
 {
-  type RefKv<'a>
-    = P::RefKv<'a>
-  where
-    Self: 'a;
+  type RefKv = <P as GatRefKv<'a>>::RefKv;
+}
 
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> Self::RefKv<'a> {
+impl<'tx, P: TxBytes<'tx>> GetGatKvRefSlice for DirectPage<'tx, P>
+where
+  P: GetGatKvRefSlice,
+{
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
     self.root.get_ref_slice(range)
   }
 }
