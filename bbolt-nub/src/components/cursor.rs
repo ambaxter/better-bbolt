@@ -482,7 +482,7 @@ where
 }
 
 pub trait CursorApi<'tx>: CursorRefApi<'tx> {
-  type TxKv;
+  type TxKv : GetKvTxSlice<'tx> + 'tx;
 
   fn first(&mut self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
   fn next(&mut self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
