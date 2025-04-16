@@ -53,7 +53,7 @@ where
 {
   pub(crate) fn search_leaf<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
   where
-    <Self::RefKv as GatRefKv<'a>>::RefKv: PartialOrd<[u8]>,
+    <Self as GatRefKv<'a>>::RefKv: PartialOrd<[u8]>,
   {
     self
       .search(v)
@@ -64,10 +64,10 @@ where
     &'a self, v: &[u8],
   ) -> crate::Result<
     Result<usize, usize>,
-    <<Self::RefKv as GatRefKv<'a>>::RefKv as TryPartialEq<[u8]>>::Error,
+    <<Self as GatRefKv<'a>>::RefKv as TryPartialEq<[u8]>>::Error,
   >
   where
-    <Self::RefKv as GatRefKv<'a>>::RefKv: TryPartialOrd<[u8]>,
+    <Self as GatRefKv<'a>>::RefKv: TryPartialOrd<[u8]>,
   {
     self
       .try_search(v)
@@ -94,9 +94,7 @@ impl<'tx, T: 'tx> HasKeyRefs for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  type RefKv = T::RefKv;
-
-  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self::RefKv as GatRefKv<'a>>::RefKv> {
+  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self as GatRefKv<'a>>::RefKv> {
     self
       .key_range(index)
       .map(|key_range| self.page.get_ref_slice(key_range))
@@ -124,7 +122,7 @@ where
     self.elements().get(index).map(|element| element.flags())
   }
 
-  fn value_ref<'a>(&'a self, index: usize) -> Option<<Self::RefKv as GatRefKv<'a>>::RefKv> {
+  fn value_ref<'a>(&'a self, index: usize) -> Option<<Self as GatRefKv<'a>>::RefKv> {
     self
       .value_range(index)
       .map(|value_range| self.page.get_ref_slice(value_range))
@@ -132,10 +130,7 @@ where
 
   fn key_value_ref<'a>(
     &'a self, index: usize,
-  ) -> Option<(
-    <Self::RefKv as GatRefKv<'a>>::RefKv,
-    <Self::RefKv as GatRefKv<'a>>::RefKv,
-  )> {
+  ) -> Option<(<Self as GatRefKv<'a>>::RefKv, <Self as GatRefKv<'a>>::RefKv)> {
     let key_range = self.key_range(index)?;
     let value_range = self.value_range(index)?;
     Some((

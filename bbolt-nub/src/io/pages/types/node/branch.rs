@@ -84,9 +84,7 @@ impl<'tx, T: 'tx> HasKeyRefs for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  type RefKv = T::RefKv;
-
-  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self::RefKv as GatRefKv<'a>>::RefKv> {
+  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self as GatRefKv<'a>>::RefKv> {
     self
       .key_range(index)
       .map(|key_range| self.page.get_ref_slice(key_range))

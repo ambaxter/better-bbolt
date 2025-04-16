@@ -1,4 +1,4 @@
-use crate::common::errors::{OpsError, PageError};
+use crate::common::errors::{CursorError, OpsError, PageError};
 use crate::common::id::NodePageId;
 use crate::common::layout::node::{BranchElement, LeafElement, LeafFlag};
 use crate::common::layout::page::PageHeader;
@@ -7,6 +7,7 @@ use crate::io::pages::types::node::branch::BranchPage;
 use crate::io::pages::types::node::leaf::LeafPage;
 use crate::io::pages::{GatRefKv, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use bytemuck::{Pod, cast_slice};
+use error_stack::ResultExt;
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::ops::Range;
@@ -83,10 +84,8 @@ impl<T> TrySliceExt<T> for [T] {
 pub mod branch;
 pub mod leaf;
 
-pub trait HasKeyRefs {
-  type RefKv: GetGatKvRefSlice;
-
-  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self::RefKv as GatRefKv<'a>>::RefKv>;
+pub trait HasKeyRefs: GetGatKvRefSlice {
+  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self as GatRefKv<'a>>::RefKv>;
 }
 
 pub trait HasKeys<'tx>: HasKeyRefs {
@@ -131,7 +130,7 @@ impl HasKeyPosLen for LeafElement {
   }
 }
 
-pub trait HasElements<'tx>: Page + GetGatKvRefSlice + Sync + Send {
+pub trait HasElements<'tx>: Page + HasKeyRefs + Sync + Send {
   type Element: HasKeyPosLen + Sync;
 
   #[inline]
@@ -157,9 +156,10 @@ pub trait HasElements<'tx>: Page + GetGatKvRefSlice + Sync + Send {
   #[cfg(not(feature = "mt_search"))]
   fn search<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
   where
-    <Self::RefKv as GatRefKv<'a>>::RefKv: PartialOrd<[u8]>,
+    <Self as GatRefKv<'a>>::RefKv: PartialOrd<[u8]>,
   {
     let elements = self.elements();
+    assert!(!elements.is_empty());
     let elements_start = elements.as_ptr().addr();
     elements.binary_search_by(|element| {
       let element_index =
@@ -175,12 +175,13 @@ pub trait HasElements<'tx>: Page + GetGatKvRefSlice + Sync + Send {
     &'a self, v: &[u8],
   ) -> crate::Result<
     Result<usize, usize>,
-    <<Self::RefKv as GatRefKv<'a>>::RefKv as TryPartialEq<[u8]>>::Error,
+    <<Self as GatRefKv<'a>>::RefKv as TryPartialEq<[u8]>>::Error,
   >
   where
-    <Self::RefKv as GatRefKv<'a>>::RefKv: TryPartialOrd<[u8]>,
+    <Self as GatRefKv<'a>>::RefKv: TryPartialOrd<[u8]>,
   {
     let elements = self.elements();
+    assert!(!elements.is_empty());
     let elements_start = elements.as_ptr().addr();
     elements.try_binary_search_by(|element| {
       let element_index =
@@ -194,11 +195,15 @@ pub trait HasElements<'tx>: Page + GetGatKvRefSlice + Sync + Send {
   // TODO: match closest vs match exact in 2 different traits
   // that way we can parallel as needed
   #[cfg(feature = "mt_search")]
-  fn search(&self, v: &[u8]) -> Result<usize, usize> {
+  fn search<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
+  where
+    <Self as GatRefKv<'a>>::RefKv: PartialOrd<[u8]>,
+  {
     use rayon::iter::IndexedParallelIterator;
     use rayon::iter::ParallelIterator;
     use rayon::slice::ParallelSlice;
     let elements = self.elements();
+    assert!(!elements.is_empty());
     let elements_start = elements.as_ptr().addr();
     let chunk_size = (elements.len() / rayon::current_num_threads()).min(16);
     let p = elements
@@ -208,7 +213,7 @@ pub trait HasElements<'tx>: Page + GetGatKvRefSlice + Sync + Send {
         let first = &chunk[0];
         let first_key_start = first.kv_data_start(0);
         let first_key = self.get_ref_slice(first_key_start..first_key_start + first.elem_key_len());
-        if KvDataType::gt(&first_key, v) {
+        if PartialOrd::gt(&first_key, v) {
           None
         } else {
           Some((
@@ -218,7 +223,7 @@ pub trait HasElements<'tx>: Page + GetGatKvRefSlice + Sync + Send {
                 (ptr::from_ref(element).addr() - elements_start) / size_of::<Self::Element>();
               let key_start = element.kv_data_start(element_index);
               let key = self.get_ref_slice(key_start..key_start + element.elem_key_len());
-              KvDataType::cmp(&key, v)
+              PartialOrd::partial_cmp(&key, v).unwrap()
             }),
           ))
         }
@@ -230,6 +235,62 @@ pub trait HasElements<'tx>: Page + GetGatKvRefSlice + Sync + Send {
       .map(|index| (chunk * chunk_size) + index)
       .map_err(|index| (chunk * chunk_size) + index)
   }
+
+  #[cfg(feature = "mt_search")]
+  fn try_search<'a>(
+    &'a self, v: &[u8],
+  ) -> crate::Result<
+    Result<usize, usize>,
+    <<Self as GatRefKv<'a>>::RefKv as TryPartialEq<[u8]>>::Error,
+  >
+  where
+    <Self as GatRefKv<'a>>::RefKv: TryPartialOrd<[u8]>,
+  {
+    use rayon::iter::IndexedParallelIterator;
+    use rayon::iter::ParallelIterator;
+    use rayon::slice::ParallelSlice;
+    let elements = self.elements();
+    assert!(!elements.is_empty());
+    let elements_start = elements.as_ptr().addr();
+    let chunk_size = (elements.len() / rayon::current_num_threads()).min(16);
+    let p = elements
+      .par_chunks(chunk_size)
+      .enumerate()
+      .filter_map(|(chunk_index, chunk)| {
+        let first = &chunk[0];
+        let first_key_start = first.kv_data_start(0);
+        let first_key = self.get_ref_slice(first_key_start..first_key_start + first.elem_key_len());
+        match TryPartialOrd::try_gt(&first_key, v) {
+          Ok(true) => None,
+          Ok(false) => {
+            let index = chunk.try_binary_search_by(|element| {
+              let element_index =
+                (ptr::from_ref(element).addr() - elements_start) / size_of::<Self::Element>();
+              let key_start = element.kv_data_start(element_index);
+              let key = self.get_ref_slice(key_start..key_start + element.elem_key_len());
+              Ok(TryPartialOrd::try_partial_cmp(&key, v)?.unwrap())
+            });
+            Some(Ok((chunk_index, index)))
+          }
+          Err(report) => Some(Err(report)),
+        }
+      });
+    let (chunk, ord_result) = p
+      .try_reduce_with(|(x_chunk, x_result), (y_chunk, y_result)| {
+        if x_chunk > y_chunk {
+          Ok((x_chunk, x_result))
+        } else {
+          Ok((y_chunk, y_result))
+        }
+      })
+      .expect("iterator can't be empty")?;
+    let result = ord_result?;
+    Ok(
+      result
+        .map(|index| (chunk * chunk_size) + index)
+        .map_err(|index| (chunk * chunk_size) + index),
+    )
+  }
 }
 
 pub trait HasNodes<'tx>: HasKeys<'tx> {
@@ -239,14 +300,11 @@ pub trait HasNodes<'tx>: HasKeys<'tx> {
 pub trait HasValues<'tx>: HasKeys<'tx> {
   fn leaf_flag(&self, index: usize) -> Option<LeafFlag>;
 
-  fn value_ref<'a>(&'a self, index: usize) -> Option<<Self::RefKv as GatRefKv<'a>>::RefKv>;
+  fn value_ref<'a>(&'a self, index: usize) -> Option<<Self as GatRefKv<'a>>::RefKv>;
 
   fn key_value_ref<'a>(
     &'a self, index: usize,
-  ) -> Option<(
-    <Self::RefKv as GatRefKv<'a>>::RefKv,
-    <Self::RefKv as GatRefKv<'a>>::RefKv,
-  )>;
+  ) -> Option<(<Self as GatRefKv<'a>>::RefKv, <Self as GatRefKv<'a>>::RefKv)>;
 
   fn value(&self, index: usize) -> Option<Self::TxKv>;
 

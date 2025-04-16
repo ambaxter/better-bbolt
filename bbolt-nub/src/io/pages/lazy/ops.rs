@@ -59,6 +59,7 @@ pub trait TryPartialEq<Rhs: ?Sized = Self> {
 
 pub trait TryEq: TryPartialEq<Self> {}
 
+//TODO: TryOrd
 pub trait TryPartialOrd<Rhs: ?Sized = Self>: TryPartialEq<Rhs> {
   fn try_partial_cmp(&self, other: &Rhs) -> crate::Result<Option<Ordering>, Self::Error>;
 

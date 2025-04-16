@@ -446,15 +446,15 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
   }
 }
 
-pub trait CursorRefApi {
-  type RefKv: GetGatKvRefSlice;
+pub trait CursorRefApi<'tx> {
+  type TxPageType: TxPageType<'tx>;
 
   fn first_ref<'a>(
     &'a mut self,
   ) -> crate::Result<
     Option<(
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
     )>,
     CursorError,
   >;
@@ -462,8 +462,8 @@ pub trait CursorRefApi {
     &'a mut self,
   ) -> crate::Result<
     Option<(
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
     )>,
     CursorError,
   >;
@@ -471,8 +471,8 @@ pub trait CursorRefApi {
     &'a mut self,
   ) -> crate::Result<
     Option<(
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
     )>,
     CursorError,
   >;
@@ -480,46 +480,44 @@ pub trait CursorRefApi {
     &'a mut self,
   ) -> crate::Result<
     Option<(
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
     )>,
     CursorError,
   >;
 }
 
-pub trait CursorSeekRefApi<'tx>: CursorRefApi
+pub trait CursorSeekRefApi<'tx>: CursorRefApi<'tx>
 where
-  for<'b> <Self::RefKv as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
+  for<'b> <Self::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
 {
   fn seek_ref<'a>(
     &'a mut self, v: &[u8],
   ) -> crate::Result<
     Option<(
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  >
-  where
-    Self: 'a;
-}
-
-pub trait CursorTrySeekRefApi: CursorRefApi
-where
-  for<'b> <Self::RefKv as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
-{
-  fn try_seek_ref<'a>(
-    &'a mut self, v: &[u8],
-  ) -> crate::Result<
-    Option<(
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
-      <Self::RefKv as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
     )>,
     CursorError,
   >;
 }
 
-pub trait CursorApi<'tx>: CursorRefApi {
+pub trait CursorTrySeekRefApi<'tx>: CursorRefApi<'tx>
+where
+  for<'b> <Self::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
+{
+  fn try_seek_ref<'a>(
+    &'a mut self, v: &[u8],
+  ) -> crate::Result<
+    Option<(
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+    )>,
+    CursorError,
+  >;
+}
+
+pub trait CursorApi<'tx>: CursorRefApi<'tx> {
   type TxKv: GetKvTxSlice<'tx> + 'tx;
 
   fn first(&mut self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
@@ -530,14 +528,14 @@ pub trait CursorApi<'tx>: CursorRefApi {
 
 pub trait CursorSeekApi<'tx>: CursorApi<'tx>
 where
-  for<'b> <Self::RefKv as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
+  for<'b> <Self::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
 {
   fn seek(&mut self, v: &[u8]) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
 }
 
 pub trait CursorTrySeekApi<'tx>: CursorApi<'tx>
 where
-  for<'b> <Self::RefKv as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
+  for<'b> <Self::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
 {
   fn try_seek(&mut self, v: &[u8]) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
 }
@@ -645,15 +643,21 @@ pub struct RefTxCursor<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, R
   filter: LeafFilterCursor<'p, 'tx, T>,
 }
 
-impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorRefApi
+impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorRefApi<'tx>
   for RefTxCursor<'p, 'tx, T>
 {
   //todo: how to handle? Brain fudgy
-  type RefKv = <T::TxPageType as TxPageType<'tx>>::RefKv;
+  type TxPageType = T::TxPageType;
 
   fn first_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<Option<(Self::RefKv<'a>, Self::RefKv<'a>)>, CursorError> {
+  ) -> error_stack::Result<
+    Option<(
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+    )>,
+    CursorError,
+  > {
     Ok(
       self
         .filter
@@ -665,7 +669,13 @@ impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> 
 
   fn next_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<Option<(Self::RefKv<'a>, Self::RefKv<'a>)>, CursorError> {
+  ) -> error_stack::Result<
+    Option<(
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+    )>,
+    CursorError,
+  > {
     Ok(
       self
         .filter
@@ -677,7 +687,13 @@ impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> 
 
   fn prev_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<Option<(Self::RefKv<'a>, Self::RefKv<'a>)>, CursorError> {
+  ) -> error_stack::Result<
+    Option<(
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+    )>,
+    CursorError,
+  > {
     Ok(
       self
         .filter
@@ -689,7 +705,13 @@ impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> 
 
   fn last_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<Option<(Self::RefKv<'a>, Self::RefKv<'a>)>, CursorError> {
+  ) -> error_stack::Result<
+    Option<(
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+      <Self::TxPageType as GatRefKv<'a>>::RefKv,
+    )>,
+    CursorError,
+  > {
     Ok(
       self
         .filter
@@ -713,10 +735,7 @@ where
       <T::TxPageType as GatRefKv<'a>>::RefKv,
     )>,
     CursorError,
-  >
-  where
-    Self: 'a,
-  {
+  > {
     todo!()
   }
 }
