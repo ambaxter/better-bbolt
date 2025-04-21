@@ -218,6 +218,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
       NodePage::Branch(_) => unreachable!("cannot be branch"),
       NodePage::Leaf(leaf) => leaf,
     };
+    self.location = CursorLocation::Inside;
     match leaf.search_leaf(v) {
       Ok(exact) => {
         entry.index = exact;
@@ -275,6 +276,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
       NodePage::Branch(_) => unreachable!("cannot be branch"),
       NodePage::Leaf(leaf) => leaf,
     };
+    self.location = CursorLocation::Inside;
     match leaf.try_search_leaf(v).change_context(CursorError::Seek)? {
       Ok(exact) => {
         entry.index = exact;
@@ -936,7 +938,7 @@ use std::fs::File;
         location: CursorLocation::Begin,
       }, leaf_flag: LeafFlag::BUCKET },
     };
-    let kv = cursor.first_ref().expect("no_errors");
+    let kv = cursor.seek_ref(b"dict".as_slice()).expect("no_errors");
     let (k, v) = kv.unwrap();
     let mut k_buf = k.ref_into_try_buf().unwrap();
     println!("{:?}", k_buf.remaining());
