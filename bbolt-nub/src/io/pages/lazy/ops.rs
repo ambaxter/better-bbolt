@@ -93,6 +93,6 @@ pub trait KvTryEq: TryEq + TryPartialEq<[u8]> {}
 pub trait KvTryOrd: TryPartialOrd + TryPartialOrd<[u8]> + KvTryEq {}
 
 pub trait KvTryDataType:
-  KvTryOrd + TryHash + TryGet<u8> + RefIntoTryCopiedIter + RefIntoTryBuf + GetGatKvRefSlice + Sized
+  KvTryOrd + TryHash + TryGet<u8> + RefIntoTryCopiedIter + RefIntoTryBuf + Sized
 {
 }

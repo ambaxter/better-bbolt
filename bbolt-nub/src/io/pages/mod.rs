@@ -57,7 +57,7 @@ pub trait GetGatKvRefSlice: for<'a> GatRefKv<'a> {
 }
 
 pub trait GetKvTxSlice<'tx>: GetGatKvRefSlice {
-  type TxKv: GetKvTxSlice<'tx> + 'tx;
+  type TxKv: GetKvTxSlice<'tx>;
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv;
 }
 

@@ -6,8 +6,9 @@ use crate::components::tx::{TheLazyTx, TheTx};
 use crate::io::bytes::ref_bytes::RefTxBytes;
 use crate::io::bytes::shared_bytes::SharedTxBytes;
 use crate::io::pages::direct::DirectPage;
+use crate::io::pages::direct::ops::KvDataType;
 use crate::io::pages::lazy::LazyPage;
-use crate::io::pages::lazy::ops::TryPartialOrd;
+use crate::io::pages::lazy::ops::{KvTryDataType, TryPartialOrd};
 use crate::io::pages::types::node::{HasElements, HasValues, NodePage};
 use crate::io::pages::{
   GatRefKv, GetGatKvRefSlice, GetKvTxSlice, TxPageType, TxReadLazyPageIO, TxReadPageIO,
@@ -79,6 +80,35 @@ impl CursorLocation {
   }
 }
 
+pub trait CoreCursorMoveApi {
+  fn move_to_first_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError>;
+  fn move_to_next_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError>;
+  fn move_to_prev_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError>;
+  fn move_to_last_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError>;
+}
+
+pub trait CoreCursorSeekApi {
+  fn seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>;
+}
+
+pub trait CoreCursorTrySeekApi {
+  fn try_seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>;
+}
+
+pub trait CoreCursorRefApi: CoreCursorMoveApi {
+  type KvRef<'a>: GetGatKvRefSlice
+  where
+    Self: 'a;
+
+  fn key_value_ref<'a>(&'a self) -> Option<(Self::KvRef<'a>, Self::KvRef<'a>)>;
+}
+
+pub trait CoreCursorApi<'tx>: CoreCursorMoveApi {
+  type KvTx: GetKvTxSlice<'tx>;
+
+  fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)>;
+}
+
 pub struct CoreCursor<'p, 'tx: 'p, T: TheTx<'tx>> {
   bucket: &'p CoreBucket<'tx, T>,
   stack: Vec<StackEntry<'tx, T::TxPageType>>,
@@ -92,89 +122,6 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
       bucket,
       stack: vec![],
       location: CursorLocation::Begin,
-    }
-  }
-
-  pub fn key_value_ref<'a>(
-    &'a self,
-  ) -> Option<(
-    <T::TxPageType as GatRefKv<'a>>::RefKv,
-    <T::TxPageType as GatRefKv<'a>>::RefKv,
-  )> {
-    if self.location.is_outside() {
-      return None;
-    }
-    assert!(!self.stack.is_empty());
-    let last = self.stack.last().unwrap();
-    if last.element_count() == 0 || last.index > last.page.element_count() {
-      None
-    } else {
-      match &last.page {
-        NodePage::Branch(_) => unreachable!("cannot be branch"),
-        NodePage::Leaf(leaf) => leaf.key_value_ref(last.index),
-      }
-    }
-  }
-
-  fn key_value(
-    &self,
-  ) -> Option<(
-    <T::TxPageType as GetKvTxSlice<'tx>>::TxKv,
-    <T::TxPageType as GetKvTxSlice<'tx>>::TxKv,
-  )> {
-    if self.location.is_outside() {
-      return None;
-    }
-    assert!(!self.stack.is_empty());
-    let last = self.stack.last().unwrap();
-    if last.element_count() == 0 || last.index > last.page.element_count() {
-      None
-    } else {
-      match &last.page {
-        NodePage::Branch(_) => unreachable!("cannot be branch"),
-        NodePage::Leaf(leaf) => leaf.key_value(last.index),
-      }
-    }
-  }
-
-  fn move_to_first_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
-    self.stack.clear();
-    self.stack.push(StackEntry::new(self.bucket.root.clone()));
-
-    self.move_to_first_element_on_stack()?;
-
-    if self.stack.last().expect("stack empty").element_count() == 0 {
-      self.move_to_next_element()?;
-    }
-
-    if self.location.is_inside() {
-      let last = self.stack.last().expect("stack empty");
-      match &last.page {
-        NodePage::Branch(_) => unreachable!("cannot be branch"),
-        NodePage::Leaf(leaf) => Ok(leaf.leaf_flag(last.index)),
-      }
-    } else {
-      Ok(None)
-    }
-  }
-
-  fn move_to_last_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
-    self.stack.clear();
-    self.stack.push(StackEntry::new(self.bucket.root.clone()));
-
-    self.move_to_last_element_on_stack()?;
-    if self.stack.last().expect("stack empty").element_count() == 0 {
-      self.move_to_prev_element()?;
-    }
-
-    if self.location.is_inside() {
-      let last = self.stack.last().expect("stack empty");
-      match &last.page {
-        NodePage::Branch(_) => unreachable!("cannot be branch"),
-        NodePage::Leaf(leaf) => Ok(leaf.leaf_flag(last.index)),
-      }
-    } else {
-      Ok(None)
     }
   }
 
@@ -200,6 +147,167 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     }
     self.location = CursorLocation::Inside;
     Ok(())
+  }
+
+  fn move_to_last_element_on_stack(&mut self) -> crate::Result<(), CursorError> {
+    assert!(!self.stack.is_empty());
+    loop {
+      // Exit when we hit a leaf page.
+      let entry = self.stack.last_mut().expect("stack empty");
+      if entry.is_leaf() {
+        break;
+      }
+      let node_page_id = match &entry.page {
+        NodePage::Branch(branch) => branch.elements()[entry.index].page_id(),
+        NodePage::Leaf(_) => unreachable!("Cannot be leaf"),
+      };
+
+      let node = self
+        .bucket
+        .tx
+        .read_node_page(node_page_id)
+        .change_context(CursorError::GoToLastElement)?;
+      let element_index = node.element_count().saturating_sub(1);
+      self
+        .stack
+        .push(StackEntry::new_with_index(node, element_index));
+    }
+    self.location = CursorLocation::Inside;
+    Ok(())
+  }
+
+  fn seek_branches<'a>(&'a mut self, v: &[u8]) -> crate::Result<(), CursorError>
+  where
+    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
+  {
+    assert!(!self.stack.is_empty());
+    loop {
+      let node_page_id = {
+        // Exit when we hit a leaf page.
+        let entry = self.stack.last_mut().expect("stack empty");
+        if entry.is_leaf() {
+          break;
+        }
+        let branch = match &entry.page {
+          NodePage::Branch(branch) => branch,
+          NodePage::Leaf(_) => unreachable!("Cannot be leaf"),
+        };
+        let node_index = branch.search_branch(v);
+        entry.index = node_index;
+        branch.elements()[node_index].page_id()
+      };
+
+      let node = self
+        .bucket
+        .tx
+        .read_node_page(node_page_id)
+        .change_context(CursorError::Seek)?;
+      self.stack.push(StackEntry::new(node));
+    }
+    Ok(())
+  }
+
+  fn seek_leaf<'a>(&'a mut self, v: &[u8]) -> Option<LeafFlag>
+  where
+    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
+  {
+    assert!(!self.stack.is_empty());
+    let entry = self.stack.last_mut().expect("stack empty");
+    assert!(entry.is_leaf());
+    let leaf = match &entry.page {
+      NodePage::Branch(_) => unreachable!("cannot be branch"),
+      NodePage::Leaf(leaf) => leaf,
+    };
+    match leaf.search_leaf(v) {
+      Ok(exact) => {
+        entry.index = exact;
+        leaf.leaf_flag(entry.index)
+      }
+      Err(closest) => {
+        entry.index = closest;
+        None
+      }
+    }
+  }
+
+  fn try_seek_branches<'a>(&'a mut self, v: &[u8]) -> crate::Result<(), CursorError>
+  where
+    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
+  {
+    assert!(!self.stack.is_empty());
+    loop {
+      let node_page_id = {
+        // Exit when we hit a leaf page.
+        let entry = self.stack.last_mut().expect("stack empty");
+        if entry.is_leaf() {
+          break;
+        }
+        let branch = match &entry.page {
+          NodePage::Branch(branch) => branch,
+          NodePage::Leaf(_) => unreachable!("Cannot be leaf"),
+        };
+        let node_index = branch
+          .try_search_branch(v)
+          .change_context(CursorError::Seek)?;
+        let node_index = 0;
+        entry.index = node_index;
+        branch.elements()[node_index].page_id()
+      };
+
+      let node = self
+        .bucket
+        .tx
+        .read_node_page(node_page_id)
+        .change_context(CursorError::Seek)?;
+      self.stack.push(StackEntry::new(node));
+    }
+    Ok(())
+  }
+
+  fn try_seek_leaf<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
+  where
+    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
+  {
+    assert!(!self.stack.is_empty());
+    let entry = self.stack.last_mut().expect("stack empty");
+    assert!(entry.is_leaf());
+    let leaf = match &entry.page {
+      NodePage::Branch(_) => unreachable!("cannot be branch"),
+      NodePage::Leaf(leaf) => leaf,
+    };
+    match leaf.try_search_leaf(v).change_context(CursorError::Seek)? {
+      Ok(exact) => {
+        entry.index = exact;
+        Ok(leaf.leaf_flag(entry.index))
+      }
+      Err(closest) => {
+        entry.index = closest;
+        Ok(None)
+      }
+    }
+  }
+}
+
+impl<'p, 'tx, T: TheTx<'tx>> CoreCursorMoveApi for CoreCursor<'p, 'tx, T> {
+  fn move_to_first_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
+    self.stack.clear();
+    self.stack.push(StackEntry::new(self.bucket.root.clone()));
+
+    self.move_to_first_element_on_stack()?;
+
+    if self.stack.last().expect("stack empty").element_count() == 0 {
+      self.move_to_next_element()?;
+    }
+
+    if self.location.is_inside() {
+      let last = self.stack.last().expect("stack empty");
+      match &last.page {
+        NodePage::Branch(_) => unreachable!("cannot be branch"),
+        NodePage::Leaf(leaf) => Ok(leaf.leaf_flag(last.index)),
+      }
+    } else {
+      Ok(None)
+    }
   }
 
   fn move_to_next_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
@@ -287,357 +395,213 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
     }
   }
 
-  fn move_to_last_element_on_stack(&mut self) -> crate::Result<(), CursorError> {
-    assert!(!self.stack.is_empty());
-    loop {
-      // Exit when we hit a leaf page.
-      let entry = self.stack.last_mut().expect("stack empty");
-      if entry.is_leaf() {
-        break;
-      }
-      let node_page_id = match &entry.page {
-        NodePage::Branch(branch) => branch.elements()[entry.index].page_id(),
-        NodePage::Leaf(_) => unreachable!("Cannot be leaf"),
-      };
+  fn move_to_last_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
+    self.stack.clear();
+    self.stack.push(StackEntry::new(self.bucket.root.clone()));
 
-      let node = self
-        .bucket
-        .tx
-        .read_node_page(node_page_id)
-        .change_context(CursorError::GoToLastElement)?;
-      let element_index = node.element_count().saturating_sub(1);
-      self
-        .stack
-        .push(StackEntry::new_with_index(node, element_index));
+    self.move_to_last_element_on_stack()?;
+    if self.stack.last().expect("stack empty").element_count() == 0 {
+      self.move_to_prev_element()?;
     }
-    self.location = CursorLocation::Inside;
-    Ok(())
-  }
 
-  fn seek<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
+    if self.location.is_inside() {
+      let last = self.stack.last().expect("stack empty");
+      match &last.page {
+        NodePage::Branch(_) => unreachable!("cannot be branch"),
+        NodePage::Leaf(leaf) => Ok(leaf.leaf_flag(last.index)),
+      }
+    } else {
+      Ok(None)
+    }
+  }
+}
+
+impl<'p, 'tx, T: TheTx<'tx>> CoreCursorRefApi for CoreCursor<'p, 'tx, T> {
+  type KvRef<'a>
+    = <T::TxPageType as GatRefKv<'a>>::RefKv
   where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
-  {
+    Self: 'a;
+
+  fn key_value_ref<'a>(&'a self) -> Option<(Self::KvRef<'a>, Self::KvRef<'a>)> {
+    if self.location.is_outside() {
+      return None;
+    }
+    assert!(!self.stack.is_empty());
+    let last = self.stack.last().unwrap();
+    if last.element_count() == 0 || last.index > last.page.element_count() {
+      None
+    } else {
+      match &last.page {
+        NodePage::Branch(_) => unreachable!("cannot be branch"),
+        NodePage::Leaf(leaf) => leaf.key_value_ref(last.index),
+      }
+    }
+  }
+}
+impl<'p, 'tx, T: TheTx<'tx>> CoreCursorApi<'tx> for CoreCursor<'p, 'tx, T> {
+  type KvTx = <T::TxPageType as GetKvTxSlice<'tx>>::TxKv;
+
+  fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)> {
+    if self.location.is_outside() {
+      return None;
+    }
+    assert!(!self.stack.is_empty());
+    let last = self.stack.last().unwrap();
+    if last.element_count() == 0 || last.index > last.page.element_count() {
+      None
+    } else {
+      match &last.page {
+        NodePage::Branch(_) => unreachable!("cannot be branch"),
+        NodePage::Leaf(leaf) => leaf.key_value(last.index),
+      }
+    }
+  }
+}
+
+impl<'p, 'tx, T: TheTx<'tx>> CoreCursorSeekApi for CoreCursor<'p, 'tx, T>
+where
+  for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
+{
+  fn seek(&mut self, v: &[u8]) -> error_stack::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
     self.stack.push(StackEntry::new(self.bucket.root.clone()));
     self.seek_branches(v)?;
     Ok(self.seek_leaf(v))
   }
+}
 
-  fn seek_branches<'a>(&'a mut self, v: &[u8]) -> crate::Result<(), CursorError>
-  where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
-  {
-    assert!(!self.stack.is_empty());
-    loop {
-      let node_page_id = {
-        // Exit when we hit a leaf page.
-        let entry = self.stack.last_mut().expect("stack empty");
-        if entry.is_leaf() {
-          break;
-        }
-        let branch = match &entry.page {
-          NodePage::Branch(branch) => branch,
-          NodePage::Leaf(_) => unreachable!("Cannot be leaf"),
-        };
-        let node_index = branch.search_branch(v);
-        entry.index = node_index;
-        branch.elements()[node_index].page_id()
-      };
-
-      let node = self
-        .bucket
-        .tx
-        .read_node_page(node_page_id)
-        .change_context(CursorError::Seek)?;
-      self.stack.push(StackEntry::new(node));
-    }
-    Ok(())
-  }
-
-  fn seek_leaf<'a>(&'a mut self, v: &[u8]) -> Option<LeafFlag>
-  where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
-  {
-    assert!(!self.stack.is_empty());
-    let entry = self.stack.last_mut().expect("stack empty");
-    assert!(entry.is_leaf());
-    let leaf = match &entry.page {
-      NodePage::Branch(_) => unreachable!("cannot be branch"),
-      NodePage::Leaf(leaf) => leaf,
-    };
-    match leaf.search_leaf(v) {
-      Ok(exact) => {
-        entry.index = exact;
-        leaf.leaf_flag(entry.index)
-      }
-      Err(closest) => {
-        entry.index = closest;
-        None
-      }
-    }
-  }
-
-  fn try_seek<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
-  where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
-  {
+impl<'p, 'tx, T: TheTx<'tx>> CoreCursorTrySeekApi for CoreCursor<'p, 'tx, T>
+where
+  for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
+{
+  fn try_seek(&mut self, v: &[u8]) -> error_stack::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
     self.stack.push(StackEntry::new(self.bucket.root.clone()));
     self.try_seek_branches(v)?;
     self.try_seek_leaf(v)
   }
-
-  fn try_seek_branches<'a>(&'a mut self, v: &[u8]) -> crate::Result<(), CursorError>
-  where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
-  {
-    assert!(!self.stack.is_empty());
-    loop {
-      let node_page_id = {
-        // Exit when we hit a leaf page.
-        let entry = self.stack.last_mut().expect("stack empty");
-        if entry.is_leaf() {
-          break;
-        }
-        let branch = match &entry.page {
-          NodePage::Branch(branch) => branch,
-          NodePage::Leaf(_) => unreachable!("Cannot be leaf"),
-        };
-        let node_index = branch
-          .try_search_branch(v)
-          .change_context(CursorError::Seek)?;
-        let node_index = 0;
-        entry.index = node_index;
-        branch.elements()[node_index].page_id()
-      };
-
-      let node = self
-        .bucket
-        .tx
-        .read_node_page(node_page_id)
-        .change_context(CursorError::Seek)?;
-      self.stack.push(StackEntry::new(node));
-    }
-    Ok(())
-  }
-
-  fn try_seek_leaf<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
-  where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
-  {
-    assert!(!self.stack.is_empty());
-    let entry = self.stack.last_mut().expect("stack empty");
-    assert!(entry.is_leaf());
-    let leaf = match &entry.page {
-      NodePage::Branch(_) => unreachable!("cannot be branch"),
-      NodePage::Leaf(leaf) => leaf,
-    };
-    match leaf.try_search_leaf(v).change_context(CursorError::Seek)? {
-      Ok(exact) => {
-        entry.index = exact;
-        Ok(leaf.leaf_flag(entry.index))
-      }
-      Err(closest) => {
-        entry.index = closest;
-        Ok(None)
-      }
-    }
-  }
 }
 
-pub trait CursorRefApi<'tx> {
-  type TxPageType: TxPageType<'tx>;
-
-  fn first_ref<'a>(
-    &'a mut self,
-  ) -> crate::Result<
-    Option<(
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  >;
-  fn next_ref<'a>(
-    &'a mut self,
-  ) -> crate::Result<
-    Option<(
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  >;
-  fn prev_ref<'a>(
-    &'a mut self,
-  ) -> crate::Result<
-    Option<(
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  >;
-  fn last_ref<'a>(
-    &'a mut self,
-  ) -> crate::Result<
-    Option<(
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  >;
-}
-
-pub trait CursorSeekRefApi<'tx>: CursorRefApi<'tx>
-where
-  for<'b> <Self::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
-{
-  fn seek_ref<'a>(
-    &'a mut self, v: &[u8],
-  ) -> crate::Result<
-    Option<(
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  >;
-}
-
-pub trait CursorTrySeekRefApi<'tx>: CursorRefApi<'tx>
-where
-  for<'b> <Self::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
-{
-  fn try_seek_ref<'a>(
-    &'a mut self, v: &[u8],
-  ) -> crate::Result<
-    Option<(
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  >;
-}
-
-pub trait CursorApi<'tx>: CursorRefApi<'tx> {
-  type TxKv: GetKvTxSlice<'tx> + 'tx;
-
-  fn first(&mut self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
-  fn next(&mut self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
-  fn prev(&mut self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
-  fn last(&mut self) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
-}
-
-pub trait CursorSeekApi<'tx>: CursorApi<'tx>
-where
-  for<'b> <Self::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
-{
-  fn seek(&mut self, v: &[u8]) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
-}
-
-pub trait CursorTrySeekApi<'tx>: CursorApi<'tx>
-where
-  for<'b> <Self::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
-{
-  fn try_seek(&mut self, v: &[u8]) -> crate::Result<Option<(Self::TxKv, Self::TxKv)>, CursorError>;
-}
-
-pub struct LeafFilterCursor<'p, 'tx, T: TheTx<'tx>> {
-  cursor: CoreCursor<'p, 'tx, T>,
+pub struct LeafFlagFilterCursor<C> {
+  cursor: C,
   leaf_flag: LeafFlag,
 }
 
-impl<'p, 'tx, T: TheTx<'tx>> LeafFilterCursor<'p, 'tx, T> {
-  pub fn new(core_cursor: CoreCursor<'p, 'tx, T>, leaf_flag: LeafFlag) -> Self {
-    LeafFilterCursor {
-      cursor: core_cursor,
-      leaf_flag,
-    }
+impl<C> LeafFlagFilterCursor<C> {
+  pub fn new(cursor: C, leaf_flag: LeafFlag) -> Self {
+    Self { cursor, leaf_flag }
   }
+}
 
-  #[inline]
-  pub fn key_value_ref<'a>(
-    &'a self,
-  ) -> Option<(
-    <T::TxPageType as GatRefKv<'a>>::RefKv,
-    <T::TxPageType as GatRefKv<'a>>::RefKv,
-  )> {
-    self.cursor.key_value_ref()
-  }
-
-  #[inline]
-  fn key_value(
-    &self,
-  ) -> Option<(
-    <T::TxPageType as GetKvTxSlice<'tx>>::TxKv,
-    <T::TxPageType as GetKvTxSlice<'tx>>::TxKv,
-  )> {
-    self.cursor.key_value()
-  }
-
-  pub fn first(&mut self) -> crate::Result<Option<()>, CursorError> {
+impl<C> CoreCursorMoveApi for LeafFlagFilterCursor<C> where C: CoreCursorMoveApi {
+  fn move_to_first_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
     if let Some(flag) = self.cursor.move_to_first_element()? {
       if flag == self.leaf_flag {
-        Ok(Some(()))
+        Ok(Some(flag))
       } else {
-        self.next()
+        self.move_to_next_element()
       }
     } else {
       Ok(None)
     }
   }
 
-  pub fn next(&mut self) -> crate::Result<Option<()>, CursorError> {
+  fn move_to_next_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
     while let Some(flag) = self.cursor.move_to_next_element()? {
       if flag == self.leaf_flag {
-        return Ok(Some(()));
-      }
-    }
-    Ok(None)
-  }
-  pub fn prev(&mut self) -> crate::Result<Option<()>, CursorError> {
-    while let Some(flag) = self.cursor.move_to_prev_element()? {
-      if flag == self.leaf_flag {
-        return Ok(Some(()));
+        return Ok(Some(flag));
       }
     }
     Ok(None)
   }
 
-  pub fn last(&mut self) -> crate::Result<Option<()>, CursorError> {
+  fn move_to_prev_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
+    while let Some(flag) = self.cursor.move_to_prev_element()? {
+      if flag == self.leaf_flag {
+        return Ok(Some(flag));
+      }
+    }
+    Ok(None)
+  }
+
+  fn move_to_last_element(&mut self) -> error_stack::Result<Option<LeafFlag>, CursorError> {
     if let Some(flag) = self.cursor.move_to_last_element()? {
       if flag == self.leaf_flag {
-        Ok(Some(()))
+        Ok(Some(flag))
       } else {
-        self.prev()
+        self.move_to_prev_element()
       }
     } else {
       Ok(None)
     }
   }
+}
 
-  fn seek<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<()>, CursorError>
-  where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
-  {
+impl<C> CoreCursorSeekApi for LeafFlagFilterCursor<C> where C: CoreCursorSeekApi {
+  fn seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
     if let Some(flag) = self.cursor.seek(v)? {
       if flag == self.leaf_flag {
-        return Ok(Some(()));
-      }
-    }
-    Ok(None)
-  }
-
-  fn try_seek<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<()>, CursorError>
-  where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
-  {
-    if let Some(flag) = self.cursor.try_seek(v)? {
-      if flag == self.leaf_flag {
-        return Ok(Some(()));
+        return Ok(Some(flag));
       }
     }
     Ok(None)
   }
 }
+
+impl<C> CoreCursorTrySeekApi for LeafFlagFilterCursor<C> where C: CoreCursorTrySeekApi {
+  fn try_seek(&mut self, v: &[u8]) -> error_stack::Result<Option<LeafFlag>, CursorError> {
+    if let Some(flag) = self.cursor.try_seek(v)? {
+      if flag == self.leaf_flag {
+        return Ok(Some(flag));
+      }
+    }
+    Ok(None)
+  }
+}
+
+impl<C> CoreCursorRefApi for LeafFlagFilterCursor<C> where C: CoreCursorRefApi {
+  type KvRef<'a> = C::KvRef<'a>
+  where
+    Self: 'a;
+
+  #[inline]
+  fn key_value_ref<'a>(&'a self) -> Option<(Self::KvRef<'a>, Self::KvRef<'a>)> {
+    self.cursor.key_value_ref()
+  }
+}
+
+impl<'tx, C> CoreCursorApi<'tx> for LeafFlagFilterCursor<C> where C: CoreCursorApi<'tx> {
+  type KvTx = C::KvTx;
+
+  fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)> {
+    self.cursor.key_value()
+  }
+}
+
+pub trait CursorRefApi {
+  type KvRef<'a>: GetGatKvRefSlice
+  where
+    Self: 'a;
+
+  fn first_ref<'a>(&'a mut self) -> crate::Result<Self::KvRef<'a>, CursorError>;
+  fn next_ref<'a>(&'a mut self) -> crate::Result<Self::KvRef<'a>, CursorError>;
+  fn prev_ref<'a>(&'a mut self) -> crate::Result<Self::KvRef<'a>, CursorError>;
+  fn last_ref<'a>(&'a mut self) -> crate::Result<Self::KvRef<'a>, CursorError>;
+
+  fn seek_ref<'a>(&'a mut self) -> crate::Result<Self::KvRef<'a>, CursorError>;
+}
+
+pub trait CursorApi<'tx> {
+  type KvTx: GetKvTxSlice<'tx>;
+
+  fn first(&mut self) -> crate::Result<Self::KvTx, CursorError>;
+  fn next(&mut self) -> crate::Result<Self::KvTx, CursorError>;
+  fn prev(&mut self) -> crate::Result<Self::KvTx, CursorError>;
+  fn last(&mut self) -> crate::Result<Self::KvTx, CursorError>;
+  fn seek(&mut self) -> crate::Result<Self::KvTx, CursorError>;
+}
+
+/*
 
 pub struct RefTxCursor<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> {
   filter: LeafFilterCursor<'p, 'tx, T>,
@@ -743,3 +707,4 @@ where
 pub struct LazyTxCursor<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> {
   filter: LeafFilterCursor<'p, 'tx, T>,
 }
+*/

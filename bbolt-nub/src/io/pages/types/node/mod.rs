@@ -89,7 +89,7 @@ pub trait HasKeyRefs: GetGatKvRefSlice {
 }
 
 pub trait HasKeys<'tx>: HasKeyRefs {
-  type TxKv: GetKvTxSlice<'tx> + 'tx;
+  type TxKv: GetKvTxSlice<'tx>;
 
   fn key(&self, index: usize) -> Option<Self::TxKv>;
 }
