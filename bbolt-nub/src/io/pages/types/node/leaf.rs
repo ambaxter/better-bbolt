@@ -2,7 +2,7 @@ use crate::common::layout::node::{LeafElement, LeafFlag};
 use crate::io::bytes::shared_bytes::SharedRefSlice;
 use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
 use crate::io::pages::types::node::{HasElements, HasKeyPosLen, HasKeyRefs, HasKeys, HasValues};
-use crate::io::pages::{GatRefKv, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
+use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use delegate::delegate;
 use std::ops::{Range, RangeBounds};
 
@@ -31,18 +31,18 @@ where
   }
 }
 
-impl<'a, 'tx, T: 'tx> GatRefKv<'a> for LeafPage<'tx, T>
+impl<'a, 'tx, T: 'tx> GatKvRef<'a> for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  type RefKv = <T as GatRefKv<'a>>::RefKv;
+  type KvRef = <T as GatKvRef<'a>>::KvRef;
 }
 
 impl<'tx, T: 'tx> GetGatKvRefSlice for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     self.page.get_ref_slice(range)
   }
 }
@@ -53,7 +53,7 @@ where
 {
   pub(crate) fn search_leaf<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
   where
-    <Self as GatRefKv<'a>>::RefKv: PartialOrd<[u8]>,
+    <Self as GatKvRef<'a>>::KvRef: PartialOrd<[u8]>,
   {
     self
       .search(v)
@@ -64,10 +64,10 @@ where
     &'a self, v: &[u8],
   ) -> crate::Result<
     Result<usize, usize>,
-    <<Self as GatRefKv<'a>>::RefKv as TryPartialEq<[u8]>>::Error,
+    <<Self as GatKvRef<'a>>::KvRef as TryPartialEq<[u8]>>::Error,
   >
   where
-    <Self as GatRefKv<'a>>::RefKv: TryPartialOrd<[u8]>,
+    <Self as GatKvRef<'a>>::KvRef: TryPartialOrd<[u8]>,
   {
     self
       .try_search(v)
@@ -94,7 +94,7 @@ impl<'tx, T: 'tx> HasKeyRefs for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self as GatRefKv<'a>>::RefKv> {
+  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self as GatKvRef<'a>>::KvRef> {
     self
       .key_range(index)
       .map(|key_range| self.page.get_ref_slice(key_range))
@@ -122,7 +122,7 @@ where
     self.elements().get(index).map(|element| element.flags())
   }
 
-  fn value_ref<'a>(&'a self, index: usize) -> Option<<Self as GatRefKv<'a>>::RefKv> {
+  fn value_ref<'a>(&'a self, index: usize) -> Option<<Self as GatKvRef<'a>>::KvRef> {
     self
       .value_range(index)
       .map(|value_range| self.page.get_ref_slice(value_range))
@@ -130,7 +130,7 @@ where
 
   fn key_value_ref<'a>(
     &'a self, index: usize,
-  ) -> Option<(<Self as GatRefKv<'a>>::RefKv, <Self as GatRefKv<'a>>::RefKv)> {
+  ) -> Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)> {
     let key_range = self.key_range(index)?;
     let value_range = self.value_range(index)?;
     Some((

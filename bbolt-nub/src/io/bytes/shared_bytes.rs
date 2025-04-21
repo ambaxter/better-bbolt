@@ -6,7 +6,7 @@ use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use crate::io::ops::RefIntoCopiedIter;
 use crate::io::pages::direct::ops::{Get, KvDataType, KvEq, KvOrd};
 use crate::io::pages::lazy::ops::{KvTryEq, KvTryOrd, TryEq};
-use crate::io::pages::{GatRefKv, GetGatKvRefSlice, GetKvTxSlice, SubRange};
+use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice, SubRange};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::iter::Copied;
@@ -169,12 +169,12 @@ impl<'tx> AsRef<[u8]> for SharedTxSlice<'tx> {
 }
 
 // Shared Tx Bytes //
-impl<'a, 'tx> GatRefKv<'a> for SharedTxBytes<'tx> {
-  type RefKv = SharedRefSlice<'a>;
+impl<'a, 'tx> GatKvRef<'a> for SharedTxBytes<'tx> {
+  type KvRef = SharedRefSlice<'a>;
 }
 
 impl<'tx> GetGatKvRefSlice for SharedTxBytes<'tx> {
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
     }
@@ -195,12 +195,12 @@ impl<'tx> GetKvTxSlice<'tx> for SharedTxBytes<'tx> {
 
 // SharedRefSlice<'a> //
 
-impl<'a, 'p> GatRefKv<'a> for SharedRefSlice<'p> {
-  type RefKv = SharedRefSlice<'a>;
+impl<'a, 'p> GatKvRef<'a> for SharedRefSlice<'p> {
+  type KvRef = SharedRefSlice<'a>;
 }
 
 impl<'p> GetGatKvRefSlice for SharedRefSlice<'p> {
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
     }
@@ -276,12 +276,12 @@ impl<'tx> Ord for SharedTxSlice<'tx> {
   }
 }
 
-impl<'a, 'tx> GatRefKv<'a> for SharedTxSlice<'tx> {
-  type RefKv = SharedRefSlice<'a>;
+impl<'a, 'tx> GatKvRef<'a> for SharedTxSlice<'tx> {
+  type KvRef = SharedRefSlice<'a>;
 }
 
 impl<'tx> GetGatKvRefSlice for SharedTxSlice<'tx> {
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
     }

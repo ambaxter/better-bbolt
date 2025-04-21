@@ -5,7 +5,7 @@ use crate::common::layout::page::PageHeader;
 use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
 use crate::io::pages::types::node::branch::BranchPage;
 use crate::io::pages::types::node::leaf::LeafPage;
-use crate::io::pages::{GatRefKv, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
+use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use bytemuck::{Pod, cast_slice};
 use error_stack::ResultExt;
 use std::cmp::Ordering;
@@ -85,7 +85,7 @@ pub mod branch;
 pub mod leaf;
 
 pub trait HasKeyRefs: GetGatKvRefSlice {
-  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self as GatRefKv<'a>>::RefKv>;
+  fn key_ref<'a>(&'a self, index: usize) -> Option<<Self as GatKvRef<'a>>::KvRef>;
 }
 
 pub trait HasKeys<'tx>: HasKeyRefs {
@@ -156,7 +156,7 @@ pub trait HasElements<'tx>: Page + HasKeyRefs + Sync + Send {
   #[cfg(not(feature = "mt_search"))]
   fn search<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
   where
-    <Self as GatRefKv<'a>>::RefKv: PartialOrd<[u8]>,
+    <Self as GatKvRef<'a>>::KvRef: PartialOrd<[u8]>,
   {
     let elements = self.elements();
     assert!(!elements.is_empty());
@@ -175,10 +175,10 @@ pub trait HasElements<'tx>: Page + HasKeyRefs + Sync + Send {
     &'a self, v: &[u8],
   ) -> crate::Result<
     Result<usize, usize>,
-    <<Self as GatRefKv<'a>>::RefKv as TryPartialEq<[u8]>>::Error,
+    <<Self as GatKvRef<'a>>::KvRef as TryPartialEq<[u8]>>::Error,
   >
   where
-    <Self as GatRefKv<'a>>::RefKv: TryPartialOrd<[u8]>,
+    <Self as GatKvRef<'a>>::KvRef: TryPartialOrd<[u8]>,
   {
     let elements = self.elements();
     assert!(!elements.is_empty());
@@ -197,7 +197,7 @@ pub trait HasElements<'tx>: Page + HasKeyRefs + Sync + Send {
   #[cfg(feature = "mt_search")]
   fn search<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
   where
-    <Self as GatRefKv<'a>>::RefKv: PartialOrd<[u8]>,
+    <Self as GatKvRef<'a>>::KvRef: PartialOrd<[u8]>,
   {
     use rayon::iter::IndexedParallelIterator;
     use rayon::iter::ParallelIterator;
@@ -241,10 +241,10 @@ pub trait HasElements<'tx>: Page + HasKeyRefs + Sync + Send {
     &'a self, v: &[u8],
   ) -> crate::Result<
     Result<usize, usize>,
-    <<Self as GatRefKv<'a>>::RefKv as TryPartialEq<[u8]>>::Error,
+    <<Self as GatKvRef<'a>>::KvRef as TryPartialEq<[u8]>>::Error,
   >
   where
-    <Self as GatRefKv<'a>>::RefKv: TryPartialOrd<[u8]>,
+    <Self as GatKvRef<'a>>::KvRef: TryPartialOrd<[u8]>,
   {
     use rayon::iter::IndexedParallelIterator;
     use rayon::iter::ParallelIterator;
@@ -300,11 +300,11 @@ pub trait HasNodes<'tx>: HasKeys<'tx> {
 pub trait HasValues<'tx>: HasKeys<'tx> {
   fn leaf_flag(&self, index: usize) -> Option<LeafFlag>;
 
-  fn value_ref<'a>(&'a self, index: usize) -> Option<<Self as GatRefKv<'a>>::RefKv>;
+  fn value_ref<'a>(&'a self, index: usize) -> Option<<Self as GatKvRef<'a>>::KvRef>;
 
   fn key_value_ref<'a>(
     &'a self, index: usize,
-  ) -> Option<(<Self as GatRefKv<'a>>::RefKv, <Self as GatRefKv<'a>>::RefKv)>;
+  ) -> Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>;
 
   fn value(&self, index: usize) -> Option<Self::TxKv>;
 

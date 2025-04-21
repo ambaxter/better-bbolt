@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+use std::path::Iter;
 use crate::common::errors::CursorError;
 use crate::common::id::NodePageId;
 use crate::common::layout::node::LeafFlag;
@@ -11,7 +13,7 @@ use crate::io::pages::lazy::LazyPage;
 use crate::io::pages::lazy::ops::{KvTryDataType, TryPartialOrd};
 use crate::io::pages::types::node::{HasElements, HasValues, NodePage};
 use crate::io::pages::{
-  GatRefKv, GetGatKvRefSlice, GetKvTxSlice, TxPageType, TxReadLazyPageIO, TxReadPageIO,
+  GatKvRef, GetGatKvRefSlice, GetKvTxSlice, TxPageType, TxReadLazyPageIO, TxReadPageIO,
 };
 use error_stack::ResultExt;
 use std::process::Output;
@@ -178,7 +180,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
 
   fn seek_branches<'a>(&'a mut self, v: &[u8]) -> crate::Result<(), CursorError>
   where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
+    for<'b> <T::TxPageType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
     loop {
@@ -209,7 +211,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
 
   fn seek_leaf<'a>(&'a mut self, v: &[u8]) -> Option<LeafFlag>
   where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
+    for<'b> <T::TxPageType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
     let entry = self.stack.last_mut().expect("stack empty");
@@ -233,7 +235,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
 
   fn try_seek_branches<'a>(&'a mut self, v: &[u8]) -> crate::Result<(), CursorError>
   where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
+    for<'b> <T::TxPageType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
     loop {
@@ -267,7 +269,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursor<'p, 'tx, T> {
 
   fn try_seek_leaf<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
   where
-    for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
+    for<'b> <T::TxPageType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
     let entry = self.stack.last_mut().expect("stack empty");
@@ -420,7 +422,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorMoveApi for CoreCursor<'p, 'tx, T> {
 
 impl<'p, 'tx, T: TheTx<'tx>> CoreCursorRefApi for CoreCursor<'p, 'tx, T> {
   type KvRef<'a>
-    = <T::TxPageType as GatRefKv<'a>>::RefKv
+    = <T::TxPageType as GatKvRef<'a>>::KvRef
   where
     Self: 'a;
 
@@ -462,7 +464,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorApi<'tx> for CoreCursor<'p, 'tx, T> {
 
 impl<'p, 'tx, T: TheTx<'tx>> CoreCursorSeekApi for CoreCursor<'p, 'tx, T>
 where
-  for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
+  for<'b> <T::TxPageType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
 {
   fn seek(&mut self, v: &[u8]) -> error_stack::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
@@ -474,7 +476,7 @@ where
 
 impl<'p, 'tx, T: TheTx<'tx>> CoreCursorTrySeekApi for CoreCursor<'p, 'tx, T>
 where
-  for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: TryPartialOrd<[u8]>,
+  for<'b> <T::TxPageType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
 {
   fn try_seek(&mut self, v: &[u8]) -> error_stack::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
@@ -596,27 +598,48 @@ where
   }
 }
 
-pub trait CursorRefApi {
-  type KvRef<'a>: GetGatKvRefSlice
-  where
-    Self: 'a;
+pub trait CursorRefApi: for<'a> GatKvRef<'a> {
 
   fn first_ref<'a>(
     &'a mut self,
-  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError>;
+  ) -> crate::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError>;
   fn next_ref<'a>(
     &'a mut self,
-  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError>;
+  ) -> crate::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError>;
   fn prev_ref<'a>(
     &'a mut self,
-  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError>;
+  ) -> crate::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError>;
   fn last_ref<'a>(
     &'a mut self,
-  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError>;
+  ) -> crate::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError>;
   fn seek_ref<'a>(
     &'a mut self, v: &[u8],
-  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError>;
+  ) -> crate::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError>;
 }
+
+pub struct CursorIter<'tx, C: 'tx> {
+  cursor: C,
+  started: bool,
+  _tx: PhantomData<&'tx ()>,
+}
+
+impl<'tx, C> Iterator for CursorIter<'tx, C> where C: CursorApi<'tx> {
+  type Item = crate::Result<(C::KvTx, C::KvTx), CursorError>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    match if !self.started {
+      self.started = true;
+      self.cursor.first()
+    } else {
+      self.cursor.next()
+    } {
+      Ok(Some((key, val))) => Some(Ok((key, val))),
+      Ok(None) => None,
+      Err(err) =>  Some(Err(err)),
+    }
+  }
+}
+
 
 pub trait CursorApi<'tx> {
   type KvTx: GetKvTxSlice<'tx>;
@@ -632,17 +655,18 @@ pub struct RefTxCursor<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, R
   cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, T>>,
 }
 
+impl<'a, 'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> GatKvRef<'a>
+for RefTxCursor<'p, 'tx, T> {
+  type KvRef = <T::TxPageType as GatKvRef<'a>>::KvRef;
+}
+
 impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorRefApi
   for RefTxCursor<'p, 'tx, T>
 {
-  type KvRef<'a>
-    = <T::TxPageType as GatRefKv<'a>>::RefKv
-  where
-    Self: 'a;
 
   fn first_ref<'a>(
     &'a mut self,
-  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+  ) -> crate::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError> {
     Ok(
       self
         .cursor
@@ -654,7 +678,7 @@ impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> 
 
   fn next_ref<'a>(
     &'a mut self,
-  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+  ) -> crate::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError> {
     Ok(
       self
         .cursor
@@ -666,7 +690,7 @@ impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> 
 
   fn prev_ref<'a>(
     &'a mut self,
-  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+  ) -> crate::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError> {
     Ok(
       self
         .cursor
@@ -678,7 +702,7 @@ impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> 
 
   fn last_ref<'a>(
     &'a mut self,
-  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+  ) -> crate::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError> {
     Ok(
       self
         .cursor
@@ -690,7 +714,7 @@ impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> 
 
   fn seek_ref<'a>(
     &'a mut self, v: &[u8],
-  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+  ) -> crate::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError> {
     Ok(
       self
         .cursor
@@ -761,17 +785,19 @@ pub struct LazyTxCursor<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx
   cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, T>>,
 }
 
+impl<'a, 'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> GatKvRef<'a>
+for LazyTxCursor<'p, 'tx, T>
+{
+  type KvRef = <T::TxPageType as GatKvRef<'a>>::KvRef;
+}
+
 impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
   for LazyTxCursor<'p, 'tx, T>
 {
-  type KvRef<'a>
-    = <T::TxPageType as GatRefKv<'a>>::RefKv
-  where
-    Self: 'a;
 
   fn first_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+  ) -> error_stack::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError> {
     Ok(
       self
         .cursor
@@ -783,7 +809,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
 
   fn next_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+  ) -> error_stack::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError> {
     Ok(
       self
         .cursor
@@ -795,7 +821,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
 
   fn prev_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+  ) -> error_stack::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError> {
     Ok(
       self
         .cursor
@@ -807,7 +833,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
 
   fn last_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+  ) -> error_stack::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError> {
     Ok(
       self
         .cursor
@@ -819,7 +845,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
 
   fn seek_ref<'a>(
     &'a mut self, v: &[u8],
-  ) -> error_stack::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+  ) -> error_stack::Result<Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>, CursorError> {
     Ok(
       self
         .cursor
@@ -894,6 +920,7 @@ mod tests {
 use crate::io::transmogrify::direct::DirectTransmogrify;
 use std::fs::File;
   use std::io::{stdout, BufReader};
+  use bytemuck::bytes_of_mut;
   use moka::sync::Cache;
   use parking_lot::RwLock;
   use size::{Size, KIBIBYTE};
@@ -901,6 +928,7 @@ use std::fs::File;
   use crate::api::tx::TxStats;
   use crate::common::buffer_pool::BufferPool;
   use crate::common::id::DirectPageTranslator;
+  use crate::common::layout::bucket::BucketHeader;
   use crate::components::tx::{CoreTxHandle, LazyTxHandle, SharedTxHandle};
   use crate::io::backends::{CachedReadHandler, ReadHandler};
   use crate::io::backends::file::SingleFileReader;
@@ -945,5 +973,35 @@ use std::fs::File;
     println!("{:?}", k_buf.chunk());
     k_buf.try_advance(4).unwrap();
     println!("{:?}", k_buf.remaining());
+    let mut v_buf = v.ref_into_try_buf().unwrap();
+    println!("{:?}", v_buf.remaining());
+    let mut bucket_header = BucketHeader::default();
+    bytes_of_mut(&mut bucket_header).copy_from_slice(v_buf.chunk());
+    println!("{:?}", bucket_header);
+
+    let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
+    let dict_bucket = CoreBucket {
+      tx: &tx,
+      root: dict_root,
+    };
+    let dict_cursor = LazyTxCursor {
+      cursor: LeafFlagFilterCursor { cursor: CoreCursor{
+        bucket: &dict_bucket,
+        stack: vec![],
+        location: CursorLocation::Begin,
+      }, leaf_flag: LeafFlag::empty() },
+    };
+    let mut dict_iter = CursorIter{
+      cursor: dict_cursor,
+      started: false,
+      _tx: Default::default(),
+    };
+    for result in dict_iter {
+      let (k, v) = result.unwrap();
+      let mut k_buf = k.ref_into_try_buf().unwrap();
+      let v_buf = v.ref_into_try_buf().unwrap();
+      let k_string = String::from_utf8_lossy(k_buf.chunk());
+      println!("{:?}: {}", k_string, v_buf.remaining());
+    }
   }
 }

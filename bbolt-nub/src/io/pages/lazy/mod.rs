@@ -7,7 +7,7 @@ use crate::io::pages::lazy::ops::{LazyRefIntoTryBuf, RefIntoTryCopiedIter, TryBu
 use crate::io::pages::lazy::ref_slice::LazyRefTryBuf;
 use crate::io::pages::lazy::tx_slice::LazyTxSlice;
 use crate::io::pages::{
-  GatRefKv, GetGatKvRefSlice, GetKvTxSlice, Page, SubRange, TxPageType, TxReadLazyPageIO,
+  GatKvRef, GetGatKvRefSlice, GetKvTxSlice, Page, SubRange, TxPageType, TxReadLazyPageIO,
   TxReadPageIO,
 };
 use bytes::Buf;
@@ -94,12 +94,12 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> Page for LazyPage<'tx, L> {
   }
 }
 
-impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> GatRefKv<'a> for LazyPage<'tx, L> {
-  type RefKv = LazyRefSlice<'a, 'tx, L>;
+impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> GatKvRef<'a> for LazyPage<'tx, L> {
+  type KvRef = LazyRefSlice<'a, 'tx, L>;
 }
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> GetGatKvRefSlice for LazyPage<'tx, L> {
-  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatRefKv<'a>>::RefKv {
+  fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     let range = (0..self.len()).sub_range(range);
     LazyRefSlice::new(self, range)
   }
