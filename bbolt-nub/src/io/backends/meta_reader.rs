@@ -61,13 +61,9 @@ impl MetaReader {
         } else {
           Ok(Some(second_metadata))
         }
-      },
-      (Some(meta_page), None) => {
-        Ok(Some(meta_page))
-      },
-      (None, Some(second_metadata)) => {
-        Ok(Some(second_metadata))
-      },
+      }
+      (Some(meta_page), None) => Ok(Some(meta_page)),
+      (None, Some(second_metadata)) => Ok(Some(second_metadata)),
       (None, None) => Ok(None),
     }
   }

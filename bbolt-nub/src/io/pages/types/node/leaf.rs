@@ -1,7 +1,9 @@
 use crate::common::layout::node::{LeafElement, LeafFlag};
 use crate::io::bytes::shared_bytes::SharedRefSlice;
 use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
-use crate::io::pages::types::node::{HasElements, HasKeyPosLen, HasKeyRefs, HasKeys, HasValues};
+use crate::io::pages::types::node::{
+  HasBranches, HasElements, HasKeyPosLen, HasKeyRefs, HasKeys, HasLeaves, HasSearchLeaf, HasValues,
+};
 use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use delegate::delegate;
 use std::ops::{Range, RangeBounds};
@@ -51,29 +53,6 @@ impl<'tx, T> LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  pub(crate) fn search_leaf<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
-  where
-    <Self as GatKvRef<'a>>::KvRef: PartialOrd<[u8]>,
-  {
-    self
-      .search(v)
-      .map_err(|next_index| next_index.saturating_sub(1))
-  }
-
-  pub(crate) fn try_search_leaf<'a>(
-    &'a self, v: &[u8],
-  ) -> crate::Result<
-    Result<usize, usize>,
-    <<Self as GatKvRef<'a>>::KvRef as TryPartialEq<[u8]>>::Error,
-  >
-  where
-    <Self as GatKvRef<'a>>::KvRef: TryPartialOrd<[u8]>,
-  {
-    self
-      .try_search(v)
-      .map(|r| r.map_err(|next_index| next_index.saturating_sub(1)))
-  }
-
   fn value_range(&self, index: usize) -> Option<Range<usize>> {
     self.elements().get(index).map(|element| {
       let start = element.kv_data_start(index) + element.elem_key_len();
@@ -89,6 +68,8 @@ where
 {
   type Element = LeafElement;
 }
+
+impl<'tx, T> HasSearchLeaf<'tx> for LeafPage<'tx, T> where T: TxPageType<'tx> {}
 
 impl<'tx, T> HasKeyRefs for LeafPage<'tx, T>
 where
@@ -154,3 +135,5 @@ where
     ))
   }
 }
+
+impl<'tx, T> HasLeaves<'tx> for LeafPage<'tx, T> where T: TxPageType<'tx> {}

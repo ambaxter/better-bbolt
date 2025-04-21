@@ -9,6 +9,8 @@ use crate::io::pages::direct::ops::KvDataType;
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::types::node::NodePage;
+use crate::io::pages::types::node::branch::BranchPage;
+use crate::io::pages::types::node::leaf::LeafPage;
 use bytemuck::from_bytes;
 use delegate::delegate;
 use std::collections::Bound;
@@ -144,7 +146,10 @@ pub trait TxReadPageIO<'tx> {
 
   fn read_node_page(
     &'tx self, node_page_id: NodePageId,
-  ) -> crate::Result<NodePage<'tx, Self::TxPageType>, PageError>;
+  ) -> crate::Result<
+    NodePage<BranchPage<'tx, Self::TxPageType>, LeafPage<'tx, Self::TxPageType>>,
+    PageError,
+  >;
 }
 
 pub trait TxReadLoadedPageIO<'tx>: TxReadPageIO<'tx> {}

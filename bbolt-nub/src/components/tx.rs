@@ -12,6 +12,8 @@ use crate::io::pages::lazy::LazyPage;
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::types::node::NodePage;
+use crate::io::pages::types::node::branch::BranchPage;
+use crate::io::pages::types::node::leaf::LeafPage;
 use crate::io::pages::{TxPage, TxPageType, TxReadLazyPageIO, TxReadPageIO};
 use error_stack::ResultExt;
 use parking_lot::RwLockReadGuard;
@@ -67,7 +69,10 @@ where
 
   fn read_node_page(
     &self, node_page_id: NodePageId,
-  ) -> crate::Result<NodePage<Self::TxPageType>, PageError> {
+  ) -> crate::Result<
+    NodePage<BranchPage<'tx, Self::TxPageType>, LeafPage<'tx, Self::TxPageType>>,
+    PageError,
+  > {
     let page = self
       .handle
       .io
@@ -127,7 +132,10 @@ where
 
   fn read_node_page(
     &self, node_page_id: NodePageId,
-  ) -> crate::Result<NodePage<Self::TxPageType>, PageError> {
+  ) -> crate::Result<
+    NodePage<BranchPage<'tx, Self::TxPageType>, LeafPage<'tx, Self::TxPageType>>,
+    PageError,
+  > {
     let page = self
       .handle
       .io
@@ -187,7 +195,10 @@ where
 
   fn read_node_page(
     &'tx self, node_page_id: NodePageId,
-  ) -> crate::Result<NodePage<'tx, Self::TxPageType>, PageError> {
+  ) -> crate::Result<
+    NodePage<BranchPage<'tx, Self::TxPageType>, LeafPage<'tx, Self::TxPageType>>,
+    PageError,
+  > {
     let page = self
       .handle
       .io

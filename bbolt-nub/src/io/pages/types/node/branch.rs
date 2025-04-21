@@ -2,7 +2,9 @@ use crate::common::id::NodePageId;
 use crate::common::layout::node::BranchElement;
 use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
 use crate::io::pages::types::node::leaf::LeafPage;
-use crate::io::pages::types::node::{HasElements, HasKeyRefs, HasKeys, HasNodes};
+use crate::io::pages::types::node::{
+  HasBranches, HasElements, HasKeyRefs, HasKeys, HasNodes, HasSearchBranch, HasSearchLeaf,
+};
 use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use delegate::delegate;
 use std::ops::RangeBounds;
@@ -48,30 +50,7 @@ where
   }
 }
 
-impl<'tx, T> BranchPage<'tx, T>
-where
-  T: TxPageType<'tx>,
-{
-  pub(crate) fn search_branch<'a>(&'a self, v: &[u8]) -> usize
-  where
-    <Self as GatKvRef<'a>>::KvRef: PartialOrd<[u8]>,
-  {
-    self
-      .search(v)
-      .unwrap_or_else(|next_index| next_index.saturating_sub(1))
-  }
-
-  pub(crate) fn try_search_branch<'a>(
-    &'a self, v: &[u8],
-  ) -> crate::Result<usize, <<Self as GatKvRef<'a>>::KvRef as TryPartialEq<[u8]>>::Error>
-  where
-    <Self as GatKvRef<'a>>::KvRef: TryPartialOrd<[u8]>,
-  {
-    self
-      .try_search(v)
-      .map(|r| r.unwrap_or_else(|next_index| next_index.saturating_sub(1)))
-  }
-}
+impl<'tx, T> BranchPage<'tx, T> where T: TxPageType<'tx> {}
 
 impl<'tx, T> HasElements<'tx> for BranchPage<'tx, T>
 where
@@ -79,6 +58,8 @@ where
 {
   type Element = BranchElement;
 }
+
+impl<'tx, T> HasSearchBranch<'tx> for BranchPage<'tx, T> where T: TxPageType<'tx> {}
 
 impl<'tx, T> HasKeyRefs for BranchPage<'tx, T>
 where
@@ -112,3 +93,5 @@ where
     self.elements().get(index).map(|element| element.page_id())
   }
 }
+
+impl<'tx, T> HasBranches<'tx> for BranchPage<'tx, T> where T: TxPageType<'tx> {}

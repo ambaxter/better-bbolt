@@ -293,9 +293,58 @@ pub trait HasElements<'tx>: Page + HasKeyRefs + Sync + Send {
   }
 }
 
+pub trait HasSearchLeaf<'tx>: HasElements<'tx> {
+  fn search_leaf<'a>(&'a self, v: &[u8]) -> Result<usize, usize>
+  where
+    <Self as GatKvRef<'a>>::KvRef: PartialOrd<[u8]>,
+  {
+    self
+      .search(v)
+      .map_err(|next_index| next_index.saturating_sub(1))
+  }
+
+  fn try_search_leaf<'a>(
+    &'a self, v: &[u8],
+  ) -> crate::Result<
+    Result<usize, usize>,
+    <<Self as GatKvRef<'a>>::KvRef as TryPartialEq<[u8]>>::Error,
+  >
+  where
+    <Self as GatKvRef<'a>>::KvRef: TryPartialOrd<[u8]>,
+  {
+    self
+      .try_search(v)
+      .map(|r| r.map_err(|next_index| next_index.saturating_sub(1)))
+  }
+}
+
+pub trait HasSearchBranch<'tx>: HasElements<'tx> {
+  fn search_branch<'a>(&'a self, v: &[u8]) -> usize
+  where
+    <Self as GatKvRef<'a>>::KvRef: PartialOrd<[u8]>,
+  {
+    self
+      .search(v)
+      .unwrap_or_else(|next_index| next_index.saturating_sub(1))
+  }
+
+  fn try_search_branch<'a>(
+    &'a self, v: &[u8],
+  ) -> crate::Result<usize, <<Self as GatKvRef<'a>>::KvRef as TryPartialEq<[u8]>>::Error>
+  where
+    <Self as GatKvRef<'a>>::KvRef: TryPartialOrd<[u8]>,
+  {
+    self
+      .try_search(v)
+      .map(|r| r.unwrap_or_else(|next_index| next_index.saturating_sub(1)))
+  }
+}
+
 pub trait HasNodes<'tx>: HasKeys<'tx> {
   fn node(&self, index: usize) -> Option<NodePageId>;
 }
+
+pub trait HasBranches<'tx>: HasNodes<'tx> + HasSearchBranch<'tx> {}
 
 pub trait HasValues<'tx>: HasKeys<'tx> {
   fn leaf_flag(&self, index: usize) -> Option<LeafFlag>;
@@ -311,13 +360,15 @@ pub trait HasValues<'tx>: HasKeys<'tx> {
   fn key_value(&self, index: usize) -> Option<(Self::TxKv, Self::TxKv)>;
 }
 
+pub trait HasLeaves<'tx>: HasValues<'tx> + HasSearchLeaf<'tx> {}
+
 #[derive(Clone)]
-pub enum NodePage<'tx, T> {
-  Branch(BranchPage<'tx, T>),
-  Leaf(LeafPage<'tx, T>),
+pub enum NodePage<B, L> {
+  Branch(B),
+  Leaf(L),
 }
 
-impl<'tx, T> TryFrom<TxPage<'tx, T>> for NodePage<'tx, T>
+impl<'tx, T> TryFrom<TxPage<'tx, T>> for NodePage<BranchPage<'tx, T>, LeafPage<'tx, T>>
 where
   T: TxPageType<'tx>,
 {
@@ -334,7 +385,7 @@ where
   }
 }
 
-impl<'tx, T> NodePage<'tx, T> {
+impl<B, L> NodePage<B, L> {
   pub fn is_leaf(&self) -> bool {
     matches!(self, NodePage::Leaf(_))
   }
@@ -344,9 +395,10 @@ impl<'tx, T> NodePage<'tx, T> {
   }
 }
 
-impl<'tx, T> NodePage<'tx, T>
+impl<B, L> NodePage<B, L>
 where
-  T: TxPageType<'tx>,
+  B: Page,
+  L: Page,
 {
   pub fn element_count(&self) -> usize {
     let len = match self {
@@ -357,9 +409,10 @@ where
   }
 }
 
-impl<'tx, T> Page for NodePage<'tx, T>
+impl<B, L> Page for NodePage<B, L>
 where
-  T: TxPageType<'tx>,
+  B: Page,
+  L: Page,
 {
   fn root_page(&self) -> &[u8] {
     match self {

@@ -3,7 +3,7 @@ use crate::io::pages::types::node::NodePage;
 
 pub trait BucketApi {}
 
-pub struct CoreBucket<'tx, T: TheTx<'tx>> {
+pub struct CoreBucket<'tx, B, L, T> {
   pub(crate) tx: &'tx T,
-  pub(crate) root: NodePage<'tx, T::TxPageType>,
+  pub(crate) root: NodePage<B, L>,
 }
