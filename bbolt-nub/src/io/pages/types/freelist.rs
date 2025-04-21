@@ -10,7 +10,7 @@ pub trait HasFreelist {
   fn freelist_iter(&self) -> Self::FreelistIter;
 }
 
-pub struct FreelistPage<'tx, T: 'tx> {
+pub struct FreelistPage<'tx, T> {
   page: TxPage<'tx, T>,
 }
 
@@ -31,7 +31,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> Page for FreelistPage<'tx, T>
+impl<'tx, T> Page for FreelistPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {

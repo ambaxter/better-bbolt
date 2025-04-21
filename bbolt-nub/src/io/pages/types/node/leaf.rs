@@ -7,11 +7,11 @@ use delegate::delegate;
 use std::ops::{Range, RangeBounds};
 
 #[derive(Clone)]
-pub struct LeafPage<'tx, T: 'tx> {
+pub struct LeafPage<'tx, T> {
   page: TxPage<'tx, T>,
 }
 
-impl<'tx, T: 'tx> LeafPage<'tx, T>
+impl<'tx, T> LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -20,7 +20,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> Page for LeafPage<'tx, T>
+impl<'tx, T> Page for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -31,14 +31,14 @@ where
   }
 }
 
-impl<'a, 'tx, T: 'tx> GatKvRef<'a> for LeafPage<'tx, T>
+impl<'a, 'tx, T> GatKvRef<'a> for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
   type KvRef = <T as GatKvRef<'a>>::KvRef;
 }
 
-impl<'tx, T: 'tx> GetGatKvRefSlice for LeafPage<'tx, T>
+impl<'tx, T> GetGatKvRefSlice for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -47,7 +47,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> LeafPage<'tx, T>
+impl<'tx, T> LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -83,14 +83,14 @@ where
   }
 }
 
-impl<'tx, T: 'tx> HasElements<'tx> for LeafPage<'tx, T>
+impl<'tx, T> HasElements<'tx> for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
   type Element = LeafElement;
 }
 
-impl<'tx, T: 'tx> HasKeyRefs for LeafPage<'tx, T>
+impl<'tx, T> HasKeyRefs for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -101,7 +101,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> HasKeys<'tx> for LeafPage<'tx, T>
+impl<'tx, T> HasKeys<'tx> for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -114,7 +114,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> HasValues<'tx> for LeafPage<'tx, T>
+impl<'tx, T> HasValues<'tx> for LeafPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {

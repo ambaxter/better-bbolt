@@ -8,11 +8,11 @@ use delegate::delegate;
 use std::ops::RangeBounds;
 
 #[derive(Clone)]
-pub struct BranchPage<'tx, T: 'tx> {
+pub struct BranchPage<'tx, T> {
   page: TxPage<'tx, T>,
 }
 
-impl<'tx, T: 'tx> BranchPage<'tx, T>
+impl<'tx, T> BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -21,7 +21,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> Page for BranchPage<'tx, T>
+impl<'tx, T> Page for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -32,14 +32,14 @@ where
   }
 }
 
-impl<'a, 'tx, T: 'tx> GatKvRef<'a> for BranchPage<'tx, T>
+impl<'a, 'tx, T> GatKvRef<'a> for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
   type KvRef = <T as GatKvRef<'a>>::KvRef;
 }
 
-impl<'tx, T: 'tx> GetGatKvRefSlice for BranchPage<'tx, T>
+impl<'tx, T> GetGatKvRefSlice for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -48,7 +48,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> BranchPage<'tx, T>
+impl<'tx, T> BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -73,14 +73,14 @@ where
   }
 }
 
-impl<'tx, T: 'tx> HasElements<'tx> for BranchPage<'tx, T>
+impl<'tx, T> HasElements<'tx> for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
   type Element = BranchElement;
 }
 
-impl<'tx, T: 'tx> HasKeyRefs for BranchPage<'tx, T>
+impl<'tx, T> HasKeyRefs for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -91,7 +91,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> HasKeys<'tx> for BranchPage<'tx, T>
+impl<'tx, T> HasKeys<'tx> for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -104,7 +104,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> HasNodes<'tx> for BranchPage<'tx, T>
+impl<'tx, T> HasNodes<'tx> for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {

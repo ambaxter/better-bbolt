@@ -75,12 +75,12 @@ pub trait TxPageType<'tx>: Page + GetKvTxSlice<'tx> + Clone + Sync + Send {
 }
 
 #[derive(Clone)]
-pub struct TxPage<'tx, T: 'tx> {
+pub struct TxPage<'tx, T> {
   tx: TxSlot<'tx>,
   page: T,
 }
 
-impl<'tx, T: 'tx> TxPage<'tx, T>
+impl<'tx, T> TxPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -92,7 +92,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> Page for TxPage<'tx, T>
+impl<'tx, T> Page for TxPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -103,14 +103,14 @@ where
   }
 }
 
-impl<'a, 'tx, T: 'tx> GatKvRef<'a> for TxPage<'tx, T>
+impl<'a, 'tx, T> GatKvRef<'a> for TxPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
   type KvRef = <T as GatKvRef<'a>>::KvRef;
 }
 
-impl<'tx, T: 'tx> GetGatKvRefSlice for TxPage<'tx, T>
+impl<'tx, T> GetGatKvRefSlice for TxPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -119,7 +119,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> GetKvTxSlice<'tx> for TxPage<'tx, T>
+impl<'tx, T> GetKvTxSlice<'tx> for TxPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {

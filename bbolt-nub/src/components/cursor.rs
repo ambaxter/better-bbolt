@@ -45,7 +45,7 @@ impl<'tx, T> StackEntry<'tx, T> {
   }
 }
 
-impl<'tx, T: 'tx> StackEntry<'tx, T>
+impl<'tx, T> StackEntry<'tx, T>
 where
   T: TxPageType<'tx>,
 {

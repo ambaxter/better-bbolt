@@ -344,7 +344,7 @@ impl<'tx, T> NodePage<'tx, T> {
   }
 }
 
-impl<'tx, T: 'tx> NodePage<'tx, T>
+impl<'tx, T> NodePage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -357,7 +357,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> Page for NodePage<'tx, T>
+impl<'tx, T> Page for NodePage<'tx, T>
 where
   T: TxPageType<'tx>,
 {

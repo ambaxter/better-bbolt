@@ -10,7 +10,7 @@ pub trait HasMeta {
   fn meta(&self) -> &Meta;
 }
 
-pub struct MetaPage<'tx, T: 'tx> {
+pub struct MetaPage<'tx, T> {
   page: TxPage<'tx, T>,
 }
 
@@ -29,7 +29,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> Page for MetaPage<'tx, T>
+impl<'tx, T> Page for MetaPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -40,7 +40,7 @@ where
   }
 }
 
-impl<'tx, T: 'tx> HasMeta for MetaPage<'tx, T>
+impl<'tx, T> HasMeta for MetaPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
