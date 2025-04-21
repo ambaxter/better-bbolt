@@ -95,7 +95,7 @@ impl<'tx, T: 'tx> HasKeys<'tx> for BranchPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  type TxKv = T::TxKv;
+  type TxKv = T::KvTx;
 
   fn key(&self, index: usize) -> Option<Self::TxKv> {
     self

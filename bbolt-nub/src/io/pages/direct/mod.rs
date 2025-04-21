@@ -46,9 +46,9 @@ impl<'tx, P: TxBytes<'tx>> GetKvTxSlice<'tx> for DirectPage<'tx, P>
 where
   P: GetKvTxSlice<'tx>,
 {
-  type TxKv = P::TxKv;
+  type KvTx = P::KvTx;
 
-  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::KvTx {
     self.root.get_tx_slice(range)
   }
 }

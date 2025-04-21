@@ -157,9 +157,9 @@ impl<'tx> PartialOrd<[u8]> for RefTxSlice<'tx> {
 }
 
 impl<'tx> GetKvTxSlice<'tx> for RefTxBytes<'tx> {
-  type TxKv = RefTxSlice<'tx>;
+  type KvTx = RefTxSlice<'tx>;
 
-  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::KvTx {
     let range = (0..self.bytes.len()).sub_range(range);
     RefTxSlice {
       bytes: self.bytes,
@@ -199,9 +199,9 @@ impl<'tx> GetGatKvRefSlice for RefTxSlice<'tx> {
 }
 
 impl<'tx> GetKvTxSlice<'tx> for RefTxSlice<'tx> {
-  type TxKv = Self;
+  type KvTx = Self;
 
-  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::KvTx {
     let range = self.range.sub_range(range);
     RefTxSlice {
       bytes: self.bytes,

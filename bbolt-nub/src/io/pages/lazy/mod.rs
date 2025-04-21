@@ -106,9 +106,9 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> GetGatKvRefSlice for LazyPage<'tx, L> {
 }
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyPage<'tx, L> {
-  type TxKv = LazyTxSlice<'tx, L>;
+  type KvTx = LazyTxSlice<'tx, L>;
 
-  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::KvTx {
     let range = (0..self.len()).sub_range(range);
     LazyTxSlice::new(self.clone(), range)
   }

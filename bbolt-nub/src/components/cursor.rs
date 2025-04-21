@@ -439,7 +439,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorRefApi for CoreCursor<'p, 'tx, T> {
   }
 }
 impl<'p, 'tx, T: TheTx<'tx>> CoreCursorApi<'tx> for CoreCursor<'p, 'tx, T> {
-  type KvTx = <T::TxPageType as GetKvTxSlice<'tx>>::TxKv;
+  type KvTx = <T::TxPageType as GetKvTxSlice<'tx>>::KvTx;
 
   fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)> {
     if self.location.is_outside() {
@@ -493,7 +493,10 @@ impl<C> LeafFlagFilterCursor<C> {
   }
 }
 
-impl<C> CoreCursorMoveApi for LeafFlagFilterCursor<C> where C: CoreCursorMoveApi {
+impl<C> CoreCursorMoveApi for LeafFlagFilterCursor<C>
+where
+  C: CoreCursorMoveApi,
+{
   fn move_to_first_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
     if let Some(flag) = self.cursor.move_to_first_element()? {
       if flag == self.leaf_flag {
@@ -537,7 +540,10 @@ impl<C> CoreCursorMoveApi for LeafFlagFilterCursor<C> where C: CoreCursorMoveApi
   }
 }
 
-impl<C> CoreCursorSeekApi for LeafFlagFilterCursor<C> where C: CoreCursorSeekApi {
+impl<C> CoreCursorSeekApi for LeafFlagFilterCursor<C>
+where
+  C: CoreCursorSeekApi,
+{
   fn seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
     if let Some(flag) = self.cursor.seek(v)? {
       if flag == self.leaf_flag {
@@ -548,7 +554,10 @@ impl<C> CoreCursorSeekApi for LeafFlagFilterCursor<C> where C: CoreCursorSeekApi
   }
 }
 
-impl<C> CoreCursorTrySeekApi for LeafFlagFilterCursor<C> where C: CoreCursorTrySeekApi {
+impl<C> CoreCursorTrySeekApi for LeafFlagFilterCursor<C>
+where
+  C: CoreCursorTrySeekApi,
+{
   fn try_seek(&mut self, v: &[u8]) -> error_stack::Result<Option<LeafFlag>, CursorError> {
     if let Some(flag) = self.cursor.try_seek(v)? {
       if flag == self.leaf_flag {
@@ -559,8 +568,12 @@ impl<C> CoreCursorTrySeekApi for LeafFlagFilterCursor<C> where C: CoreCursorTryS
   }
 }
 
-impl<C> CoreCursorRefApi for LeafFlagFilterCursor<C> where C: CoreCursorRefApi {
-  type KvRef<'a> = C::KvRef<'a>
+impl<C> CoreCursorRefApi for LeafFlagFilterCursor<C>
+where
+  C: CoreCursorRefApi,
+{
+  type KvRef<'a>
+    = C::KvRef<'a>
   where
     Self: 'a;
 
@@ -570,7 +583,10 @@ impl<C> CoreCursorRefApi for LeafFlagFilterCursor<C> where C: CoreCursorRefApi {
   }
 }
 
-impl<'tx, C> CoreCursorApi<'tx> for LeafFlagFilterCursor<C> where C: CoreCursorApi<'tx> {
+impl<'tx, C> CoreCursorApi<'tx> for LeafFlagFilterCursor<C>
+where
+  C: CoreCursorApi<'tx>,
+{
   type KvTx = C::KvTx;
 
   fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)> {
@@ -583,128 +599,289 @@ pub trait CursorRefApi {
   where
     Self: 'a;
 
-  fn first_ref<'a>(&'a mut self) -> crate::Result<Self::KvRef<'a>, CursorError>;
-  fn next_ref<'a>(&'a mut self) -> crate::Result<Self::KvRef<'a>, CursorError>;
-  fn prev_ref<'a>(&'a mut self) -> crate::Result<Self::KvRef<'a>, CursorError>;
-  fn last_ref<'a>(&'a mut self) -> crate::Result<Self::KvRef<'a>, CursorError>;
-
-  fn seek_ref<'a>(&'a mut self) -> crate::Result<Self::KvRef<'a>, CursorError>;
+  fn first_ref<'a>(
+    &'a mut self,
+  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError>;
+  fn next_ref<'a>(
+    &'a mut self,
+  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError>;
+  fn prev_ref<'a>(
+    &'a mut self,
+  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError>;
+  fn last_ref<'a>(
+    &'a mut self,
+  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError>;
+  fn seek_ref<'a>(
+    &'a mut self, v: &[u8],
+  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError>;
 }
 
 pub trait CursorApi<'tx> {
   type KvTx: GetKvTxSlice<'tx>;
 
-  fn first(&mut self) -> crate::Result<Self::KvTx, CursorError>;
-  fn next(&mut self) -> crate::Result<Self::KvTx, CursorError>;
-  fn prev(&mut self) -> crate::Result<Self::KvTx, CursorError>;
-  fn last(&mut self) -> crate::Result<Self::KvTx, CursorError>;
-  fn seek(&mut self) -> crate::Result<Self::KvTx, CursorError>;
+  fn first(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
+  fn next(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
+  fn prev(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
+  fn last(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
+  fn seek(&mut self, v: &[u8]) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
 }
-
-/*
 
 pub struct RefTxCursor<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> {
-  filter: LeafFilterCursor<'p, 'tx, T>,
+  cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, T>>,
 }
 
-impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorRefApi<'tx>
+impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorRefApi
   for RefTxCursor<'p, 'tx, T>
 {
-  //todo: how to handle? Brain fudgy
-  type TxPageType = T::TxPageType;
+  type KvRef<'a>
+    = <T::TxPageType as GatRefKv<'a>>::RefKv
+  where
+    Self: 'a;
 
   fn first_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<
-    Option<(
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  > {
+  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
     Ok(
       self
-        .filter
-        .first()?
-        .map(|_| self.filter.key_value_ref())
+        .cursor
+        .move_to_first_element()?
+        .map(move |_| self.cursor.key_value_ref())
         .flatten(),
     )
   }
 
   fn next_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<
-    Option<(
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  > {
+  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
     Ok(
       self
-        .filter
-        .next()?
-        .map(|_| self.filter.key_value_ref())
+        .cursor
+        .move_to_next_element()?
+        .map(move |_| self.cursor.key_value_ref())
         .flatten(),
     )
   }
 
   fn prev_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<
-    Option<(
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  > {
+  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
     Ok(
       self
-        .filter
-        .prev()?
-        .map(|_| self.filter.key_value_ref())
+        .cursor
+        .move_to_prev_element()?
+        .map(move |_| self.cursor.key_value_ref())
         .flatten(),
     )
   }
 
   fn last_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<
-    Option<(
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-      <Self::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  > {
+  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
     Ok(
       self
-        .filter
-        .last()?
-        .map(|_| self.filter.key_value_ref())
+        .cursor
+        .move_to_last_element()?
+        .map(move |_| self.cursor.key_value_ref())
+        .flatten(),
+    )
+  }
+
+  fn seek_ref<'a>(
+    &'a mut self, v: &[u8],
+  ) -> crate::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .seek(v)?
+        .map(move |_| self.cursor.key_value_ref())
         .flatten(),
     )
   }
 }
 
-impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>>
-  CursorSeekRefApi<'tx> for RefTxCursor<'p, 'tx, T>
-where
-  for<'b> <T::TxPageType as GatRefKv<'b>>::RefKv: PartialOrd<[u8]>,
+impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorApi<'tx>
+  for RefTxCursor<'p, 'tx, T>
 {
-  fn seek_ref<'a>(
-    &'a mut self, v: &[u8],
-  ) -> error_stack::Result<
-    Option<(
-      <T::TxPageType as GatRefKv<'a>>::RefKv,
-      <T::TxPageType as GatRefKv<'a>>::RefKv,
-    )>,
-    CursorError,
-  > {
-    todo!()
+  type KvTx = <T::TxPageType as GetKvTxSlice<'tx>>::KvTx;
+
+  fn first(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_first_element()?
+        .map(move |_| self.cursor.key_value())
+        .flatten(),
+    )
+  }
+
+  fn next(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_next_element()?
+        .map(move |_| self.cursor.key_value())
+        .flatten(),
+    )
+  }
+
+  fn prev(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_prev_element()?
+        .map(move |_| self.cursor.key_value())
+        .flatten(),
+    )
+  }
+
+  fn last(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_last_element()?
+        .map(move |_| self.cursor.key_value())
+        .flatten(),
+    )
+  }
+
+  fn seek(&mut self, v: &[u8]) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .seek(v)?
+        .map(move |_| self.cursor.key_value())
+        .flatten(),
+    )
   }
 }
 
 pub struct LazyTxCursor<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> {
-  filter: LeafFilterCursor<'p, 'tx, T>,
+  cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, T>>,
 }
-*/
+
+impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
+  for LazyTxCursor<'p, 'tx, T>
+{
+  type KvRef<'a>
+    = <T::TxPageType as GatRefKv<'a>>::RefKv
+  where
+    Self: 'a;
+
+  fn first_ref<'a>(
+    &'a mut self,
+  ) -> error_stack::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_first_element()?
+        .map(move |_| self.cursor.key_value_ref())
+        .flatten(),
+    )
+  }
+
+  fn next_ref<'a>(
+    &'a mut self,
+  ) -> error_stack::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_next_element()?
+        .map(move |_| self.cursor.key_value_ref())
+        .flatten(),
+    )
+  }
+
+  fn prev_ref<'a>(
+    &'a mut self,
+  ) -> error_stack::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_prev_element()?
+        .map(move |_| self.cursor.key_value_ref())
+        .flatten(),
+    )
+  }
+
+  fn last_ref<'a>(
+    &'a mut self,
+  ) -> error_stack::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_last_element()?
+        .map(move |_| self.cursor.key_value_ref())
+        .flatten(),
+    )
+  }
+
+  fn seek_ref<'a>(
+    &'a mut self, v: &[u8],
+  ) -> error_stack::Result<Option<(Self::KvRef<'a>, Self::KvRef<'a>)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .try_seek(v)?
+        .map(move |_| self.cursor.key_value_ref())
+        .flatten(),
+    )
+  }
+}
+
+impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorApi<'tx>
+  for LazyTxCursor<'p, 'tx, T>
+{
+  type KvTx = <T::TxPageType as GetKvTxSlice<'tx>>::KvTx;
+
+  fn first(&mut self) -> error_stack::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_first_element()?
+        .map(move |_| self.cursor.key_value())
+        .flatten(),
+    )
+  }
+
+  fn next(&mut self) -> error_stack::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_next_element()?
+        .map(move |_| self.cursor.key_value())
+        .flatten(),
+    )
+  }
+
+  fn prev(&mut self) -> error_stack::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_prev_element()?
+        .map(move |_| self.cursor.key_value())
+        .flatten(),
+    )
+  }
+
+  fn last(&mut self) -> error_stack::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .move_to_last_element()?
+        .map(move |_| self.cursor.key_value())
+        .flatten(),
+    )
+  }
+
+  fn seek(
+    &mut self, v: &[u8],
+  ) -> error_stack::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+    Ok(
+      self
+        .cursor
+        .try_seek(v)?
+        .map(move |_| self.cursor.key_value())
+        .flatten(),
+    )
+  }
+}

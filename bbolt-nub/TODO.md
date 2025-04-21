@@ -1,3 +1,3 @@
 # Cursor
-* Complete RefTxCursor
-* Complete LazyTxCursor
+* MemMapCursor
+* FileCursor

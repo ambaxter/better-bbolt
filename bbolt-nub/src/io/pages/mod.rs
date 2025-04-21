@@ -57,8 +57,8 @@ pub trait GetGatKvRefSlice: for<'a> GatRefKv<'a> {
 }
 
 pub trait GetKvTxSlice<'tx>: GetGatKvRefSlice {
-  type TxKv: GetKvTxSlice<'tx>;
-  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv;
+  type KvTx: GetKvTxSlice<'tx>;
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::KvTx;
 }
 
 pub trait Page {
@@ -123,10 +123,10 @@ impl<'tx, T: 'tx> GetKvTxSlice<'tx> for TxPage<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  type TxKv = T::TxKv;
+  type KvTx = T::KvTx;
 
   #[inline]
-  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::TxKv {
+  fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::KvTx {
     self.page.get_tx_slice(range)
   }
 }
