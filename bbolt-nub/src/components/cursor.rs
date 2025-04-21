@@ -885,3 +885,63 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorApi<'t
     )
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use crate::io::pages::lazy::ops::RefIntoTryBuf;
+use crate::io::transmogrify::direct::DirectTransmogrify;
+use std::fs::File;
+  use std::io::{stdout, BufReader};
+  use moka::sync::Cache;
+  use parking_lot::RwLock;
+  use size::{Size, KIBIBYTE};
+  use triomphe::Arc;
+  use crate::api::tx::TxStats;
+  use crate::common::buffer_pool::BufferPool;
+  use crate::common::id::DirectPageTranslator;
+  use crate::components::tx::{CoreTxHandle, LazyTxHandle, SharedTxHandle};
+  use crate::io::backends::{CachedReadHandler, ReadHandler};
+  use crate::io::backends::file::SingleFileReader;
+  use crate::io::backends::meta_reader::MetaReader;
+  use crate::io::pages::lazy::ref_slice::LazyRefTryBuf;
+  use crate::io::pages::lazy::ops::TryBuf;
+  use super::*;
+  #[test]
+  fn test() {
+    let mut reader = BufReader::new(File::open("my.db").unwrap());
+    let metadata = MetaReader::new(reader).determine_file_meta().unwrap();
+    println!("{:?}", metadata);
+    let meta = metadata.meta;
+    let tx_id = meta.tx_id;
+    let page_size = meta.page_size as usize;
+    let root_page = meta.root.root();
+    let buffer_pool = BufferPool::new(page_size, Size::from_kibibytes(64), Size::from_kibibytes(32), Size::from_kibibytes(256));
+    let tx_stats = Arc::new(TxStats::default());
+    let backend = SingleFileReader::new("my.db", page_size, buffer_pool).unwrap();
+    let tx_context = DirectTransmogrify{};
+    let handler = ReadHandler{ tx_context, io: backend, page_size};
+    let cached_read_handler = RwLock::new(CachedReadHandler{ handler, page_cache: Cache::new(10_000) });
+    let read_lock = cached_read_handler.read();
+    let core_tx = CoreTxHandle { io: read_lock, stats: tx_stats.clone(), tx_id };
+    let tx = LazyTxHandle{ handle: core_tx};
+    let root = tx.read_node_page(root_page.into()).unwrap();
+    let bucket = CoreBucket {
+      tx: &tx,
+      root,
+    };
+    let mut cursor = LazyTxCursor {
+      cursor: LeafFlagFilterCursor { cursor: CoreCursor{
+        bucket: &bucket,
+        stack: vec![],
+        location: CursorLocation::Begin,
+      }, leaf_flag: LeafFlag::BUCKET },
+    };
+    let kv = cursor.first_ref().expect("no_errors");
+    let (k, v) = kv.unwrap();
+    let mut k_buf = k.ref_into_try_buf().unwrap();
+    println!("{:?}", k_buf.remaining());
+    println!("{:?}", k_buf.chunk());
+    k_buf.try_advance(4).unwrap();
+    println!("{:?}", k_buf.remaining());
+  }
+}

@@ -127,7 +127,7 @@ impl<'p, 'tx, L: TxReadLazyPageIO<'tx>> RefIntoTryBuf for LazyRefSlice<'p, 'tx, 
   fn ref_into_try_buf<'a>(
     &'a self,
   ) -> crate::Result<Self::TryBuf<'a>, <<Self as RefIntoTryBuf>::TryBuf<'a> as TryBuf>::Error> {
-    todo!()
+    LazyRefTryBuf::new(self)
   }
 }
 
@@ -166,12 +166,24 @@ impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> TryBuf for LazyRefTryBuf<'a, 'tx, L> {
   }
 
   fn chunk(&self) -> &[u8] {
+    let page_size = self.slice.page.root.as_ref().len();
+    let overflow_start = self.overflow_index as usize * page_size;
+    assert!(overflow_start <= self.range.start);
     let page_len = self.page.as_ref().len();
-    todo!()
+    let page_start = self.range.start - overflow_start;
+    let page_end = page_len.min(self.range.end - overflow_start);
+    &self.page.as_ref()[page_start..page_end]
   }
 
   fn try_advance(&mut self, cnt: usize) -> crate::Result<(), Self::Error> {
-    todo!()
+    let overflow_index = (self.range.start / self.slice.page.root.as_ref().len()) as u32;
+    if overflow_index != self.overflow_index {
+      let page = self.slice.page.read_overflow_page(overflow_index)?;
+      self.overflow_index = overflow_index;
+      self.page = page;
+    }
+    self.range = self.range.sub_range(cnt..);
+    Ok(())
   }
 }
 

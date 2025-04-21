@@ -15,7 +15,7 @@ use crate::io::pages::types::node::NodePage;
 use crate::io::pages::{TxPage, TxPageType, TxReadLazyPageIO, TxReadPageIO};
 use error_stack::ResultExt;
 use parking_lot::RwLockReadGuard;
-use std::sync::Arc;
+use triomphe::Arc;
 
 pub trait TheTx<'tx>: TxReadPageIO<'tx> {
   fn stats(&self) -> &TxStats;
@@ -24,13 +24,13 @@ pub trait TheTx<'tx>: TxReadPageIO<'tx> {
 pub trait TheLazyTx<'tx>: TheTx<'tx> + TxReadLazyPageIO<'tx> {}
 
 pub struct CoreTxHandle<'tx, IO> {
-  io: RwLockReadGuard<'tx, IO>,
-  stats: Arc<TxStats>,
-  tx_id: TxId,
+  pub(crate) io: RwLockReadGuard<'tx, IO>,
+  pub(crate) stats: Arc<TxStats>,
+  pub(crate) tx_id: TxId,
 }
 
 pub struct SharedTxHandle<'tx, IO> {
-  handle: CoreTxHandle<'tx, IO>,
+  pub(crate) handle: CoreTxHandle<'tx, IO>,
 }
 
 impl<'tx, IO> TxReadPageIO<'tx> for SharedTxHandle<'tx, IO>
@@ -150,7 +150,7 @@ where
 }
 
 pub struct LazyTxHandle<'tx, IO> {
-  handle: CoreTxHandle<'tx, IO>,
+  pub(crate) handle: CoreTxHandle<'tx, IO>,
 }
 
 impl<'tx, IO> TxReadPageIO<'tx> for LazyTxHandle<'tx, IO>

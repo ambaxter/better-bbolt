@@ -54,10 +54,21 @@ impl MetaReader {
   }
 
   fn check_metadata(&mut self) -> io::Result<Option<HeaderMetaPage>> {
-    if let Some(header) = self.first_metadata()? {
-      Ok(Some(header))
-    } else {
-      self.second_metadata()
+    match (self.first_metadata()?, self.second_metadata()?) {
+      (Some(meta_page), Some(second_metadata)) => {
+        if meta_page.meta.tx_id > second_metadata.meta.tx_id {
+          Ok(Some(meta_page))
+        } else {
+          Ok(Some(second_metadata))
+        }
+      },
+      (Some(meta_page), None) => {
+        Ok(Some(meta_page))
+      },
+      (None, Some(second_metadata)) => {
+        Ok(Some(second_metadata))
+      },
+      (None, None) => Ok(None),
     }
   }
 

@@ -49,9 +49,9 @@ pub trait ContigIOReader: IOReader {
 }
 
 pub struct ReadHandler<T, I> {
-  tx_context: T,
-  io: I,
-  page_size: usize,
+  pub(crate) tx_context: T,
+  pub(crate) io: I,
+  pub(crate) page_size: usize,
 }
 
 pub trait IOPageReader {
@@ -111,8 +111,8 @@ pub trait IOOverflowPageReader: IOPageReader {
 }
 
 pub struct CachedReadHandler<T, I: IOReader<Bytes = SharedBytes>> {
-  handler: ReadHandler<T, I>,
-  page_cache: Cache<DiskPageId, SharedBytes>,
+  pub(crate) handler: ReadHandler<T, I>,
+  pub(crate) page_cache: Cache<DiskPageId, SharedBytes>,
 }
 
 impl<T, I> CachedReadHandler<T, I>

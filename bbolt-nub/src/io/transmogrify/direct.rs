@@ -1,7 +1,7 @@
 use crate::common::id::{DiskPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::io::transmogrify::{TxContext, TxDirectContext, TxIndirectContext};
 
-struct DirectTransmogrify;
+pub struct DirectTransmogrify;
 
 impl TxContext for DirectTransmogrify {
   #[inline]
