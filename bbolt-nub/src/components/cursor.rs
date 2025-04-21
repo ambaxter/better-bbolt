@@ -322,7 +322,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorMoveApi for CoreCursor<'p, 'tx, T> {
       let mut new_stack_depth = 0;
       for (depth, entry) in self.stack.iter_mut().enumerate().rev() {
         new_stack_depth = depth + 1;
-        if entry.index < entry.element_count() {
+        if entry.index + 1 < entry.element_count() {
           entry.index += 1;
           stack_exhausted = false;
           break;
@@ -349,7 +349,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorMoveApi for CoreCursor<'p, 'tx, T> {
       }
       match &entry.page {
         NodePage::Branch(_) => unreachable!("cannot be branch"),
-        NodePage::Leaf(leaf) => return Ok(leaf.leaf_flag(entry.index)),
+        NodePage::Leaf(leaf) => return Ok(Some(leaf.leaf_flag(entry.index).unwrap())),
       }
     }
   }
@@ -919,7 +919,7 @@ mod tests {
   use crate::io::pages::lazy::ops::RefIntoTryBuf;
 use crate::io::transmogrify::direct::DirectTransmogrify;
 use std::fs::File;
-  use std::io::{stdout, BufReader};
+  use std::io::{stdout, BufReader, BufWriter, Write};
   use bytemuck::bytes_of_mut;
   use moka::sync::Cache;
   use parking_lot::RwLock;
@@ -996,12 +996,14 @@ use std::fs::File;
       started: false,
       _tx: Default::default(),
     };
+    let mut write = BufWriter::new(File::create("out.csv").unwrap());
     for result in dict_iter {
       let (k, v) = result.unwrap();
       let mut k_buf = k.ref_into_try_buf().unwrap();
       let v_buf = v.ref_into_try_buf().unwrap();
       let k_string = String::from_utf8_lossy(k_buf.chunk());
-      println!("{:?}: {}", k_string, v_buf.remaining());
+      write.write_fmt(format_args!("{},{}\n", k_string, v_buf.remaining())).unwrap();
     }
+    write.flush().unwrap();
   }
 }
