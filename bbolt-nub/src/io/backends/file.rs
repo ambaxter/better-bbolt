@@ -63,7 +63,7 @@ pub struct MultiFileReader {
 }
 
 impl MultiFileReader {
-  fn new<P: AsRef<Path>>(
+  pub fn new<P: AsRef<Path>>(
     path: P, reader_count: usize, page_size: usize, buffer_pool: BufferPool,
   ) -> crate::Result<Self, DiskReadError> {
     // TODO: Managing channels and File failures?

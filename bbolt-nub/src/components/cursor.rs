@@ -989,8 +989,8 @@ mod tests {
   use crate::api::tx::TxStats;
   use crate::common::buffer_pool::BufferPool;
   use crate::common::layout::bucket::BucketHeader;
-  use crate::components::tx::{CoreTxHandle, LazyTxHandle};
-  use crate::io::backends::file::SingleFileReader;
+  use crate::components::tx::{CoreTxHandle, LazyTxHandle, RefTxHandle};
+  use crate::io::backends::file::{MultiFileReader, SingleFileReader};
   use crate::io::backends::meta_reader::MetaReader;
   use crate::io::backends::{CachedReadHandler, ReadHandler};
   use crate::io::pages::lazy::ops::RefIntoTryBuf;
@@ -1002,9 +1002,12 @@ mod tests {
   use size::Size;
   use std::fs::File;
   use std::io::{BufReader, BufWriter, Write};
+  use memmap2::{Advice, Mmap, MmapOptions};
   use triomphe::Arc;
+  use crate::io::backends::memmap::MemMapReader;
+
   #[test]
-  fn test() {
+  fn test_file() {
     let mut reader = BufReader::new(File::open("my.db").unwrap());
     let metadata = MetaReader::new(reader).determine_file_meta().unwrap();
     println!("{:?}", metadata);
@@ -1082,7 +1085,188 @@ mod tests {
       started: false,
       _tx: Default::default(),
     };
-    let mut write = BufWriter::new(File::create("out.csv").unwrap());
+    let mut write = BufWriter::new(File::create("out_file.csv").unwrap());
+    for result in dict_iter {
+      let (k, v) = result.unwrap();
+      let mut k_buf = k.ref_into_try_buf().unwrap();
+      let v_buf = v.ref_into_try_buf().unwrap();
+      let k_string = String::from_utf8_lossy(k_buf.chunk());
+      write
+        .write_fmt(format_args!("{},{}\n", k_string, v_buf.remaining()))
+        .unwrap();
+    }
+    write.flush().unwrap();
+  }
+
+  #[test]
+  fn test_multifile() {
+    let mut reader = BufReader::new(File::open("my.db").unwrap());
+    let metadata = MetaReader::new(reader).determine_file_meta().unwrap();
+    println!("{:?}", metadata);
+    let meta = metadata.meta;
+    let tx_id = meta.tx_id;
+    let page_size = meta.page_size as usize;
+    let root_page = meta.root.root();
+    let buffer_pool = BufferPool::new(
+      page_size,
+      Size::from_kibibytes(64),
+      Size::from_kibibytes(32),
+      Size::from_kibibytes(256),
+    );
+    let tx_stats = Arc::new(TxStats::default());
+    let backend = MultiFileReader::new("my.db", 32, page_size, buffer_pool).unwrap();
+    let tx_context = DirectTransmogrify {};
+    let handler = ReadHandler {
+      tx_context,
+      io: backend,
+      page_size,
+    };
+    let cached_read_handler = RwLock::new(CachedReadHandler {
+      handler,
+      page_cache: Cache::new(10_000),
+    });
+    let read_lock = cached_read_handler.read();
+    let core_tx = CoreTxHandle {
+      io: read_lock,
+      stats: tx_stats.clone(),
+      tx_id,
+    };
+    let tx = LazyTxHandle { handle: core_tx };
+    let root = tx.read_node_page(root_page.into()).unwrap();
+    let bucket = CoreBucket { tx: &tx, root };
+    let mut cursor = LazyTxCursor {
+      cursor: LeafFlagFilterCursor {
+        cursor: CoreCursor {
+          bucket: &bucket,
+          stack: vec![],
+          location: CursorLocation::Begin,
+        },
+        leaf_flag: LeafFlag::BUCKET,
+      },
+    };
+    let kv = cursor.seek_ref(b"dict".as_slice()).expect("no_errors");
+    let (k, v) = kv.unwrap();
+    let mut k_buf = k.ref_into_try_buf().unwrap();
+    println!("{:?}", k_buf.remaining());
+    println!("{:?}", k_buf.chunk());
+    k_buf.try_advance(4).unwrap();
+    println!("{:?}", k_buf.remaining());
+    let mut v_buf = v.ref_into_try_buf().unwrap();
+    println!("{:?}", v_buf.remaining());
+    let mut bucket_header = BucketHeader::default();
+    bytes_of_mut(&mut bucket_header).copy_from_slice(v_buf.chunk());
+    println!("{:?}", bucket_header);
+
+    let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
+    let dict_bucket = CoreBucket {
+      tx: &tx,
+      root: dict_root,
+    };
+    let dict_cursor = LazyTxCursor {
+      cursor: LeafFlagFilterCursor {
+        cursor: CoreCursor {
+          bucket: &dict_bucket,
+          stack: vec![],
+          location: CursorLocation::Begin,
+        },
+        leaf_flag: LeafFlag::empty(),
+      },
+    };
+    let mut dict_iter = CursorIter {
+      cursor: dict_cursor,
+      started: false,
+      _tx: Default::default(),
+    };
+    let mut write = BufWriter::new(File::create("out_multi.csv").unwrap());
+    for result in dict_iter {
+      let (k, v) = result.unwrap();
+      let mut k_buf = k.ref_into_try_buf().unwrap();
+      let v_buf = v.ref_into_try_buf().unwrap();
+      let k_string = String::from_utf8_lossy(k_buf.chunk());
+      write
+        .write_fmt(format_args!("{},{}\n", k_string, v_buf.remaining()))
+        .unwrap();
+    }
+    write.flush().unwrap();
+  }
+
+  #[test]
+  fn test_memmap() {
+    let mut reader = BufReader::new(File::open("my.db").unwrap());
+    let metadata = MetaReader::new(reader).determine_file_meta().unwrap();
+    println!("{:?}", metadata);
+    let meta = metadata.meta;
+    let tx_id = meta.tx_id;
+    let page_size = meta.page_size as usize;
+    let root_page = meta.root.root();
+    let buffer_pool = BufferPool::new(
+      page_size,
+      Size::from_kibibytes(64),
+      Size::from_kibibytes(32),
+      Size::from_kibibytes(256),
+    );
+    let tx_stats = Arc::new(TxStats::default());
+    let backend = MemMapReader::new(page_size);
+    let tx_context = DirectTransmogrify {};
+    let handler = ReadHandler {
+      tx_context,
+      io: backend,
+      page_size,
+    };
+    let cached_read_handler = RwLock::new(handler);
+    let read_lock = cached_read_handler.read();
+    let core_tx = CoreTxHandle {
+      io: read_lock,
+      stats: tx_stats.clone(),
+      tx_id,
+    };
+    let tx = RefTxHandle { handle: core_tx };
+    let root = tx.read_node_page(root_page.into()).unwrap();
+    let bucket = CoreBucket { tx: &tx, root };
+    let mut cursor = RefTxCursor {
+      cursor: LeafFlagFilterCursor {
+        cursor: CoreCursor {
+          bucket: &bucket,
+          stack: vec![],
+          location: CursorLocation::Begin,
+        },
+        leaf_flag: LeafFlag::BUCKET,
+      },
+    };
+    let kv = cursor.seek_ref(b"dict".as_slice()).expect("no_errors");
+    let (k, v) = kv.unwrap();
+    let mut k_buf = k.ref_into_try_buf().unwrap();
+    println!("{:?}", k_buf.remaining());
+    println!("{:?}", k_buf.chunk());
+    k_buf.try_advance(4).unwrap();
+    println!("{:?}", k_buf.remaining());
+    let mut v_buf = v.ref_into_try_buf().unwrap();
+    println!("{:?}", v_buf.remaining());
+    let mut bucket_header = BucketHeader::default();
+    bytes_of_mut(&mut bucket_header).copy_from_slice(v_buf.chunk());
+    println!("{:?}", bucket_header);
+
+    let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
+    let dict_bucket = CoreBucket {
+      tx: &tx,
+      root: dict_root,
+    };
+    let dict_cursor = RefTxCursor {
+      cursor: LeafFlagFilterCursor {
+        cursor: CoreCursor {
+          bucket: &dict_bucket,
+          stack: vec![],
+          location: CursorLocation::Begin,
+        },
+        leaf_flag: LeafFlag::empty(),
+      },
+    };
+    let mut dict_iter = CursorIter {
+      cursor: dict_cursor,
+      started: false,
+      _tx: Default::default(),
+    };
+    let mut write = BufWriter::new(File::create("out_memmap.csv").unwrap());
     for result in dict_iter {
       let (k, v) = result.unwrap();
       let mut k_buf = k.ref_into_try_buf().unwrap();

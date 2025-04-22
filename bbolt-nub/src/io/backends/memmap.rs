@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::path::Path;
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, EOFPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
@@ -7,11 +9,23 @@ use crate::io::backends::{
 use crate::io::bytes::ref_bytes::RefBytes;
 use crate::io::pages::{TxReadLazyPageIO, TxReadPageIO};
 use crate::io::transmogrify::{TxContext, TxDirectContext, TxIndirectContext};
-use memmap2::Mmap;
+use memmap2::{Advice, Mmap, MmapOptions};
 
 pub struct MemMapReader {
   mmap: Mmap,
   page_size: usize,
+}
+
+impl MemMapReader {
+  pub fn new<P: AsRef<Path>>(page_size: usize) -> Self {
+    let file = File::open("my.db").unwrap();
+    let mmap = unsafe {
+      MmapOptions::new()
+        .map(&file)
+    }.unwrap();
+    mmap.advise(Advice::Random).unwrap();
+    Self { mmap, page_size }
+  }
 }
 
 impl IOReader for MemMapReader {

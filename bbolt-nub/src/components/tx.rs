@@ -94,7 +94,7 @@ where
 }
 
 pub struct RefTxHandle<'tx, IO> {
-  handle: CoreTxHandle<'tx, IO>,
+  pub(crate) handle: CoreTxHandle<'tx, IO>,
 }
 
 impl<'tx, IO> TxReadPageIO<'tx> for RefTxHandle<'tx, IO>
