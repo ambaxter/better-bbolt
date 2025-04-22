@@ -56,4 +56,4 @@ pub trait HasValues<'tx>: HasKeys<'tx> {
   fn key_value(&self, index: usize) -> Option<(Self::TxKv, Self::TxKv)>;
 }
 
-pub trait HasLeaves<'tx>: HasValues<'tx> + HasSearchLeaf<'tx> {}
+pub trait HasLeaves<'tx>: HasValues<'tx> + HasSearchLeaf<'tx> + Clone {}

@@ -9,14 +9,15 @@ use crate::io::pages::direct::ops::KvDataType;
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::types::node::NodePage;
+use crate::io::pages::types::node::branch::HasBranches;
 use crate::io::pages::types::node::branch::bbolt::BBoltBranch;
+use crate::io::pages::types::node::leaf::HasLeaves;
 use crate::io::pages::types::node::leaf::bbolt::BBoltLeaf;
 use bytemuck::from_bytes;
 use delegate::delegate;
 use std::collections::Bound;
 use std::hash::Hash;
 use std::ops::{Deref, Range, RangeBounds};
-use crate::io::pages::types::node::branch::HasBranches;
 
 pub mod direct;
 pub mod lazy;
@@ -138,7 +139,8 @@ pub trait TxReadPageIO<'tx> {
   type TxPageType: TxPageType<'tx>;
 
   type BranchType: HasBranches<'tx>;
-  
+  type LeafType: HasLeaves<'tx>;
+
   fn read_meta_page(
     &'tx self, meta_page_id: MetaPageId,
   ) -> crate::Result<MetaPage<'tx, Self::TxPageType>, PageError>;
@@ -149,10 +151,7 @@ pub trait TxReadPageIO<'tx> {
 
   fn read_node_page(
     &'tx self, node_page_id: NodePageId,
-  ) -> crate::Result<
-    NodePage<Self::BranchType, BBoltLeaf<'tx, Self::TxPageType>>,
-    PageError,
-  >;
+  ) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError>;
 }
 
 pub trait TxReadLoadedPageIO<'tx>: TxReadPageIO<'tx> {}

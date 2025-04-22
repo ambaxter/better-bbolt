@@ -42,6 +42,7 @@ where
 {
   type TxPageType = DirectPage<'tx, SharedTxBytes<'tx>>;
   type BranchType = BBoltBranch<'tx, Self::TxPageType>;
+  type LeafType = BBoltLeaf<'tx, Self::TxPageType>;
 
   fn read_meta_page(
     &self, meta_page_id: MetaPageId,
@@ -70,10 +71,7 @@ where
 
   fn read_node_page(
     &self, node_page_id: NodePageId,
-  ) -> crate::Result<
-    NodePage<Self::BranchType, BBoltLeaf<'tx, Self::TxPageType>>,
-    PageError,
-  > {
+  ) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError> {
     let page = self
       .handle
       .io
@@ -106,6 +104,7 @@ where
 {
   type TxPageType = DirectPage<'tx, RefTxBytes<'tx>>;
   type BranchType = BBoltBranch<'tx, Self::TxPageType>;
+  type LeafType = BBoltLeaf<'tx, Self::TxPageType>;
 
   fn read_meta_page(
     &self, meta_page_id: MetaPageId,
@@ -134,10 +133,7 @@ where
 
   fn read_node_page(
     &self, node_page_id: NodePageId,
-  ) -> crate::Result<
-    NodePage<Self::BranchType, BBoltLeaf<'tx, Self::TxPageType>>,
-    PageError,
-  > {
+  ) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError> {
     let page = self
       .handle
       .io
@@ -170,6 +166,7 @@ where
 {
   type TxPageType = LazyPage<'tx, Self>;
   type BranchType = BBoltBranch<'tx, Self::TxPageType>;
+  type LeafType = BBoltLeaf<'tx, Self::TxPageType>;
 
   fn read_meta_page(
     &'tx self, meta_page_id: MetaPageId,
@@ -198,10 +195,7 @@ where
 
   fn read_node_page(
     &'tx self, node_page_id: NodePageId,
-  ) -> crate::Result<
-    NodePage<Self::BranchType, BBoltLeaf<'tx, Self::TxPageType>>,
-    PageError,
-  > {
+  ) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError> {
     let page = self
       .handle
       .io
