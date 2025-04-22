@@ -1,27 +1,22 @@
 use crate::common::errors::CursorError;
-use crate::common::id::NodePageId;
 use crate::common::layout::node::LeafFlag;
 use crate::components::bucket::{BucketApi, CoreBucket};
 use crate::components::tx::{TheLazyTx, TheTx};
 use crate::io::bytes::ref_bytes::RefTxBytes;
-use crate::io::bytes::shared_bytes::SharedTxBytes;
 use crate::io::pages::direct::DirectPage;
 use crate::io::pages::direct::ops::KvDataType;
 use crate::io::pages::lazy::LazyPage;
 use crate::io::pages::lazy::ops::{KvTryDataType, TryPartialOrd};
-use crate::io::pages::types::node::branch::BranchPage;
-use crate::io::pages::types::node::leaf::LeafPage;
-use crate::io::pages::types::node::{
-  HasBranches, HasElements, HasLeaves, HasNodes, HasSearchBranch, HasSearchLeaf, HasValues,
-  NodePage,
-};
+use crate::io::pages::types::node::branch::bbolt::BBoltBranch;
+use crate::io::pages::types::node::branch::{HasBranches, HasNodes, HasSearchBranch};
+use crate::io::pages::types::node::leaf::bbolt::BBoltLeaf;
+use crate::io::pages::types::node::leaf::{HasLeaves, HasSearchLeaf, HasValues};
+use crate::io::pages::types::node::{HasElements, NodePage};
 use crate::io::pages::{
   GatKvRef, GetGatKvRefSlice, GetKvTxSlice, Page, TxPageType, TxReadLazyPageIO, TxReadPageIO,
 };
 use error_stack::ResultExt;
 use std::marker::PhantomData;
-use std::path::Iter;
-use std::process::Output;
 
 pub struct StackEntry<B, L> {
   page: NodePage<B, L>,
@@ -124,12 +119,12 @@ pub struct CoreCursor<'p, 'tx, B, L, T> {
 }
 
 impl<'p, 'tx, T>
-  CoreCursor<'p, 'tx, BranchPage<'tx, T::TxPageType>, LeafPage<'tx, T::TxPageType>, T>
+  CoreCursor<'p, 'tx, BBoltBranch<'tx, T::TxPageType>, BBoltLeaf<'tx, T::TxPageType>, T>
 where
   T: TheTx<'tx>,
 {
   pub fn new(
-    bucket: &'p CoreBucket<'tx, BranchPage<'tx, T::TxPageType>, LeafPage<'tx, T::TxPageType>, T>,
+    bucket: &'p CoreBucket<'tx, BBoltBranch<'tx, T::TxPageType>, BBoltLeaf<'tx, T::TxPageType>, T>,
   ) -> Self {
     bucket.tx.stats().inc_cursor_count(1);
     Self {
@@ -305,7 +300,7 @@ where
 }
 
 impl<'p, 'tx, T: TheTx<'tx>> CoreCursorMoveApi
-  for CoreCursor<'p, 'tx, BranchPage<'tx, T::TxPageType>, LeafPage<'tx, T::TxPageType>, T>
+  for CoreCursor<'p, 'tx, BBoltBranch<'tx, T::TxPageType>, BBoltLeaf<'tx, T::TxPageType>, T>
 {
   fn move_to_first_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
@@ -435,7 +430,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorMoveApi
 }
 
 impl<'p, 'tx, T: TheTx<'tx>> CoreCursorRefApi
-  for CoreCursor<'p, 'tx, BranchPage<'tx, T::TxPageType>, LeafPage<'tx, T::TxPageType>, T>
+  for CoreCursor<'p, 'tx, BBoltBranch<'tx, T::TxPageType>, BBoltLeaf<'tx, T::TxPageType>, T>
 {
   type KvRef<'a>
     = <T::TxPageType as GatKvRef<'a>>::KvRef
@@ -459,7 +454,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorRefApi
   }
 }
 impl<'p, 'tx, T: TheTx<'tx>> CoreCursorApi<'tx>
-  for CoreCursor<'p, 'tx, BranchPage<'tx, T::TxPageType>, LeafPage<'tx, T::TxPageType>, T>
+  for CoreCursor<'p, 'tx, BBoltBranch<'tx, T::TxPageType>, BBoltLeaf<'tx, T::TxPageType>, T>
 {
   type KvTx = <T::TxPageType as GetKvTxSlice<'tx>>::KvTx;
 
@@ -481,7 +476,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorApi<'tx>
 }
 
 impl<'p, 'tx, T: TheTx<'tx>> CoreCursorSeekApi
-  for CoreCursor<'p, 'tx, BranchPage<'tx, T::TxPageType>, LeafPage<'tx, T::TxPageType>, T>
+  for CoreCursor<'p, 'tx, BBoltBranch<'tx, T::TxPageType>, BBoltLeaf<'tx, T::TxPageType>, T>
 where
   for<'b> <T::TxPageType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
 {
@@ -494,7 +489,7 @@ where
 }
 
 impl<'p, 'tx, T: TheTx<'tx>> CoreCursorTrySeekApi
-  for CoreCursor<'p, 'tx, BranchPage<'tx, T::TxPageType>, LeafPage<'tx, T::TxPageType>, T>
+  for CoreCursor<'p, 'tx, BBoltBranch<'tx, T::TxPageType>, BBoltLeaf<'tx, T::TxPageType>, T>
 where
   for<'b> <T::TxPageType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
 {
@@ -689,7 +684,7 @@ pub trait CursorApi<'tx> {
 
 pub struct RefTxCursor<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> {
   cursor: LeafFlagFilterCursor<
-    CoreCursor<'p, 'tx, BranchPage<'tx, T::TxPageType>, LeafPage<'tx, T::TxPageType>, T>,
+    CoreCursor<'p, 'tx, BBoltBranch<'tx, T::TxPageType>, BBoltLeaf<'tx, T::TxPageType>, T>,
   >,
 }
 
@@ -836,7 +831,7 @@ impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> 
 
 pub struct LazyTxCursor<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> {
   cursor: LeafFlagFilterCursor<
-    CoreCursor<'p, 'tx, BranchPage<'tx, T::TxPageType>, LeafPage<'tx, T::TxPageType>, T>,
+    CoreCursor<'p, 'tx, BBoltBranch<'tx, T::TxPageType>, BBoltLeaf<'tx, T::TxPageType>, T>,
   >,
 }
 
@@ -988,22 +983,20 @@ mod tests {
   use super::*;
   use crate::api::tx::TxStats;
   use crate::common::buffer_pool::BufferPool;
-  use crate::common::id::DirectPageTranslator;
   use crate::common::layout::bucket::BucketHeader;
-  use crate::components::tx::{CoreTxHandle, LazyTxHandle, SharedTxHandle};
+  use crate::components::tx::{CoreTxHandle, LazyTxHandle};
   use crate::io::backends::file::SingleFileReader;
   use crate::io::backends::meta_reader::MetaReader;
   use crate::io::backends::{CachedReadHandler, ReadHandler};
   use crate::io::pages::lazy::ops::RefIntoTryBuf;
   use crate::io::pages::lazy::ops::TryBuf;
-  use crate::io::pages::lazy::ref_slice::LazyRefTryBuf;
   use crate::io::transmogrify::direct::DirectTransmogrify;
   use bytemuck::bytes_of_mut;
   use moka::sync::Cache;
   use parking_lot::RwLock;
-  use size::{KIBIBYTE, Size};
+  use size::Size;
   use std::fs::File;
-  use std::io::{BufReader, BufWriter, Write, stdout};
+  use std::io::{BufReader, BufWriter, Write};
   use triomphe::Arc;
   #[test]
   fn test() {

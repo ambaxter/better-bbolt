@@ -1,19 +1,16 @@
 use crate::common::layout::node::{LeafElement, LeafFlag};
-use crate::io::bytes::shared_bytes::SharedRefSlice;
-use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
-use crate::io::pages::types::node::{
-  HasBranches, HasElements, HasKeyPosLen, HasKeyRefs, HasKeys, HasLeaves, HasSearchLeaf, HasValues,
-};
+use crate::io::pages::types::node::leaf::{HasLeaves, HasSearchLeaf, HasValues};
+use crate::io::pages::types::node::{HasElements, HasKeyPosLen, HasKeyRefs, HasKeys};
 use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use delegate::delegate;
 use std::ops::{Range, RangeBounds};
 
 #[derive(Clone)]
-pub struct LeafPage<'tx, T> {
+pub struct BBoltLeaf<'tx, T> {
   page: TxPage<'tx, T>,
 }
 
-impl<'tx, T> LeafPage<'tx, T>
+impl<'tx, T> BBoltLeaf<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -22,7 +19,7 @@ where
   }
 }
 
-impl<'tx, T> Page for LeafPage<'tx, T>
+impl<'tx, T> Page for BBoltLeaf<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -33,14 +30,14 @@ where
   }
 }
 
-impl<'a, 'tx, T> GatKvRef<'a> for LeafPage<'tx, T>
+impl<'a, 'tx, T> GatKvRef<'a> for BBoltLeaf<'tx, T>
 where
   T: TxPageType<'tx>,
 {
   type KvRef = <T as GatKvRef<'a>>::KvRef;
 }
 
-impl<'tx, T> GetGatKvRefSlice for LeafPage<'tx, T>
+impl<'tx, T> GetGatKvRefSlice for BBoltLeaf<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -49,7 +46,7 @@ where
   }
 }
 
-impl<'tx, T> LeafPage<'tx, T>
+impl<'tx, T> BBoltLeaf<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -62,16 +59,16 @@ where
   }
 }
 
-impl<'tx, T> HasElements<'tx> for LeafPage<'tx, T>
+impl<'tx, T> HasElements<'tx> for BBoltLeaf<'tx, T>
 where
   T: TxPageType<'tx>,
 {
   type Element = LeafElement;
 }
 
-impl<'tx, T> HasSearchLeaf<'tx> for LeafPage<'tx, T> where T: TxPageType<'tx> {}
+impl<'tx, T> HasSearchLeaf<'tx> for BBoltLeaf<'tx, T> where T: TxPageType<'tx> {}
 
-impl<'tx, T> HasKeyRefs for LeafPage<'tx, T>
+impl<'tx, T> HasKeyRefs for BBoltLeaf<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -82,7 +79,7 @@ where
   }
 }
 
-impl<'tx, T> HasKeys<'tx> for LeafPage<'tx, T>
+impl<'tx, T> HasKeys<'tx> for BBoltLeaf<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -95,7 +92,7 @@ where
   }
 }
 
-impl<'tx, T> HasValues<'tx> for LeafPage<'tx, T>
+impl<'tx, T> HasValues<'tx> for BBoltLeaf<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -136,4 +133,4 @@ where
   }
 }
 
-impl<'tx, T> HasLeaves<'tx> for LeafPage<'tx, T> where T: TxPageType<'tx> {}
+impl<'tx, T> HasLeaves<'tx> for BBoltLeaf<'tx, T> where T: TxPageType<'tx> {}

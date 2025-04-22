@@ -1,29 +1,26 @@
 use crate::common::id::NodePageId;
 use crate::common::layout::node::BranchElement;
-use crate::io::pages::lazy::ops::{TryPartialEq, TryPartialOrd};
-use crate::io::pages::types::node::leaf::LeafPage;
-use crate::io::pages::types::node::{
-  HasBranches, HasElements, HasKeyRefs, HasKeys, HasNodes, HasSearchBranch, HasSearchLeaf,
-};
+use crate::io::pages::types::node::branch::{HasBranches, HasNodes, HasSearchBranch};
+use crate::io::pages::types::node::{HasElements, HasKeyRefs, HasKeys};
 use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice, Page, TxPage, TxPageType};
 use delegate::delegate;
 use std::ops::RangeBounds;
 
 #[derive(Clone)]
-pub struct BranchPage<'tx, T> {
+pub struct BBoltBranch<'tx, T> {
   page: TxPage<'tx, T>,
 }
 
-impl<'tx, T> BranchPage<'tx, T>
+impl<'tx, T> BBoltBranch<'tx, T>
 where
   T: TxPageType<'tx>,
 {
-  pub fn new(page: TxPage<T>) -> BranchPage<T> {
-    BranchPage { page }
+  pub fn new(page: TxPage<T>) -> BBoltBranch<T> {
+    BBoltBranch { page }
   }
 }
 
-impl<'tx, T> Page for BranchPage<'tx, T>
+impl<'tx, T> Page for BBoltBranch<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -34,14 +31,14 @@ where
   }
 }
 
-impl<'a, 'tx, T> GatKvRef<'a> for BranchPage<'tx, T>
+impl<'a, 'tx, T> GatKvRef<'a> for BBoltBranch<'tx, T>
 where
   T: TxPageType<'tx>,
 {
   type KvRef = <T as GatKvRef<'a>>::KvRef;
 }
 
-impl<'tx, T> GetGatKvRefSlice for BranchPage<'tx, T>
+impl<'tx, T> GetGatKvRefSlice for BBoltBranch<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -50,18 +47,18 @@ where
   }
 }
 
-impl<'tx, T> BranchPage<'tx, T> where T: TxPageType<'tx> {}
+impl<'tx, T> BBoltBranch<'tx, T> where T: TxPageType<'tx> {}
 
-impl<'tx, T> HasElements<'tx> for BranchPage<'tx, T>
+impl<'tx, T> HasElements<'tx> for BBoltBranch<'tx, T>
 where
   T: TxPageType<'tx>,
 {
   type Element = BranchElement;
 }
 
-impl<'tx, T> HasSearchBranch<'tx> for BranchPage<'tx, T> where T: TxPageType<'tx> {}
+impl<'tx, T> HasSearchBranch<'tx> for BBoltBranch<'tx, T> where T: TxPageType<'tx> {}
 
-impl<'tx, T> HasKeyRefs for BranchPage<'tx, T>
+impl<'tx, T> HasKeyRefs for BBoltBranch<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -72,7 +69,7 @@ where
   }
 }
 
-impl<'tx, T> HasKeys<'tx> for BranchPage<'tx, T>
+impl<'tx, T> HasKeys<'tx> for BBoltBranch<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -85,7 +82,7 @@ where
   }
 }
 
-impl<'tx, T> HasNodes<'tx> for BranchPage<'tx, T>
+impl<'tx, T> HasNodes<'tx> for BBoltBranch<'tx, T>
 where
   T: TxPageType<'tx>,
 {
@@ -94,4 +91,4 @@ where
   }
 }
 
-impl<'tx, T> HasBranches<'tx> for BranchPage<'tx, T> where T: TxPageType<'tx> {}
+impl<'tx, T> HasBranches<'tx> for BBoltBranch<'tx, T> where T: TxPageType<'tx> {}
