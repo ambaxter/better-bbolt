@@ -480,7 +480,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorSeekApi
 where
   for<'b> <T::TxPageType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
 {
-  fn seek(&mut self, v: &[u8]) -> error_stack::Result<Option<LeafFlag>, CursorError> {
+  fn seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
     self.stack.push(StackEntry::new(self.bucket.root.clone()));
     self.seek_branches(v)?;
@@ -493,7 +493,7 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorTrySeekApi
 where
   for<'b> <T::TxPageType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
 {
-  fn try_seek(&mut self, v: &[u8]) -> error_stack::Result<Option<LeafFlag>, CursorError> {
+  fn try_seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
     self.stack.push(StackEntry::new(self.bucket.root.clone()));
     self.try_seek_branches(v)?;
@@ -546,7 +546,7 @@ where
     Ok(None)
   }
 
-  fn move_to_last_element(&mut self) -> error_stack::Result<Option<LeafFlag>, CursorError> {
+  fn move_to_last_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
     if let Some(flag) = self.cursor.move_to_last_element()? {
       if flag == self.leaf_flag {
         Ok(Some(flag))
@@ -577,7 +577,7 @@ impl<C> CoreCursorTrySeekApi for LeafFlagFilterCursor<C>
 where
   C: CoreCursorTrySeekApi,
 {
-  fn try_seek(&mut self, v: &[u8]) -> error_stack::Result<Option<LeafFlag>, CursorError> {
+  fn try_seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
     if let Some(flag) = self.cursor.try_seek(v)? {
       if flag == self.leaf_flag {
         return Ok(Some(flag));
@@ -846,7 +846,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
 {
   fn first_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<
+  ) -> crate::Result<
     Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>,
     CursorError,
   > {
@@ -861,7 +861,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
 
   fn next_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<
+  ) -> crate::Result<
     Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>,
     CursorError,
   > {
@@ -876,7 +876,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
 
   fn prev_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<
+  ) -> crate::Result<
     Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>,
     CursorError,
   > {
@@ -891,7 +891,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
 
   fn last_ref<'a>(
     &'a mut self,
-  ) -> error_stack::Result<
+  ) -> crate::Result<
     Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>,
     CursorError,
   > {
@@ -906,7 +906,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
 
   fn seek_ref<'a>(
     &'a mut self, v: &[u8],
-  ) -> error_stack::Result<
+  ) -> crate::Result<
     Option<(<Self as GatKvRef<'a>>::KvRef, <Self as GatKvRef<'a>>::KvRef)>,
     CursorError,
   > {
@@ -925,7 +925,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorApi<'t
 {
   type KvTx = <T::TxPageType as GetKvTxSlice<'tx>>::KvTx;
 
-  fn first(&mut self) -> error_stack::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+  fn first(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
     Ok(
       self
         .cursor
@@ -935,7 +935,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorApi<'t
     )
   }
 
-  fn next(&mut self) -> error_stack::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+  fn next(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
     Ok(
       self
         .cursor
@@ -945,7 +945,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorApi<'t
     )
   }
 
-  fn prev(&mut self) -> error_stack::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+  fn prev(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
     Ok(
       self
         .cursor
@@ -955,7 +955,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorApi<'t
     )
   }
 
-  fn last(&mut self) -> error_stack::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+  fn last(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
     Ok(
       self
         .cursor
@@ -967,7 +967,7 @@ impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorApi<'t
 
   fn seek(
     &mut self, v: &[u8],
-  ) -> error_stack::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
+  ) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
     Ok(
       self
         .cursor
