@@ -28,7 +28,7 @@ pub trait HasSearchBranch<'tx>: HasElements<'tx> {
   }
 }
 
-pub trait HasBranches<'tx>: HasNodes<'tx> + HasSearchBranch<'tx> {}
+pub trait HasBranches<'tx>: HasNodes<'tx> + HasSearchBranch<'tx> + Clone {}
 
 pub trait HasNodes<'tx>: HasKeys<'tx> {
   fn node(&self, index: usize) -> Option<NodePageId>;

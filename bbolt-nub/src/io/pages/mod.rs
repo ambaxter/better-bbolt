@@ -16,6 +16,7 @@ use delegate::delegate;
 use std::collections::Bound;
 use std::hash::Hash;
 use std::ops::{Deref, Range, RangeBounds};
+use crate::io::pages::types::node::branch::HasBranches;
 
 pub mod direct;
 pub mod lazy;
@@ -136,6 +137,8 @@ where
 pub trait TxReadPageIO<'tx> {
   type TxPageType: TxPageType<'tx>;
 
+  type BranchType: HasBranches<'tx>;
+  
   fn read_meta_page(
     &'tx self, meta_page_id: MetaPageId,
   ) -> crate::Result<MetaPage<'tx, Self::TxPageType>, PageError>;
@@ -147,7 +150,7 @@ pub trait TxReadPageIO<'tx> {
   fn read_node_page(
     &'tx self, node_page_id: NodePageId,
   ) -> crate::Result<
-    NodePage<BBoltBranch<'tx, Self::TxPageType>, BBoltLeaf<'tx, Self::TxPageType>>,
+    NodePage<Self::BranchType, BBoltLeaf<'tx, Self::TxPageType>>,
     PageError,
   >;
 }
