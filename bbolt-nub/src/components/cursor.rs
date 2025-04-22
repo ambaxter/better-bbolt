@@ -682,8 +682,7 @@ pub trait CursorApi<'tx> {
 }
 
 pub struct RefTxCursor<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> {
-  cursor:
-    LeafFlagFilterCursor<CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>>,
+  cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>>,
 }
 
 impl<'a, 'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> GatKvRef<'a>
@@ -834,8 +833,7 @@ where
 }
 
 pub struct LazyTxCursor<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> {
-  cursor:
-    LeafFlagFilterCursor<CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>>,
+  cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>>,
 }
 
 impl<'a, 'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> GatKvRef<'a>
