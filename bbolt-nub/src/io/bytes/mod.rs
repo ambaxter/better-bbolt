@@ -1,5 +1,7 @@
 use std::ops::Deref;
 
+pub mod slice_bytes;
+
 pub mod ref_bytes;
 pub mod shared_bytes;
 

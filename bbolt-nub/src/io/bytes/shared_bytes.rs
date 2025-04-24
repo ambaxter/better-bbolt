@@ -4,7 +4,7 @@ use crate::io::TxSlot;
 use crate::io::bytes::ref_bytes::RefTryBuf;
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
 use crate::io::ops::RefIntoCopiedIter;
-use crate::io::pages::direct::ops::{Get, KvDataType, KvEq, KvOrd};
+use crate::io::pages::direct::ops::{DirectGet, KvDataType, KvEq, KvOrd};
 use crate::io::pages::lazy::ops::{KvTryEq, KvTryOrd, TryEq};
 use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice, SubRange};
 use std::cmp::Ordering;
@@ -130,8 +130,8 @@ impl<'tx> Hash for SharedTxBytes<'tx> {
 
 impl<'tx> TryEq for SharedTxBytes<'tx> {}
 
-impl<'tx> Get<u8> for SharedTxBytes<'tx> {
-  fn get<'a>(&'a self, index: usize) -> Option<u8> {
+impl<'tx> DirectGet<u8> for SharedTxBytes<'tx> {
+  fn direct_get(&self, index: usize) -> Option<u8> {
     self.as_ref().get(index).copied()
   }
 }
@@ -227,8 +227,8 @@ impl<'tx> PartialOrd<[u8]> for SharedRefSlice<'tx> {
 
 impl<'tx> TryEq for SharedRefSlice<'tx> {}
 
-impl<'tx> Get<u8> for SharedRefSlice<'tx> {
-  fn get<'a>(&'a self, index: usize) -> Option<u8> {
+impl<'tx> DirectGet<u8> for SharedRefSlice<'tx> {
+  fn direct_get(&self, index: usize) -> Option<u8> {
     self.as_ref().get(index).copied()
   }
 }
@@ -307,8 +307,8 @@ impl<'tx> Hash for SharedTxSlice<'tx> {
 
 impl<'tx> TryEq for SharedTxSlice<'tx> {}
 
-impl<'tx> Get<u8> for SharedTxSlice<'tx> {
-  fn get<'a>(&'a self, index: usize) -> Option<u8> {
+impl<'tx> DirectGet<u8> for SharedTxSlice<'tx> {
+  fn direct_get(&self, index: usize) -> Option<u8> {
     self.as_ref().get(index).copied()
   }
 }

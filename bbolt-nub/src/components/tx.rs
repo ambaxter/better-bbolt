@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+use std::sync;
 use crate::api::tx::TxStats;
 use crate::common::errors::{DiskReadError, PageError};
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId, TxId};
@@ -21,6 +23,10 @@ use triomphe::Arc;
 
 pub trait TheTx<'tx>: TxReadPageIO<'tx> {
   fn stats(&self) -> &TxStats;
+}
+
+pub trait TheMutTx<'tx>: TheTx<'tx> {
+  fn register_bytes(&self, bytes: &[u8]) -> &'tx [u8];
 }
 
 pub trait TheLazyTx<'tx>: TheTx<'tx> + TxReadLazyPageIO<'tx> {}
