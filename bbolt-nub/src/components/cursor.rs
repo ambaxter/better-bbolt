@@ -991,20 +991,20 @@ mod tests {
   use crate::common::layout::bucket::BucketHeader;
   use crate::components::tx::{CoreTxHandle, LazyTxHandle, RefTxHandle};
   use crate::io::backends::file::{MultiFileReader, SingleFileReader};
+  use crate::io::backends::memmap::MemMapReader;
   use crate::io::backends::meta_reader::MetaReader;
   use crate::io::backends::{CachedReadHandler, ReadHandler};
   use crate::io::pages::lazy::ops::RefIntoTryBuf;
   use crate::io::pages::lazy::ops::TryBuf;
   use crate::io::transmogrify::direct::DirectTransmogrify;
   use bytemuck::bytes_of_mut;
+  use memmap2::{Advice, Mmap, MmapOptions};
   use moka::sync::Cache;
   use parking_lot::RwLock;
   use size::Size;
   use std::fs::File;
   use std::io::{BufReader, BufWriter, Write};
-  use memmap2::{Advice, Mmap, MmapOptions};
   use triomphe::Arc;
-  use crate::io::backends::memmap::MemMapReader;
 
   #[test]
   fn test_file() {

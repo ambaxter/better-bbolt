@@ -8,6 +8,7 @@ use std::io;
 use std::iter::Copied;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, Range, RangeBounds};
+use std::sync::atomic::AtomicI64;
 use triomphe::{Arc, HeaderSlice, UniqueArc};
 use uninit::extension_traits::AsOut;
 use uninit::read::ReadIntoUninit;
@@ -151,7 +152,6 @@ impl BufferPool {
     self.inner.page_size
   }
 
-  // TODO: Can we put this on a different thread?
   pub(crate) fn push(&self, buffer: UniqueArc<PoolBuffer>) {
     if buffer.slice.len() == self.inner.page_size {
       self.inner.push(buffer);

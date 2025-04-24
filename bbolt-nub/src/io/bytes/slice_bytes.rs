@@ -1,10 +1,9 @@
+use crate::io::bytes::ref_bytes::{RefBytes, RefTxBytes};
+use crate::io::bytes::{FromIOBytes, TxBytes};
+use crate::io::pages::direct::ops::{DirectGet, KvDataType, KvEq, KvOrd};
+use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice};
 use std::ops::RangeBounds;
 use std::slice;
-use crate::io::bytes::{FromIOBytes, TxBytes};
-use crate::io::bytes::ref_bytes::{RefBytes, RefTxBytes};
-use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice};
-use crate::io::pages::direct::ops::{DirectGet, KvDataType, KvEq, KvOrd};
-
 
 // TODO: Can we make this work?
 
@@ -18,7 +17,6 @@ impl<'tx> FromIOBytes<'tx, RefBytes> for &'tx [u8] {
 
 impl<'a, 'tx> GatKvRef<'a> for &'tx [u8] {
   type KvRef = &'a [u8];
-
 }
 
 impl<'tx> GetGatKvRefSlice for &'tx [u8] {

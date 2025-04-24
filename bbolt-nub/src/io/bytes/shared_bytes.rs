@@ -40,12 +40,14 @@ impl AsRef<[u8]> for SharedBytes {
 impl Drop for SharedBytes {
   fn drop(&mut self) {
     let inner = self.inner.take().expect("shared buffer is dropped");
-    if inner.is_unique() {
-      let mut inner: UniqueArc<PoolBuffer> = inner.try_into().expect("shared buffer isn't unique?");
-      if let Some(pool) = inner.header.take() {
-        pool.push(inner);
+    rayon::spawn(move || {
+      // There is a race condition here, but there's nothing we can do about it
+      if let Some(unique) = Arc::try_unique(inner).ok() {
+        if let Some(pool) = unique.header.take() {
+          pool.push(unique);
+        }
       }
-    }
+    });
   }
 }
 

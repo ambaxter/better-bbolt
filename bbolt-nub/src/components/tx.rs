@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-use std::sync;
 use crate::api::tx::TxStats;
 use crate::common::errors::{DiskReadError, PageError};
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId, TxId};
@@ -19,6 +17,8 @@ use crate::io::pages::types::node::leaf::bbolt::BBoltLeaf;
 use crate::io::pages::{TxPage, TxPageType, TxReadLazyPageIO, TxReadPageIO};
 use error_stack::ResultExt;
 use parking_lot::RwLockReadGuard;
+use std::collections::BTreeMap;
+use std::sync;
 use triomphe::Arc;
 
 pub trait TheTx<'tx>: TxReadPageIO<'tx> {

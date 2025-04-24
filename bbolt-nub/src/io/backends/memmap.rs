@@ -1,5 +1,3 @@
-use std::fs::File;
-use std::path::Path;
 use crate::common::errors::DiskReadError;
 use crate::common::id::{DiskPageId, EOFPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
@@ -10,6 +8,8 @@ use crate::io::bytes::ref_bytes::RefBytes;
 use crate::io::pages::{TxReadLazyPageIO, TxReadPageIO};
 use crate::io::transmogrify::{TxContext, TxDirectContext, TxIndirectContext};
 use memmap2::{Advice, Mmap, MmapOptions};
+use std::fs::File;
+use std::path::Path;
 
 pub struct MemMapReader {
   mmap: Mmap,
@@ -19,10 +19,7 @@ pub struct MemMapReader {
 impl MemMapReader {
   pub fn new<P: AsRef<Path>>(path: P, page_size: usize) -> Self {
     let file = File::open(path.as_ref()).unwrap();
-    let mmap = unsafe {
-      MmapOptions::new()
-        .map(&file)
-    }.unwrap();
+    let mmap = unsafe { MmapOptions::new().map(&file) }.unwrap();
     mmap.advise(Advice::Random).unwrap();
     Self { mmap, page_size }
   }
