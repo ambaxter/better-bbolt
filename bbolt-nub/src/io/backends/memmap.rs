@@ -17,8 +17,8 @@ pub struct MemMapReader {
 }
 
 impl MemMapReader {
-  pub fn new<P: AsRef<Path>>(page_size: usize) -> Self {
-    let file = File::open("my.db").unwrap();
+  pub fn new<P: AsRef<Path>>(path: P, page_size: usize) -> Self {
+    let file = File::open(path.as_ref()).unwrap();
     let mmap = unsafe {
       MmapOptions::new()
         .map(&file)

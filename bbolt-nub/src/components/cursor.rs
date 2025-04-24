@@ -1206,7 +1206,7 @@ mod tests {
       Size::from_kibibytes(256),
     );
     let tx_stats = Arc::new(TxStats::default());
-    let backend = MemMapReader::new(page_size);
+    let backend = MemMapReader::new("my.db", page_size);
     let tx_context = DirectTransmogrify {};
     let handler = ReadHandler {
       tx_context,
