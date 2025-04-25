@@ -15,8 +15,9 @@ use crate::io::pages::types::node::NodePage;
 use crate::io::pages::types::node::branch::bbolt::BBoltBranch;
 use crate::io::pages::types::node::leaf::bbolt::BBoltLeaf;
 use crate::io::pages::{TxPage, TxPageType, TxReadLazyPageIO, TxReadPageIO};
+use delegate::delegate;
 use error_stack::ResultExt;
-use parking_lot::RwLockReadGuard;
+use parking_lot::{RwLockReadGuard, RwLockUpgradableReadGuard};
 use std::collections::BTreeMap;
 use std::sync;
 use triomphe::Arc;
@@ -31,8 +32,78 @@ pub trait TheMutTx<'tx>: TheTx<'tx> {
 
 pub trait TheLazyTx<'tx>: TheTx<'tx> + TxReadLazyPageIO<'tx> {}
 
+pub enum IOLockGuard<'tx, IO> {
+  R(RwLockReadGuard<'tx, IO>),
+  U(RwLockUpgradableReadGuard<'tx, IO>),
+}
+
+impl<'tx, IO> From<RwLockReadGuard<'tx, IO>> for IOLockGuard<'tx, IO> where IO: IOPageReader {
+  fn from(value: RwLockReadGuard<'tx, IO>) -> Self {
+    IOLockGuard::R(value)
+  }
+}
+
+impl<'tx, IO> From<RwLockUpgradableReadGuard<'tx, IO>> for IOLockGuard<'tx, IO> where IO: IOPageReader {
+  fn from(value: RwLockUpgradableReadGuard<'tx, IO>) -> Self {
+    IOLockGuard::U(value)
+  }
+}
+
+impl<'tx, IO> IOPageReader for IOLockGuard<'tx, IO>
+where
+  IO: IOPageReader,
+{
+  type Bytes = IO::Bytes;
+
+  fn read_meta_page(&self, meta_page_id: MetaPageId) -> crate::Result<Self::Bytes, DiskReadError> {
+    match self {
+      IOLockGuard::R(io) => io.read_meta_page(meta_page_id),
+      IOLockGuard::U(io) => io.read_meta_page(meta_page_id),
+    }
+  }
+
+  fn read_freelist_page(
+    &self, freelist_page_id: FreelistPageId,
+  ) -> crate::Result<Self::Bytes, DiskReadError> {
+    match self {
+      IOLockGuard::R(io) => io.read_freelist_page(freelist_page_id),
+      IOLockGuard::U(io) => io.read_freelist_page(freelist_page_id),
+    }
+  }
+
+  fn read_node_page(&self, node_page_id: NodePageId) -> crate::Result<Self::Bytes, DiskReadError> {
+    match self {
+      IOLockGuard::R(io) => io.read_node_page(node_page_id),
+      IOLockGuard::U(io) => io.read_node_page(node_page_id),
+    }
+  }
+}
+
+impl<'tx, IO> IOOverflowPageReader for IOLockGuard<'tx, IO>
+where
+  IO: IOOverflowPageReader,
+{
+  fn read_freelist_overflow(
+    &self, freelist_page_id: FreelistPageId, overflow: u32,
+  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
+    match self {
+      IOLockGuard::R(io) => io.read_freelist_overflow(freelist_page_id, overflow),
+      IOLockGuard::U(io) => io.read_freelist_overflow(freelist_page_id, overflow),
+    }
+  }
+
+  fn read_node_overflow(
+    &self, node_page_id: NodePageId, overflow: u32,
+  ) -> error_stack::Result<Self::Bytes, DiskReadError> {
+    match self {
+      IOLockGuard::R(io) => io.read_node_overflow(node_page_id, overflow),
+      IOLockGuard::U(io) => io.read_node_overflow(node_page_id, overflow),
+    }
+  }
+}
+
 pub struct CoreTxHandle<'tx, IO> {
-  pub(crate) io: RwLockReadGuard<'tx, IO>,
+  pub(crate) io: IOLockGuard<'tx, IO>,
   pub(crate) stats: Arc<TxStats>,
   pub(crate) tx_id: TxId,
 }
@@ -255,3 +326,52 @@ where
   IO::Bytes: IntoTxBytes<'tx, SharedTxBytes<'tx>>,
 {
 }
+
+pub struct MutTxHandle<TX> {
+  tx: TX,
+}
+
+impl<'tx, TX> TxReadPageIO<'tx> for MutTxHandle<TX>
+where
+  TX: TxReadPageIO<'tx>,
+{
+  type TxPageType = TX::TxPageType;
+  type BranchType = TX::BranchType;
+  type LeafType = TX::LeafType;
+
+  delegate! {
+      to self.tx {
+      fn read_meta_page(&'tx self, meta_page_id: MetaPageId) -> crate::Result<MetaPage<'tx, Self::TxPageType>, PageError>;
+      fn read_freelist_page(&'tx self, freelist_page_id: FreelistPageId) -> crate::Result<FreelistPage<'tx, Self::TxPageType>, PageError>;
+      fn read_node_page(&'tx self, node_page_id: NodePageId) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError>;
+      }
+  }
+}
+
+impl<'tx, TX> TheTx<'tx> for MutTxHandle<TX>
+where
+  TX: TheTx<'tx>,
+{
+  delegate! {
+      to &self.tx {
+          fn stats(&self) -> &TxStats;
+      }
+  }
+}
+
+impl<'tx, TX> TxReadLazyPageIO<'tx> for MutTxHandle<TX>
+where
+  TX: TxReadLazyPageIO<'tx>,
+{
+  delegate! {
+      to self.tx {
+      fn read_freelist_overflow(&'tx self, freelist_page_id: FreelistPageId, overflow: u32) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskReadError>;
+      fn read_node_overflow(&'tx self, node_page_id: NodePageId, overflow: u32) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskReadError>;
+      }
+  }
+}
+
+impl<'tx, TX> TheLazyTx<'tx> for MutTxHandle<TX>
+where
+  TX: TheLazyTx<'tx>,
+{}

@@ -7,7 +7,7 @@ description = "The Rust port Bolt database. Core functionality and types"
 
 [features]
 default = []
-mt_search = ["dep:rayon"]
+mt_search = []
 
 [dependencies]
 parking_lot.workspace = true
@@ -30,10 +30,8 @@ fake.workspace = true
 hashbrown.workspace = true
 fs-err.workspace = true
 moka.workspace = true
-enum_dispatch.workspace = true
 getset.workspace = true
 tracing.workspace = true
 error-stack.workspace = true
-bumpalo.workspace = true
-rayon = {workspace = true, optional = true}
+rayon = {workspace = true}
 bytes.workspace = true

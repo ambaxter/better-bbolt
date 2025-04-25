@@ -168,23 +168,24 @@ impl BufferPool {
 
 #[cfg(test)]
 mod test {
+  use std::alloc::Layout;
   use super::*;
   use crate::common::layout::page::PageHeader;
 
   #[test]
   fn test() {
-    let pool = BufferPool::new_unbound(4096);
-    let mut empty = vec![0u8; 4096];
+    let pool = BufferPool::new_unbound(4012);
+    let mut empty = vec![0u8; 4012];
     let pool = pool.read_exact_and_share(&mut empty.as_slice()).unwrap();
-    assert!(
-      pool
-        .inner
-        .as_ref()
-        .unwrap()
-        .slice
-        .as_ptr()
-        .cast::<PageHeader>()
-        .is_aligned()
-    );
+    println!("pool alignment: {:?}", align_of_val(&pool));
+    println!("pool size: {:?}", size_of_val(&pool));
+    println!("pool.inner alignment: {:?}", align_of_val(&pool.inner));
+    println!("pool.inner size: {:?}", size_of_val(&pool.inner));
+    let arc = pool.inner.as_ref().unwrap();
+    println!("arc.header alignment: {:?}", align_of_val(&arc.header));
+    println!("arc.header size: {:?}", size_of_val(&arc.header));
+    println!("arc.slice alignment: {:?}", align_of_val(&arc.slice));
+    println!("arc.slice size: {:?}", size_of_val(&arc.slice));
+    println!("layout: {:?}", Layout::for_value(&**arc));
   }
 }

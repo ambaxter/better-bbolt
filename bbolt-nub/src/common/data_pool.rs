@@ -1,5 +1,6 @@
 use crate::common::buffer_pool::{BufferPool, PoolBuffer, UniqueBuffer};
 use parking_lot::Mutex;
+use rayon;
 use size::Size;
 use std::fmt::Debug;
 use std::ops::Deref;
@@ -36,8 +37,9 @@ impl Drop for SharedData {
     let inner = self.inner.take().expect("shared buffer is dropped");
     rayon::spawn(move || {
       // There is a race condition here, but there's nothing we can do about it
-      if let Some(unique) = Arc::try_unique(inner).ok() {
-        if let Some(pool) = unique.header.take() {
+      // https://github.com/Manishearth/triomphe/pull/109
+      if let Some(mut unique) = Arc::try_unique(inner).ok() {
+        if let Some(mut pool) = unique.header.take() {
           pool.push(UniqueData(unique));
         }
       }

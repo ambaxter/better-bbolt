@@ -4,7 +4,7 @@
   allow(dead_code, unused_imports, unused_variables, unused_mut)
 )]
 
-pub use error_stack::Result;
+pub use error_stack::{Result, ResultExt};
 
 pub mod common;
 pub mod io;

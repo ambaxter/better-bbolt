@@ -1035,7 +1035,7 @@ mod tests {
     });
     let read_lock = cached_read_handler.read();
     let core_tx = CoreTxHandle {
-      io: read_lock,
+      io: read_lock.into(),
       stats: tx_stats.clone(),
       tx_id,
     };
@@ -1127,7 +1127,7 @@ mod tests {
     });
     let read_lock = cached_read_handler.read();
     let core_tx = CoreTxHandle {
-      io: read_lock,
+      io: read_lock.into(),
       stats: tx_stats.clone(),
       tx_id,
     };
@@ -1216,7 +1216,7 @@ mod tests {
     let cached_read_handler = RwLock::new(handler);
     let read_lock = cached_read_handler.read();
     let core_tx = CoreTxHandle {
-      io: read_lock,
+      io: read_lock.into(),
       stats: tx_stats.clone(),
       tx_id,
     };
