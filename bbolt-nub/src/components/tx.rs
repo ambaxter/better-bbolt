@@ -37,13 +37,19 @@ pub enum IOLockGuard<'tx, IO> {
   U(RwLockUpgradableReadGuard<'tx, IO>),
 }
 
-impl<'tx, IO> From<RwLockReadGuard<'tx, IO>> for IOLockGuard<'tx, IO> where IO: IOPageReader {
+impl<'tx, IO> From<RwLockReadGuard<'tx, IO>> for IOLockGuard<'tx, IO>
+where
+  IO: IOPageReader,
+{
   fn from(value: RwLockReadGuard<'tx, IO>) -> Self {
     IOLockGuard::R(value)
   }
 }
 
-impl<'tx, IO> From<RwLockUpgradableReadGuard<'tx, IO>> for IOLockGuard<'tx, IO> where IO: IOPageReader {
+impl<'tx, IO> From<RwLockUpgradableReadGuard<'tx, IO>> for IOLockGuard<'tx, IO>
+where
+  IO: IOPageReader,
+{
   fn from(value: RwLockUpgradableReadGuard<'tx, IO>) -> Self {
     IOLockGuard::U(value)
   }
@@ -371,7 +377,4 @@ where
   }
 }
 
-impl<'tx, TX> TheLazyTx<'tx> for MutTxHandle<TX>
-where
-  TX: TheLazyTx<'tx>,
-{}
+impl<'tx, TX> TheLazyTx<'tx> for MutTxHandle<TX> where TX: TheLazyTx<'tx> {}

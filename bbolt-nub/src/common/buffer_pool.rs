@@ -168,9 +168,9 @@ impl BufferPool {
 
 #[cfg(test)]
 mod test {
-  use std::alloc::Layout;
   use super::*;
   use crate::common::layout::page::PageHeader;
+  use std::alloc::Layout;
 
   #[test]
   fn test() {
