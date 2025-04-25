@@ -206,9 +206,9 @@ pub struct BucketPathBuilder {
   path: BucketPathBuf,
 }
 
-impl Hash for BucketPathBuilder {
+impl Hash for BucketPathBuf {
   fn hash<H: Hasher>(&self, state: &mut H) {
-    state.write_usize(self.path.len());
+    state.write_usize(self.len());
     for path in self.into_iter() {
       state.write(path);
     }
@@ -252,28 +252,32 @@ fn test_into<T: Into<BucketPathBuf>>(val: T) {
   println!("{}", val.into());
 }
 
-fn test_discriminant<T, U, V, W>(
-  read: T, write: V,
-) where
-  T: IntoIterator<Item = U>,
+fn test_discriminant<const M: usize, T, const N: usize, U>(
+  read: [T; M], write: [U; N],
+) -> ([Option<BucketPathBuf>; M], [Option<BucketPathBuf>; N])
+where
+  T: Into<BucketPathBuf>,
   U: Into<BucketPathBuf>,
-  V: IntoIterator<Item = W>,
-  W: Into<BucketPathBuf>,{
-  println!("read:");
-  for i in read.into_iter() {
-    let p = i.into();
-    println!("p:{:?}", p);
-  }
-  println!("write");
-  for i in write.into_iter() {
-    let p = i.into();
-    println!("p:{:?}", p);
+{
+  (
+    read.map(|t| Some(t.into())),
+    write.map(|w| Some(w.into())),
+  )
+}
+
+pub struct NoBuckets;
+
+impl From<NoBuckets> for BucketPathBuf {
+  fn from(value: NoBuckets) -> Self {
+    unreachable!()
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use super::{BucketPathBuf, BucketPathBuilder, BucketPathIterator, test_discriminant, test_into};
+  use super::{
+    BucketPathBuf, BucketPathBuilder, BucketPathIterator, NoBuckets, test_discriminant, test_into,
+  };
 
   #[test]
   fn test() {
@@ -289,6 +293,6 @@ mod tests {
 
   #[test]
   fn test_disc() {
-    test_discriminant([], [["root", "next2"], ["root2", "next3"]]);
+    test_discriminant([NoBuckets; 0], [["root", "next2"], ["root2", "next3"]]);
   }
 }
