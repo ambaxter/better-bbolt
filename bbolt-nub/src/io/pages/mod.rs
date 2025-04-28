@@ -18,6 +18,7 @@ use delegate::delegate;
 use std::collections::Bound;
 use std::hash::Hash;
 use std::ops::{Deref, Range, RangeBounds};
+use std::sync;
 
 pub mod direct;
 pub mod lazy;
@@ -142,15 +143,15 @@ pub trait TxReadPageIO<'tx> {
   type LeafType: HasLeaves<'tx>;
 
   fn read_meta_page(
-    &'tx self, meta_page_id: MetaPageId,
+    self: &sync::Arc<Self>, meta_page_id: MetaPageId,
   ) -> crate::Result<MetaPage<'tx, Self::TxPageType>, PageError>;
 
   fn read_freelist_page(
-    &'tx self, freelist_page_id: FreelistPageId,
+    self: &sync::Arc<Self>, freelist_page_id: FreelistPageId,
   ) -> crate::Result<FreelistPage<'tx, Self::TxPageType>, PageError>;
 
   fn read_node_page(
-    &'tx self, node_page_id: NodePageId,
+    self: &sync::Arc<Self>, node_page_id: NodePageId,
   ) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError>;
 }
 
@@ -158,10 +159,10 @@ pub trait TxReadLoadedPageIO<'tx>: TxReadPageIO<'tx> {}
 
 pub trait TxReadLazyPageIO<'tx>: TxReadPageIO<'tx> {
   fn read_freelist_overflow(
-    &'tx self, freelist_page_id: FreelistPageId, overflow: u32,
+    &self, freelist_page_id: FreelistPageId, overflow: u32,
   ) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskReadError>;
 
   fn read_node_overflow(
-    &'tx self, node_page_id: NodePageId, overflow: u32,
+    &self, node_page_id: NodePageId, overflow: u32,
   ) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskReadError>;
 }

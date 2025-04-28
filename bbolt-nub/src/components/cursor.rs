@@ -12,7 +12,7 @@ use crate::io::pages::types::node::branch::bbolt::BBoltBranch;
 use crate::io::pages::types::node::branch::{HasBranches, HasNodes, HasSearchBranch};
 use crate::io::pages::types::node::leaf::bbolt::BBoltLeaf;
 use crate::io::pages::types::node::leaf::{HasLeaves, HasSearchLeaf, HasValues};
-use crate::io::pages::types::node::{HasElements, HasKeys, NodePage};
+use crate::io::pages::types::node::{HasElements, HasKeyRefs, HasKeys, NodePage};
 use crate::io::pages::{
   GatKvRef, GetGatKvRefSlice, GetKvTxSlice, Page, TxPageType, TxReadLazyPageIO, TxReadPageIO,
 };
@@ -105,26 +105,34 @@ pub trait CoreCursorRefApi: CoreCursorMoveApi {
   where
     Self: 'a;
 
+  fn key_ref<'a>(&'a self) -> Option<Self::KvRef<'a>>;
+
+  fn value_ref<'a>(&'a self) -> Option<Self::KvRef<'a>>;
+
   fn key_value_ref<'a>(&'a self) -> Option<(Self::KvRef<'a>, Self::KvRef<'a>)>;
 }
 
 pub trait CoreCursorApi<'tx>: CoreCursorMoveApi {
   type KvTx: GetKvTxSlice<'tx>;
 
+  fn key(&self) -> Option<Self::KvTx>;
+
+  fn value(&self) -> Option<Self::KvTx>;
+
   fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)>;
 }
 
-pub struct CoreCursor<'p, 'tx, B, L, TX> {
-  bucket: &'p OnDiskBucket<'tx, B, L, TX>,
+pub struct CoreCursor<'c, B, L, TX> {
+  bucket: &'c OnDiskBucket<B, L, TX>,
   stack: Vec<StackEntry<B, L>>,
   location: CursorLocation,
 }
 
-impl<'p, 'tx, TX> CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
+impl<'c, 'tx, TX> CoreCursor<'c, TX::BranchType, TX::LeafType, TX>
 where
   TX: TheTx<'tx>,
 {
-  pub fn new(bucket: &'p OnDiskBucket<'tx, TX::BranchType, TX::LeafType, TX>) -> Self {
+  pub fn new(bucket: &'c OnDiskBucket<TX::BranchType, TX::LeafType, TX>) -> Self {
     bucket.tx.stats().inc_cursor_count(1);
     Self {
       bucket,
@@ -134,7 +142,7 @@ where
   }
 
   pub fn new_with_stack(
-    bucket: &'p OnDiskBucket<'tx, TX::BranchType, TX::LeafType, TX>,
+    bucket: &'c OnDiskBucket<TX::BranchType, TX::LeafType, TX>,
     stack: Vec<StackEntry<TX::BranchType, TX::LeafType>>,
   ) -> Self {
     bucket.tx.stats().inc_cursor_count(1);
@@ -308,11 +316,25 @@ where
       }
     }
   }
+
+  fn get_leaf_for_kv(&self) -> Option<(usize, &TX::LeafType)> {
+    if self.location.is_outside() {
+      return None;
+    }
+    assert!(!self.stack.is_empty());
+    let last = self.stack.last().unwrap();
+    if last.element_count() == 0 || last.index > last.page.element_count() {
+      None
+    } else {
+      match &last.page {
+        NodePage::Branch(_) => unreachable!("cannot be branch"),
+        NodePage::Leaf(leaf) => Some((last.index, leaf)),
+      }
+    }
+  }
 }
 
-impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorMoveApi
-  for CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
-{
+impl<'tx, TX: TheTx<'tx>> CoreCursorMoveApi for CoreCursor<'tx, TX::BranchType, TX::LeafType, TX> {
   fn move_to_first_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
     self.stack.push(StackEntry::new(self.bucket.root.clone()));
@@ -440,54 +462,60 @@ impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorMoveApi
   }
 }
 
-impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorRefApi
-  for CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
-{
+impl<'tx, TX: TheTx<'tx>> CoreCursorRefApi for CoreCursor<'tx, TX::BranchType, TX::LeafType, TX> {
   type KvRef<'a>
     = <TX::LeafType as GatKvRef<'a>>::KvRef
   where
     Self: 'a;
 
+  fn key_ref<'a>(&'a self) -> Option<Self::KvRef<'a>> {
+    self
+      .get_leaf_for_kv()
+      .map(|(index, leaf)| leaf.key_ref(index))
+      .flatten()
+  }
+
+  fn value_ref<'a>(&'a self) -> Option<Self::KvRef<'a>> {
+    self
+      .get_leaf_for_kv()
+      .map(|(index, leaf)| leaf.value_ref(index))
+      .flatten()
+  }
+
   fn key_value_ref<'a>(&'a self) -> Option<(Self::KvRef<'a>, Self::KvRef<'a>)> {
-    if self.location.is_outside() {
-      return None;
-    }
-    assert!(!self.stack.is_empty());
-    let last = self.stack.last().unwrap();
-    if last.element_count() == 0 || last.index > last.page.element_count() {
-      None
-    } else {
-      match &last.page {
-        NodePage::Branch(_) => unreachable!("cannot be branch"),
-        NodePage::Leaf(leaf) => leaf.key_value_ref(last.index),
-      }
-    }
+    self
+      .get_leaf_for_kv()
+      .map(|(index, leaf)| leaf.key_value_ref(index))
+      .flatten()
   }
 }
-impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorApi<'tx>
-  for CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
-{
+
+impl<'tx, TX: TheTx<'tx>> CoreCursorApi<'tx> for CoreCursor<'tx, TX::BranchType, TX::LeafType, TX> {
   type KvTx = <TX::LeafType as HasKeys<'tx>>::TxKv;
 
+  fn key(&self) -> Option<Self::KvTx> {
+    self
+      .get_leaf_for_kv()
+      .map(|(index, leaf)| leaf.key(index))
+      .flatten()
+  }
+
+  fn value(&self) -> Option<Self::KvTx> {
+    self
+      .get_leaf_for_kv()
+      .map(|(index, leaf)| leaf.value(index))
+      .flatten()
+  }
+
   fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)> {
-    if self.location.is_outside() {
-      return None;
-    }
-    assert!(!self.stack.is_empty());
-    let last = self.stack.last().unwrap();
-    if last.element_count() == 0 || last.index > last.page.element_count() {
-      None
-    } else {
-      match &last.page {
-        NodePage::Branch(_) => unreachable!("cannot be branch"),
-        NodePage::Leaf(leaf) => leaf.key_value(last.index),
-      }
-    }
+    self
+      .get_leaf_for_kv()
+      .map(|(index, leaf)| leaf.key_value(index))
+      .flatten()
   }
 }
 
-impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorSeekApi
-  for CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
+impl<'tx, TX: TheTx<'tx>> CoreCursorSeekApi for CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>
 where
   for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
   for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
@@ -500,8 +528,7 @@ where
   }
 }
 
-impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorTrySeekApi
-  for CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
+impl<'tx, TX: TheTx<'tx>> CoreCursorTrySeekApi for CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>
 where
   for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
   for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
@@ -577,12 +604,20 @@ where
   C: CoreCursorSeekApi,
 {
   fn seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
-    if let Some(flag) = self.cursor.seek(v)? {
-      if flag == self.leaf_flag {
-        return Ok(Some(flag));
+    match self.cursor.seek(v)? {
+      None => Ok(None),
+      Some(flag) => {
+        if flag == self.leaf_flag {
+          Ok(Some(flag))
+        } else {
+          if self.leaf_flag == LeafFlag::BUCKET {
+            Err(CursorError::ValueIsABucket.into())
+          } else {
+            Err(CursorError::ValueIsABucket.into())
+          }
+        }
       }
     }
-    Ok(None)
   }
 }
 
@@ -591,12 +626,20 @@ where
   C: CoreCursorTrySeekApi,
 {
   fn try_seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
-    if let Some(flag) = self.cursor.try_seek(v)? {
-      if flag == self.leaf_flag {
-        return Ok(Some(flag));
+    match self.cursor.try_seek(v)? {
+      None => Ok(None),
+      Some(flag) => {
+        if flag == self.leaf_flag {
+          Ok(Some(flag))
+        } else {
+          if self.leaf_flag == LeafFlag::BUCKET {
+            Err(CursorError::ValueIsABucket.into())
+          } else {
+            Err(CursorError::ValueIsABucket.into())
+          }
+        }
       }
     }
-    Ok(None)
   }
 }
 
@@ -610,6 +653,16 @@ where
     Self: 'a;
 
   #[inline]
+  fn key_ref<'a>(&'a self) -> Option<Self::KvRef<'a>> {
+    self.cursor.key_ref()
+  }
+
+  #[inline]
+  fn value_ref<'a>(&'a self) -> Option<Self::KvRef<'a>> {
+    self.cursor.value_ref()
+  }
+
+  #[inline]
   fn key_value_ref<'a>(&'a self) -> Option<(Self::KvRef<'a>, Self::KvRef<'a>)> {
     self.cursor.key_value_ref()
   }
@@ -621,6 +674,17 @@ where
 {
   type KvTx = C::KvTx;
 
+  #[inline]
+  fn key(&self) -> Option<Self::KvTx> {
+    self.cursor.key()
+  }
+
+  #[inline]
+  fn value(&self) -> Option<Self::KvTx> {
+    self.cursor.value()
+  }
+
+  #[inline]
   fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)> {
     self.cursor.key_value()
   }
@@ -728,18 +792,18 @@ pub struct CursorMutIter<'tx, C> {
 
 }*/
 
-pub struct RefTxCursor<'p, 'tx: 'p, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> {
-  cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>>,
+pub struct RefTxCursor<'tx, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> {
+  cursor: LeafFlagFilterCursor<CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>>,
 }
 
-impl<'a, 'p, 'tx: 'p, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> GatKvRef<'a>
-  for RefTxCursor<'p, 'tx, TX>
+impl<'a, 'tx, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> GatKvRef<'a>
+  for RefTxCursor<'tx, TX>
 {
   type KvRef = <TX::LeafType as GatKvRef<'a>>::KvRef;
 }
 
-impl<'p, 'tx: 'p, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorRefApi
-  for RefTxCursor<'p, 'tx, TX>
+impl<'tx, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorRefApi
+  for RefTxCursor<'tx, TX>
 where
   for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
   for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
@@ -820,8 +884,8 @@ where
   }
 }
 
-impl<'p, 'tx: 'p, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorApi<'tx>
-  for RefTxCursor<'p, 'tx, TX>
+impl<'tx, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorApi<'tx>
+  for RefTxCursor<'tx, TX>
 where
   for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
   for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
@@ -879,18 +943,17 @@ where
   }
 }
 
-pub struct LazyTxCursor<'p, 'tx: 'p, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> {
-  cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>>,
+pub struct LazyTxCursor<'tx, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> {
+  cursor: LeafFlagFilterCursor<CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>>,
 }
 
-impl<'a, 'p, 'tx: 'p, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> GatKvRef<'a>
-  for LazyTxCursor<'p, 'tx, TX>
+impl<'a, 'tx, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> GatKvRef<'a>
+  for LazyTxCursor<'tx, TX>
 {
   type KvRef = <TX::LeafType as GatKvRef<'a>>::KvRef;
 }
 
-impl<'p, 'tx: 'p, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> CursorRefApi
-  for LazyTxCursor<'p, 'tx, TX>
+impl<'tx, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> CursorRefApi for LazyTxCursor<'tx, TX>
 where
   for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
   for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
@@ -971,8 +1034,8 @@ where
   }
 }
 
-impl<'p, 'tx: 'p, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> CursorApi<'tx>
-  for LazyTxCursor<'p, 'tx, TX>
+impl<'tx, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> CursorApi<'tx>
+  for LazyTxCursor<'tx, TX>
 where
   for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
   for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,

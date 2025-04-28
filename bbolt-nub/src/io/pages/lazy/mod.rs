@@ -14,8 +14,8 @@ use bytes::Buf;
 use error_stack::{FutureExt, ResultExt};
 use ref_slice::LazyRefSlice;
 use std::cmp::Ordering;
-use std::hash;
 use std::ops::{Deref, Range, RangeBounds};
+use std::{hash, sync};
 use tracing::warn;
 
 pub mod ops;
@@ -25,7 +25,7 @@ pub mod tx_slice;
 pub struct LazyPage<'tx, L: TxReadLazyPageIO<'tx>> {
   tx: TxSlot<'tx>,
   root: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes,
-  r: Option<&'tx L>,
+  r: Option<sync::Arc<L>>,
 }
 
 unsafe impl<'tx, L: TxReadLazyPageIO<'tx>> Send for LazyPage<'tx, L> {}
@@ -36,14 +36,14 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> Clone for LazyPage<'tx, L> {
     LazyPage {
       tx: self.tx,
       root: self.root.clone(),
-      r: self.r,
+      r: self.r.clone(),
     }
   }
 }
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> LazyPage<'tx, L> {
   pub fn new(
-    root: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes, r: &'tx L,
+    root: <<L as TxReadPageIO<'tx>>::TxPageType as TxPageType<'tx>>::TxPageBytes, r: &sync::Arc<L>,
   ) -> Self {
     let mut page = LazyPage {
       tx: Default::default(),
@@ -51,7 +51,7 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> LazyPage<'tx, L> {
       r: None,
     };
     if page.page_header().get_overflow() > 0 {
-      page.r = Some(r)
+      page.r = Some(r.clone());
     };
     page
   }
@@ -73,14 +73,10 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> LazyPage<'tx, L> {
       Ok(self.root.clone())
     } else {
       let page_id = header.overflow_page_id().expect("overflow page id");
+      let r = self.r.as_ref().unwrap();
       match page_id {
-        OverflowPageId::Freelist(page_id) => self
-          .r
-          .unwrap()
-          .read_freelist_overflow(page_id, overflow_index),
-        OverflowPageId::Node(page_id) => {
-          self.r.unwrap().read_node_overflow(page_id, overflow_index)
-        }
+        OverflowPageId::Freelist(page_id) => r.read_freelist_overflow(page_id, overflow_index),
+        OverflowPageId::Node(page_id) => r.read_node_overflow(page_id, overflow_index),
       }
       .change_context(PageError::OverflowReadError(page_id, overflow_index))
     }

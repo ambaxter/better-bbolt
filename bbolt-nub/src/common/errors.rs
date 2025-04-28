@@ -64,6 +64,10 @@ pub enum CursorError {
   GoToLastElement,
   #[error("Cursor Error: `Seek`")]
   Seek,
+  #[error("Expected Bytes, found Bucket")]
+  ValueIsABucket,
+  #[error("Expected Bucket, found Bytes")]
+  ValueIsBytes,
 }
 
 #[derive(Debug, Error)]
@@ -74,6 +78,8 @@ pub enum TxError {
 
 #[derive(Debug, Error)]
 pub enum BucketError {
+  #[error("Expected Bytes, found Bucket")]
+  ValueIsABucket,
   #[error("Bucket Error: GetError")]
   GetError,
 }

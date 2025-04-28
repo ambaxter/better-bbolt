@@ -136,8 +136,8 @@ where
   type LeafType = BBoltLeaf<'tx, Self::TxPageType>;
 
   fn read_meta_page(
-    &self, meta_page_id: MetaPageId,
-  ) -> crate::Result<MetaPage<Self::TxPageType>, PageError> {
+    self: &sync::Arc<Self>, meta_page_id: MetaPageId,
+  ) -> crate::Result<MetaPage<'tx, Self::TxPageType>, PageError> {
     let page = self
       .handle
       .io
@@ -148,8 +148,8 @@ where
   }
 
   fn read_freelist_page(
-    &self, freelist_page_id: FreelistPageId,
-  ) -> crate::Result<FreelistPage<Self::TxPageType>, PageError> {
+    self: &sync::Arc<Self>, freelist_page_id: FreelistPageId,
+  ) -> crate::Result<FreelistPage<'tx, Self::TxPageType>, PageError> {
     let page = self
       .handle
       .io
@@ -161,7 +161,7 @@ where
   }
 
   fn read_node_page(
-    &self, node_page_id: NodePageId,
+    self: &sync::Arc<Self>, node_page_id: NodePageId,
   ) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError> {
     let page = self
       .handle
@@ -198,8 +198,8 @@ where
   type LeafType = BBoltLeaf<'tx, Self::TxPageType>;
 
   fn read_meta_page(
-    &self, meta_page_id: MetaPageId,
-  ) -> crate::Result<MetaPage<Self::TxPageType>, PageError> {
+    self: &sync::Arc<Self>, meta_page_id: MetaPageId,
+  ) -> crate::Result<MetaPage<'tx, Self::TxPageType>, PageError> {
     let page = self
       .handle
       .io
@@ -210,8 +210,8 @@ where
   }
 
   fn read_freelist_page(
-    &self, freelist_page_id: FreelistPageId,
-  ) -> crate::Result<FreelistPage<Self::TxPageType>, PageError> {
+    self: &sync::Arc<Self>, freelist_page_id: FreelistPageId,
+  ) -> crate::Result<FreelistPage<'tx, Self::TxPageType>, PageError> {
     let page = self
       .handle
       .io
@@ -223,7 +223,7 @@ where
   }
 
   fn read_node_page(
-    &self, node_page_id: NodePageId,
+    self: &sync::Arc<Self>, node_page_id: NodePageId,
   ) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError> {
     let page = self
       .handle
@@ -260,7 +260,7 @@ where
   type LeafType = BBoltLeaf<'tx, Self::TxPageType>;
 
   fn read_meta_page(
-    &'tx self, meta_page_id: MetaPageId,
+    self: &sync::Arc<Self>, meta_page_id: MetaPageId,
   ) -> crate::Result<MetaPage<'tx, Self::TxPageType>, PageError> {
     let page = self
       .handle
@@ -272,27 +272,27 @@ where
   }
 
   fn read_freelist_page(
-    &'tx self, freelist_page_id: FreelistPageId,
+    self: &sync::Arc<Self>, freelist_page_id: FreelistPageId,
   ) -> crate::Result<FreelistPage<'tx, Self::TxPageType>, PageError> {
-    let page = self
+    let bytes = self
       .handle
       .io
       .read_freelist_page(freelist_page_id)
-      .map(|bytes| LazyPage::new(bytes.into_tx(), self))
       .change_context(PageError::InvalidFreelist(freelist_page_id))?;
+    let page = LazyPage::new(IntoTxBytes::<'tx>::into_tx(bytes), self);
     FreelistPage::try_from(TxPage::new(page))
       .change_context(PageError::InvalidFreelist(freelist_page_id))
   }
 
   fn read_node_page(
-    &'tx self, node_page_id: NodePageId,
+    self: &sync::Arc<Self>, node_page_id: NodePageId,
   ) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError> {
-    let page = self
+    let bytes = self
       .handle
       .io
       .read_node_page(node_page_id)
-      .map(|bytes| LazyPage::new(bytes.into_tx(), self))
       .change_context(PageError::InvalidNode(node_page_id))?;
+    let page = LazyPage::new(IntoTxBytes::<'tx>::into_tx(bytes), self);
     NodePage::try_from(TxPage::new(page)).change_context(PageError::InvalidNode(node_page_id))
   }
 }
@@ -342,7 +342,7 @@ where
 }
 
 pub struct MutTxHandle<TX> {
-  tx: TX,
+  tx: sync::Arc<TX>,
   data_pool: DataPool,
   key_set: Mutex<HashSet<SharedData>>,
   delta_map: Mutex<BTreeMap<BucketPathBuf, BucketDelta>>,
@@ -358,9 +358,9 @@ where
 
   delegate! {
       to self.tx {
-      fn read_meta_page(&'tx self, meta_page_id: MetaPageId) -> crate::Result<MetaPage<'tx, Self::TxPageType>, PageError>;
-      fn read_freelist_page(&'tx self, freelist_page_id: FreelistPageId) -> crate::Result<FreelistPage<'tx, Self::TxPageType>, PageError>;
-      fn read_node_page(&'tx self, node_page_id: NodePageId) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError>;
+      fn read_meta_page(self: &sync::Arc<Self>, meta_page_id: MetaPageId) -> crate::Result<MetaPage<'tx, Self::TxPageType>, PageError>;
+      fn read_freelist_page(self: &sync::Arc<Self>, freelist_page_id: FreelistPageId) -> crate::Result<FreelistPage<'tx, Self::TxPageType>, PageError>;
+      fn read_node_page(self: &sync::Arc<Self>, node_page_id: NodePageId) -> crate::Result<NodePage<Self::BranchType, Self::LeafType>, PageError>;
       }
   }
 }
@@ -382,8 +382,8 @@ where
 {
   delegate! {
       to self.tx {
-      fn read_freelist_overflow(&'tx self, freelist_page_id: FreelistPageId, overflow: u32) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskReadError>;
-      fn read_node_overflow(&'tx self, node_page_id: NodePageId, overflow: u32) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskReadError>;
+      fn read_freelist_overflow(&self, freelist_page_id: FreelistPageId, overflow: u32) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskReadError>;
+      fn read_node_overflow(&self, node_page_id: NodePageId, overflow: u32) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskReadError>;
       }
   }
 }

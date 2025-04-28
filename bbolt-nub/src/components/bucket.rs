@@ -1,9 +1,13 @@
 use crate::common::data_pool::SharedData;
-use crate::common::errors::BucketError;
+use crate::common::errors::{BucketError, CursorError};
 use crate::common::layout::bucket::BucketHeader;
-use crate::components::cursor::{CoreCursor, CoreCursorSeekApi, LeafFlagFilterCursor, StackEntry};
+use crate::common::layout::node::LeafFlag;
+use crate::components::cursor::{
+  CoreCursor, CoreCursorApi, CoreCursorSeekApi, LeafFlagFilterCursor, StackEntry,
+};
 use crate::components::tx::{TheMutTx, TheTx};
-use crate::io::pages::types::node::NodePage;
+use crate::io::pages::lazy::ops::TryPartialOrd;
+use crate::io::pages::types::node::{HasKeys, NodePage};
 use crate::io::pages::{GatKvRef, GetKvTxSlice, TxPageType};
 use parking_lot::{Mutex, MutexGuard};
 use std::cmp::Ordering;
@@ -14,19 +18,19 @@ use std::iter::FusedIterator;
 use std::ops::Deref;
 use std::sync;
 
-pub struct OnDiskBucket<'a, B, L, TX> {
-  pub(crate) tx: &'a TX,
+pub struct OnDiskBucket<B, L, TX> {
+  pub(crate) tx: sync::Arc<TX>,
   pub(crate) header: BucketHeader,
   pub(crate) root: NodePage<B, L>,
 }
 
-impl<'p, B, L, TX> OnDiskBucket<'p, B, L, TX> {
-  pub fn sequence(&self) -> u64 {
+impl<B, L, TX> OnDiskBucket<B, L, TX> {
+  fn sequence(&self) -> u64 {
     self.header.sequence()
   }
 }
 
-impl<'p, 'tx, TX> OnDiskBucket<'p, TX::BranchType, TX::LeafType, TX>
+impl<'tx, TX> OnDiskBucket<TX::BranchType, TX::LeafType, TX>
 where
   TX: TheTx<'tx>,
   for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
@@ -34,7 +38,31 @@ where
 {
   fn get(
     &self, key: &[u8],
-  ) -> crate::Result<<TX::TxPageType as GetKvTxSlice<'tx>>::KvTx, BucketError> {
+  ) -> crate::Result<Option<<TX::LeafType as HasKeys<'tx>>::TxKv>, BucketError> {
+    let core_cursor = CoreCursor::new(self);
+    let mut c = LeafFlagFilterCursor::new(core_cursor, LeafFlag::default());
+    match c.seek(key) {
+      Ok(v) => Ok(v.map(|_| c.value()).flatten()),
+      Err(err) => {
+        let e = match err.current_context() {
+          CursorError::ValueIsABucket => err.change_context(BucketError::ValueIsABucket),
+          _ => err.change_context(BucketError::GetError),
+        };
+        Err(e)
+      }
+    }
+  }
+}
+
+impl<'tx, TX> OnDiskBucket<TX::BranchType, TX::LeafType, TX>
+where
+  TX: TheTx<'tx>,
+  for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
+  for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
+{
+  fn try_get(
+    &self, key: &[u8],
+  ) -> crate::Result<<TX::LeafType as HasKeys<'tx>>::TxKv, BucketError> {
     todo!()
   }
 }
@@ -45,16 +73,16 @@ pub enum ValueDelta {
   Delete,
 }
 
-pub enum BucketType<'a, B, L, T> {
-  OnDisk(OnDiskBucket<'a, B, L, T>),
-  UpsertOnly(&'a T),
+pub enum BucketType<B, L, T> {
+  OnDisk(OnDiskBucket<B, L, T>),
+  Delta(sync::Arc<T>),
 }
 
-impl<'a, B, L, T> BucketType<'a, B, L, T> {
+impl<B, L, T> BucketType<B, L, T> {
   fn tx(&self) -> &T {
     match self {
-      BucketType::OnDisk(bucket) => bucket.tx,
-      BucketType::UpsertOnly(tx) => tx,
+      BucketType::OnDisk(bucket) => &bucket.tx,
+      BucketType::Delta(tx) => tx,
     }
   }
 }
@@ -64,29 +92,29 @@ pub struct BucketDelta {
   delta: sync::Arc<Mutex<BTreeMap<SharedData, ValueDelta>>>,
 }
 
-pub struct UpsertBucket<'a, B, L, T> {
-  pub(crate) bucket_type: BucketType<'a, B, L, T>,
+pub struct DeltaBucket<B, L, T> {
+  pub(crate) bucket_type: BucketType<B, L, T>,
   pub(crate) delta: BucketDelta,
 }
 
-pub enum UpsertKv<D> {
+pub enum DeltaKv<D> {
   OnDisk(D),
-  Upsert(SharedData),
+  Delta(SharedData),
 }
 
-impl<D> AsRef<[u8]> for UpsertKv<D>
+impl<D> AsRef<[u8]> for DeltaKv<D>
 where
   D: AsRef<[u8]>,
 {
   fn as_ref(&self) -> &[u8] {
     match self {
-      UpsertKv::OnDisk(d) => d.as_ref(),
-      UpsertKv::Upsert(u) => u.as_ref(),
+      DeltaKv::OnDisk(d) => d.as_ref(),
+      DeltaKv::Delta(u) => u.as_ref(),
     }
   }
 }
 
-impl<D> Deref for UpsertKv<D>
+impl<D> Deref for DeltaKv<D>
 where
   D: AsRef<[u8]>,
 {
@@ -97,7 +125,7 @@ where
   }
 }
 
-impl<'a, 'tx, B, L, TX> UpsertBucket<'a, B, L, TX>
+impl<'tx, B, L, TX> DeltaBucket<B, L, TX>
 where
   TX: TheMutTx<'tx>,
 {
