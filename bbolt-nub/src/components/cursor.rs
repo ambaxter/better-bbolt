@@ -549,6 +549,7 @@ where
 // Calling Bucket.get(&self) which creates a Cursor with &'a Bucket and Cursor.seek(&mut self) fails
 // due to Subtyping & Veriance (https://doc.rust-lang.org/nomicon/subtyping.html)
 // "mutable references are invariant over their type parameter"
+// Ideally we don't want to have to clone 2 Arcs for every Bucket.get() invocation
 pub struct LeafFlagFilterCursor<C> {
   cursor: C,
   leaf_flag: LeafFlag,
@@ -1185,7 +1186,7 @@ mod tests {
 
     let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
     let dict_bucket = OnDiskBucket {
-      tx: &tx,
+      tx: tx.clone(),
       header: Default::default(),
       root: dict_root,
     };
@@ -1274,7 +1275,7 @@ mod tests {
 
     let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
     let dict_bucket = OnDiskBucket {
-      tx: &tx,
+      tx: tx.clone(),
       header: Default::default(),
       root: dict_root,
     };
@@ -1360,7 +1361,7 @@ mod tests {
 
     let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
     let dict_bucket = OnDiskBucket {
-      tx: &tx,
+      tx: tx.clone(),
       header: Default::default(),
       root: dict_root,
     };
