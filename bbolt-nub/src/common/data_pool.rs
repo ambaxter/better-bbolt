@@ -1,17 +1,20 @@
 use crate::common::buffer_pool::{BufferPool, PoolBuffer, UniqueBuffer};
+use crate::io::pages::lazy::ops::TryBuf;
 use parking_lot::Mutex;
 use rayon;
 use size::Size;
+use std::borrow::Borrow;
 use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+use std::sync;
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
-use triomphe::{Arc, HeaderSlice, UniqueArc};
 
-pub type PoolData = HeaderSlice<Option<DataPool>, Vec<u8>>;
+pub type PoolData = triomphe::HeaderSlice<Option<DataPool>, Vec<u8>>;
 
 #[derive(Clone)]
 pub struct SharedData {
-  pub(crate) inner: Option<Arc<PoolData>>,
+  pub(crate) inner: Option<triomphe::Arc<PoolData>>,
 }
 
 impl Deref for SharedData {
@@ -32,13 +35,45 @@ impl AsRef<[u8]> for SharedData {
   }
 }
 
+impl Borrow<[u8]> for SharedData {
+  fn borrow(&self) -> &[u8] {
+    self.as_ref()
+  }
+}
+
+impl PartialEq for SharedData {
+  fn eq(&self, other: &Self) -> bool {
+    self.deref() == other.deref()
+  }
+}
+
+impl Eq for SharedData {}
+
+impl Ord for SharedData {
+  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    self.deref().cmp(other.deref())
+  }
+}
+
+impl PartialOrd for SharedData {
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    Some(self.cmp(other))
+  }
+}
+
+impl Hash for SharedData {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.deref().hash(state);
+  }
+}
+
 impl Drop for SharedData {
   fn drop(&mut self) {
     let inner = self.inner.take().expect("shared buffer is dropped");
     rayon::spawn(move || {
       // There is a race condition here, but there's nothing we can do about it
       // https://github.com/Manishearth/triomphe/pull/109
-      if let Some(mut unique) = Arc::try_unique(inner).ok() {
+      if let Some(mut unique) = triomphe::Arc::try_unique(inner).ok() {
         if let Some(mut pool) = unique.header.take() {
           pool.push(UniqueData(unique));
         }
@@ -47,7 +82,7 @@ impl Drop for SharedData {
   }
 }
 
-pub struct UniqueData(UniqueArc<PoolData>);
+pub struct UniqueData(triomphe::UniqueArc<PoolData>);
 
 impl UniqueData {
   pub fn set_header(&mut self, header: Option<DataPool>) {
@@ -60,6 +95,26 @@ impl UniqueData {
     SharedData {
       inner: Some(shared),
     }
+  }
+
+  pub fn copy_try_buf_and_share<T: TryBuf>(
+    mut self, mut data: T,
+  ) -> crate::Result<SharedData, T::Error> {
+    let data_len = data.remaining();
+    let slice_capacity = self.0.slice.capacity();
+    if data_len > slice_capacity {
+      self.0.slice.reserve(data_len - slice_capacity);
+    }
+
+    while data.remaining() != 0 {
+      let chunk_len = data.chunk().len();
+      self.0.slice.extend_from_slice(data.chunk());
+      data.try_advance(chunk_len)?
+    }
+    let shared = self.0.shareable();
+    Ok(SharedData {
+      inner: Some(shared),
+    })
   }
 }
 
@@ -84,7 +139,7 @@ impl InnerDataPool {
       header: None,
       slice: Vec::with_capacity(self.default_data_capacity),
     };
-    UniqueData(UniqueArc::new(data))
+    UniqueData(triomphe::UniqueArc::new(data))
   }
 
   fn pop(&self) -> UniqueData {
@@ -95,7 +150,7 @@ impl InnerDataPool {
       .inspect(|data| {
         self
           .current_size_in_bytes
-          .fetch_sub(data.0.slice.capacity() as i64, Ordering::Release);
+          .fetch_sub(data.0.slice.capacity() as i64, Ordering::Relaxed);
       })
       .unwrap_or_else(|| self.new_unique())
   }
@@ -105,14 +160,14 @@ impl InnerDataPool {
     data.0.slice.shrink_to(self.max_data_capacity);
     self
       .current_size_in_bytes
-      .fetch_add(data.0.slice.capacity() as i64, Ordering::Release);
+      .fetch_add(data.0.slice.capacity() as i64, Ordering::Relaxed);
     self.pool.lock().push(data);
   }
 }
 
 #[derive(Clone)]
 pub struct DataPool {
-  inner: Arc<InnerDataPool>,
+  inner: sync::Arc<InnerDataPool>,
 }
 
 impl Debug for DataPool {
@@ -129,7 +184,7 @@ impl Debug for DataPool {
 }
 
 impl DataPool {
-  fn pop(&self) -> UniqueData {
+  pub fn pop(&self) -> UniqueData {
     let mut entry = self.inner.pop();
     entry.set_header(Some(self.clone()));
     entry

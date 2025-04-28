@@ -65,3 +65,15 @@ pub enum CursorError {
   #[error("Cursor Error: `Seek`")]
   Seek,
 }
+
+#[derive(Debug, Error)]
+pub enum TxError {
+  #[error("Tx Error: DataCopy")]
+  DataCopy,
+}
+
+#[derive(Debug, Error)]
+pub enum BucketError {
+  #[error("Bucket Error: GetError")]
+  GetError,
+}

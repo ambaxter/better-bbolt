@@ -8,7 +8,6 @@ use std::fmt::{Debug, Formatter};
 use std::ops::SubAssign;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
-use triomphe::Arc;
 
 #[derive(Default)]
 pub struct TxStats {

@@ -1,9 +1,9 @@
 use crate::api::bytes::TxSlice;
-use triomphe::Arc;
+use std::sync;
 
 #[derive(Clone)]
 pub struct DbStats {
-  inner: Arc<InnerDbStats>,
+  inner: sync::Arc<InnerDbStats>,
 }
 
 struct InnerDbStats {}

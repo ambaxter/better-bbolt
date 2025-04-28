@@ -1,7 +1,10 @@
 use crate::api::tx::TxStats;
-use crate::common::errors::{DiskReadError, PageError};
+use crate::common::data_pool::{DataPool, SharedData};
+use crate::common::errors::{DiskReadError, PageError, TxError};
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId, TxId};
 use crate::common::layout::meta::Meta;
+use crate::components::bucket::{BucketDelta, OnDiskBucket, ValueDelta};
+use crate::components::bucket_path::BucketPathBuf;
 use crate::io::TxSlot;
 use crate::io::backends::{IOOverflowPageReader, IOPageReader, IOReader};
 use crate::io::bytes::ref_bytes::{RefBytes, RefTxBytes};
@@ -9,6 +12,7 @@ use crate::io::bytes::shared_bytes::{SharedBytes, SharedTxBytes};
 use crate::io::bytes::{FromIOBytes, IOBytes, IntoTxBytes, TxBytes};
 use crate::io::pages::direct::DirectPage;
 use crate::io::pages::lazy::LazyPage;
+use crate::io::pages::lazy::ops::RefIntoTryBuf;
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
 use crate::io::pages::types::node::NodePage;
@@ -16,18 +20,22 @@ use crate::io::pages::types::node::branch::bbolt::BBoltBranch;
 use crate::io::pages::types::node::leaf::bbolt::BBoltLeaf;
 use crate::io::pages::{TxPage, TxPageType, TxReadLazyPageIO, TxReadPageIO};
 use delegate::delegate;
-use error_stack::ResultExt;
-use parking_lot::{RwLockReadGuard, RwLockUpgradableReadGuard};
+use error_stack::{FutureExt, ResultExt};
+use hashbrown::HashSet;
+use parking_lot::{Mutex, RwLockReadGuard, RwLockUpgradableReadGuard};
 use std::collections::BTreeMap;
 use std::sync;
-use triomphe::Arc;
 
 pub trait TheTx<'tx>: TxReadPageIO<'tx> {
   fn stats(&self) -> &TxStats;
 }
 
 pub trait TheMutTx<'tx>: TheTx<'tx> {
-  fn register_bytes(&self, bytes: &[u8]) -> &'tx [u8];
+  fn clone_key(&self, bytes: &[u8]) -> SharedData;
+  fn try_clone_key<T>(&self, bytes: &T) -> crate::Result<SharedData, TxError>
+  where
+    T: RefIntoTryBuf;
+  fn clone_value(&self, bytes: &[u8]) -> SharedData;
 }
 
 pub trait TheLazyTx<'tx>: TheTx<'tx> + TxReadLazyPageIO<'tx> {}
@@ -110,7 +118,7 @@ where
 
 pub struct CoreTxHandle<'tx, IO> {
   pub(crate) io: IOLockGuard<'tx, IO>,
-  pub(crate) stats: Arc<TxStats>,
+  pub(crate) stats: sync::Arc<TxStats>,
   pub(crate) tx_id: TxId,
 }
 
@@ -335,6 +343,9 @@ where
 
 pub struct MutTxHandle<TX> {
   tx: TX,
+  data_pool: DataPool,
+  key_set: Mutex<HashSet<SharedData>>,
+  delta_map: Mutex<BTreeMap<BucketPathBuf, BucketDelta>>,
 }
 
 impl<'tx, TX> TxReadPageIO<'tx> for MutTxHandle<TX>
@@ -378,3 +389,41 @@ where
 }
 
 impl<'tx, TX> TheLazyTx<'tx> for MutTxHandle<TX> where TX: TheLazyTx<'tx> {}
+
+impl<'tx, TX> TheMutTx<'tx> for MutTxHandle<TX>
+where
+  TX: TheTx<'tx>,
+{
+  fn clone_key(&self, bytes: &[u8]) -> SharedData {
+    let mut key_set = self.key_set.lock();
+    key_set
+      .get_or_insert_with(bytes, |f| {
+        let mut unique = self.data_pool.pop();
+        unique.copy_data_and_share(bytes)
+      })
+      .clone()
+  }
+
+  fn try_clone_key<T>(&self, bytes: &T) -> crate::Result<SharedData, TxError>
+  where
+    T: RefIntoTryBuf,
+  {
+    let data = bytes
+      .ref_into_try_buf()
+      .and_then(|try_buf| {
+        let mut unique = self.data_pool.pop();
+        unique.copy_try_buf_and_share(try_buf)
+      })
+      .change_context(TxError::DataCopy)?;
+    let mut key_set = self.key_set.lock();
+    let key = key_set.get_or_insert(data);
+    Ok(key.clone())
+  }
+
+  fn clone_value(&self, bytes: &[u8]) -> SharedData {
+    let mut unique = self.data_pool.pop();
+    unique.copy_data_and_share(bytes)
+  }
+}
+
+impl<'tx, TX> MutTxHandle<TX> where TX: TheTx<'tx> {}

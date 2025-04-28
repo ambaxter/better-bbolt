@@ -1,6 +1,7 @@
+use crate::common::data_pool::SharedData;
 use crate::common::errors::CursorError;
 use crate::common::layout::node::LeafFlag;
-use crate::components::bucket::{BucketApi, CoreBucket};
+use crate::components::bucket::OnDiskBucket;
 use crate::components::tx::{TheLazyTx, TheTx};
 use crate::io::bytes::ref_bytes::RefTxBytes;
 use crate::io::pages::direct::DirectPage;
@@ -17,6 +18,7 @@ use crate::io::pages::{
 };
 use error_stack::ResultExt;
 use std::marker::PhantomData;
+use std::ops::Deref;
 
 pub struct StackEntry<B, L> {
   page: NodePage<B, L>,
@@ -112,21 +114,33 @@ pub trait CoreCursorApi<'tx>: CoreCursorMoveApi {
   fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)>;
 }
 
-pub struct CoreCursor<'p, 'tx, B, L, T> {
-  bucket: &'p CoreBucket<'tx, B, L, T>,
+pub struct CoreCursor<'p, 'tx, B, L, TX> {
+  bucket: &'p OnDiskBucket<'tx, B, L, TX>,
   stack: Vec<StackEntry<B, L>>,
   location: CursorLocation,
 }
 
-impl<'p, 'tx, T> CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>
+impl<'p, 'tx, TX> CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
 where
-  T: TheTx<'tx>,
+  TX: TheTx<'tx>,
 {
-  pub fn new(bucket: &'p CoreBucket<'tx, T::BranchType, T::LeafType, T>) -> Self {
+  pub fn new(bucket: &'p OnDiskBucket<'tx, TX::BranchType, TX::LeafType, TX>) -> Self {
     bucket.tx.stats().inc_cursor_count(1);
     Self {
       bucket,
       stack: vec![],
+      location: CursorLocation::Begin,
+    }
+  }
+
+  pub fn new_with_stack(
+    bucket: &'p OnDiskBucket<'tx, TX::BranchType, TX::LeafType, TX>,
+    stack: Vec<StackEntry<TX::BranchType, TX::LeafType>>,
+  ) -> Self {
+    bucket.tx.stats().inc_cursor_count(1);
+    Self {
+      bucket,
+      stack,
       location: CursorLocation::Begin,
     }
   }
@@ -184,7 +198,7 @@ where
 
   fn seek_branches<'a>(&'a mut self, v: &[u8]) -> crate::Result<(), CursorError>
   where
-    for<'b> <T::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
+    for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
     loop {
@@ -215,7 +229,7 @@ where
 
   fn seek_leaf<'a>(&'a mut self, v: &[u8]) -> Option<LeafFlag>
   where
-    for<'b> <T::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
+    for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
     let entry = self.stack.last_mut().expect("stack empty");
@@ -239,7 +253,7 @@ where
 
   fn try_seek_branches<'a>(&'a mut self, v: &[u8]) -> crate::Result<(), CursorError>
   where
-    for<'b> <T::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
+    for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
     loop {
@@ -273,7 +287,7 @@ where
 
   fn try_seek_leaf<'a>(&'a mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>
   where
-    for<'b> <T::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
+    for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
   {
     assert!(!self.stack.is_empty());
     let entry = self.stack.last_mut().expect("stack empty");
@@ -296,8 +310,8 @@ where
   }
 }
 
-impl<'p, 'tx, T: TheTx<'tx>> CoreCursorMoveApi
-  for CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>
+impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorMoveApi
+  for CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
 {
   fn move_to_first_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
@@ -426,11 +440,11 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorMoveApi
   }
 }
 
-impl<'p, 'tx, T: TheTx<'tx>> CoreCursorRefApi
-  for CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>
+impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorRefApi
+  for CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
 {
   type KvRef<'a>
-    = <T::LeafType as GatKvRef<'a>>::KvRef
+    = <TX::LeafType as GatKvRef<'a>>::KvRef
   where
     Self: 'a;
 
@@ -450,10 +464,10 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorRefApi
     }
   }
 }
-impl<'p, 'tx, T: TheTx<'tx>> CoreCursorApi<'tx>
-  for CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>
+impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorApi<'tx>
+  for CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
 {
-  type KvTx = <T::LeafType as HasKeys<'tx>>::TxKv;
+  type KvTx = <TX::LeafType as HasKeys<'tx>>::TxKv;
 
   fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)> {
     if self.location.is_outside() {
@@ -472,11 +486,11 @@ impl<'p, 'tx, T: TheTx<'tx>> CoreCursorApi<'tx>
   }
 }
 
-impl<'p, 'tx, T: TheTx<'tx>> CoreCursorSeekApi
-  for CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>
+impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorSeekApi
+  for CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
 where
-  for<'b> <T::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
-  for<'b> <T::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
+  for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
+  for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
 {
   fn seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
@@ -486,11 +500,11 @@ where
   }
 }
 
-impl<'p, 'tx, T: TheTx<'tx>> CoreCursorTrySeekApi
-  for CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>
+impl<'p, 'tx, TX: TheTx<'tx>> CoreCursorTrySeekApi
+  for CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>
 where
-  for<'b> <T::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
-  for<'b> <T::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
+  for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
+  for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
 {
   fn try_seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
@@ -645,7 +659,7 @@ pub trait CursorRefApi: for<'a> GatKvRef<'a> {
   >;
 }
 
-pub struct CursorIter<'tx, C: 'tx> {
+pub struct CursorIter<'tx, C> {
   cursor: C,
   started: bool,
   _tx: PhantomData<&'tx ()>,
@@ -681,21 +695,54 @@ pub trait CursorApi<'tx> {
   fn seek(&mut self, v: &[u8]) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
 }
 
-pub struct RefTxCursor<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> {
-  cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>>,
+pub enum CursorMutKv<D> {
+  OnDisk(D),
+  Upsert(SharedData),
 }
 
-impl<'a, 'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> GatKvRef<'a>
-  for RefTxCursor<'p, 'tx, T>
-{
-  type KvRef = <T::LeafType as GatKvRef<'a>>::KvRef;
-}
-
-impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorRefApi
-  for RefTxCursor<'p, 'tx, T>
+impl<D> AsRef<[u8]> for CursorMutKv<D>
 where
-  for<'b> <T::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
-  for<'b> <T::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
+  D: AsRef<[u8]>,
+{
+  fn as_ref(&self) -> &[u8] {
+    match self {
+      CursorMutKv::OnDisk(d) => d.as_ref(),
+      CursorMutKv::Upsert(u) => u.as_ref(),
+    }
+  }
+}
+
+impl<D> Deref for CursorMutKv<D>
+where
+  D: AsRef<[u8]>,
+{
+  type Target = [u8];
+
+  fn deref(&self) -> &Self::Target {
+    self.as_ref()
+  }
+}
+
+/*
+pub struct CursorMutIter<'tx, C> {
+
+}*/
+
+pub struct RefTxCursor<'p, 'tx: 'p, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> {
+  cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>>,
+}
+
+impl<'a, 'p, 'tx: 'p, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> GatKvRef<'a>
+  for RefTxCursor<'p, 'tx, TX>
+{
+  type KvRef = <TX::LeafType as GatKvRef<'a>>::KvRef;
+}
+
+impl<'p, 'tx: 'p, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorRefApi
+  for RefTxCursor<'p, 'tx, TX>
+where
+  for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
+  for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
 {
   fn first_ref<'a>(
     &'a mut self,
@@ -773,13 +820,13 @@ where
   }
 }
 
-impl<'p, 'tx: 'p, T: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorApi<'tx>
-  for RefTxCursor<'p, 'tx, T>
+impl<'p, 'tx: 'p, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> CursorApi<'tx>
+  for RefTxCursor<'p, 'tx, TX>
 where
-  for<'b> <T::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
-  for<'b> <T::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
+  for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
+  for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: PartialOrd<[u8]>,
 {
-  type KvTx = <T::LeafType as HasKeys<'tx>>::TxKv;
+  type KvTx = <TX::LeafType as HasKeys<'tx>>::TxKv;
 
   fn first(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
     Ok(
@@ -832,21 +879,21 @@ where
   }
 }
 
-pub struct LazyTxCursor<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> {
-  cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, T::BranchType, T::LeafType, T>>,
+pub struct LazyTxCursor<'p, 'tx: 'p, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> {
+  cursor: LeafFlagFilterCursor<CoreCursor<'p, 'tx, TX::BranchType, TX::LeafType, TX>>,
 }
 
-impl<'a, 'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> GatKvRef<'a>
-  for LazyTxCursor<'p, 'tx, T>
+impl<'a, 'p, 'tx: 'p, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> GatKvRef<'a>
+  for LazyTxCursor<'p, 'tx, TX>
 {
-  type KvRef = <T::LeafType as GatKvRef<'a>>::KvRef;
+  type KvRef = <TX::LeafType as GatKvRef<'a>>::KvRef;
 }
 
-impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorRefApi
-  for LazyTxCursor<'p, 'tx, T>
+impl<'p, 'tx: 'p, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> CursorRefApi
+  for LazyTxCursor<'p, 'tx, TX>
 where
-  for<'b> <T::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
-  for<'b> <T::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
+  for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
+  for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
 {
   fn first_ref<'a>(
     &'a mut self,
@@ -924,13 +971,13 @@ where
   }
 }
 
-impl<'p, 'tx: 'p, T: TheLazyTx<'tx, TxPageType = LazyPage<'tx, T>>> CursorApi<'tx>
-  for LazyTxCursor<'p, 'tx, T>
+impl<'p, 'tx: 'p, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> CursorApi<'tx>
+  for LazyTxCursor<'p, 'tx, TX>
 where
-  for<'b> <T::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
-  for<'b> <T::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
+  for<'b> <TX::BranchType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
+  for<'b> <TX::LeafType as GatKvRef<'b>>::KvRef: TryPartialOrd<[u8]>,
 {
-  type KvTx = <T::LeafType as HasKeys<'tx>>::TxKv;
+  type KvTx = <TX::LeafType as HasKeys<'tx>>::TxKv;
 
   fn first(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError> {
     Ok(
@@ -1004,7 +1051,7 @@ mod tests {
   use size::Size;
   use std::fs::File;
   use std::io::{BufReader, BufWriter, Write};
-  use triomphe::Arc;
+  use std::sync;
 
   #[test]
   fn test_file() {
@@ -1021,7 +1068,7 @@ mod tests {
       Size::from_kibibytes(32),
       Size::from_kibibytes(256),
     );
-    let tx_stats = Arc::new(TxStats::default());
+    let tx_stats = sync::Arc::new(TxStats::default());
     let backend = SingleFileReader::new("my.db", page_size, buffer_pool).unwrap();
     let tx_context = DirectTransmogrify {};
     let handler = ReadHandler {
@@ -1041,7 +1088,11 @@ mod tests {
     };
     let tx = LazyTxHandle { handle: core_tx };
     let root = tx.read_node_page(root_page.into()).unwrap();
-    let bucket = CoreBucket { tx: &tx, root };
+    let bucket = OnDiskBucket {
+      tx: &tx,
+      header: Default::default(),
+      root,
+    };
     let mut cursor = LazyTxCursor {
       cursor: LeafFlagFilterCursor {
         cursor: CoreCursor {
@@ -1066,8 +1117,9 @@ mod tests {
     println!("{:?}", bucket_header);
 
     let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
-    let dict_bucket = CoreBucket {
+    let dict_bucket = OnDiskBucket {
       tx: &tx,
+      header: Default::default(),
       root: dict_root,
     };
     let dict_cursor = LazyTxCursor {
@@ -1113,7 +1165,7 @@ mod tests {
       Size::from_kibibytes(32),
       Size::from_kibibytes(256),
     );
-    let tx_stats = Arc::new(TxStats::default());
+    let tx_stats = sync::Arc::new(TxStats::default());
     let backend = MultiFileReader::new("my.db", 32, page_size, buffer_pool).unwrap();
     let tx_context = DirectTransmogrify {};
     let handler = ReadHandler {
@@ -1133,7 +1185,11 @@ mod tests {
     };
     let tx = LazyTxHandle { handle: core_tx };
     let root = tx.read_node_page(root_page.into()).unwrap();
-    let bucket = CoreBucket { tx: &tx, root };
+    let bucket = OnDiskBucket {
+      tx: &tx,
+      header: Default::default(),
+      root,
+    };
     let mut cursor = LazyTxCursor {
       cursor: LeafFlagFilterCursor {
         cursor: CoreCursor {
@@ -1158,8 +1214,9 @@ mod tests {
     println!("{:?}", bucket_header);
 
     let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
-    let dict_bucket = CoreBucket {
+    let dict_bucket = OnDiskBucket {
       tx: &tx,
+      header: Default::default(),
       root: dict_root,
     };
     let dict_cursor = LazyTxCursor {
@@ -1205,7 +1262,7 @@ mod tests {
       Size::from_kibibytes(32),
       Size::from_kibibytes(256),
     );
-    let tx_stats = Arc::new(TxStats::default());
+    let tx_stats = sync::Arc::new(TxStats::default());
     let backend = MemMapReader::new("my.db", page_size);
     let tx_context = DirectTransmogrify {};
     let handler = ReadHandler {
@@ -1222,7 +1279,11 @@ mod tests {
     };
     let tx = RefTxHandle { handle: core_tx };
     let root = tx.read_node_page(root_page.into()).unwrap();
-    let bucket = CoreBucket { tx: &tx, root };
+    let bucket = OnDiskBucket {
+      tx: &tx,
+      header: Default::default(),
+      root,
+    };
     let mut cursor = RefTxCursor {
       cursor: LeafFlagFilterCursor {
         cursor: CoreCursor {
@@ -1247,8 +1308,9 @@ mod tests {
     println!("{:?}", bucket_header);
 
     let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
-    let dict_bucket = CoreBucket {
+    let dict_bucket = OnDiskBucket {
       tx: &tx,
+      header: Default::default(),
       root: dict_root,
     };
     let dict_cursor = RefTxCursor {

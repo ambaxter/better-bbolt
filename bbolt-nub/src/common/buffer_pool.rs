@@ -4,12 +4,12 @@ use size::Size;
 use std::cmp::Ordering;
 use std::collections::Bound;
 use std::fmt::Debug;
-use std::io;
 use std::iter::Copied;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, Range, RangeBounds};
 use std::sync::atomic::AtomicI64;
-use triomphe::{Arc, HeaderSlice, UniqueArc};
+use std::{io, sync};
+use triomphe::{HeaderSlice, UniqueArc};
 use uninit::extension_traits::AsOut;
 use uninit::read::ReadIntoUninit;
 
@@ -102,7 +102,7 @@ impl InnerBufferPool {
 
 #[derive(Clone)]
 pub struct BufferPool {
-  inner: Arc<InnerBufferPool>,
+  inner: sync::Arc<InnerBufferPool>,
 }
 
 impl Debug for BufferPool {
@@ -132,7 +132,7 @@ impl BufferPool {
       pool: Mutex::new(pool),
     };
     BufferPool {
-      inner: Arc::new(inner),
+      inner: sync::Arc::new(inner),
     }
   }
 

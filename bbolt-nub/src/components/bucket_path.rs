@@ -299,23 +299,17 @@ mod tests {
 
   #[test]
   fn test_disc_ref() {
-    let (read, write) = test_discriminant_ref(
-      &[],
-      &[["root", "next2"].into(), ["root2", "next3"].into()],
-    );
+    let (read, write) =
+      test_discriminant_ref(&[], &[["root", "next2"].into(), ["root2", "next3"].into()]);
     println!("read: {:?}", read);
     println!("write: {:?}", write);
   }
 
   #[test]
   fn test_disc_iter() {
-    let (read, write) = test_discriminant_iter(
-      [],
-      [["root", "next2"].into(), ["root2", "next3"].into()],
-    );
+    let (read, write) =
+      test_discriminant_iter([], [["root", "next2"].into(), ["root2", "next3"].into()]);
     println!("read: {:?}", read);
     println!("write: {:?}", write);
   }
-
 }
-

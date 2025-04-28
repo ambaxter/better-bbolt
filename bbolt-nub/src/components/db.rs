@@ -1,9 +1,9 @@
 use parking_lot::RwLock;
-use triomphe::Arc;
+use std::sync;
 
 pub struct DbHandle {}
 
 #[derive(Clone)]
 pub struct BoltDb {
-  inner: Arc<RwLock<DbHandle>>,
+  inner: sync::Arc<RwLock<DbHandle>>,
 }

@@ -12,11 +12,10 @@ use std::hash::{Hash, Hasher};
 use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
 use std::{io, slice};
-use triomphe::{Arc, UniqueArc};
 
 #[derive(Clone)]
 pub struct SharedBytes {
-  pub(crate) inner: Option<Arc<PoolBuffer>>,
+  pub(crate) inner: Option<triomphe::Arc<PoolBuffer>>,
 }
 
 impl Deref for SharedBytes {
@@ -43,7 +42,7 @@ impl Drop for SharedBytes {
     rayon::spawn(move || {
       // There is a race condition here, but there's nothing we can do about it
       // https://github.com/Manishearth/triomphe/pull/109
-      if let Some(mut unique) = Arc::try_unique(inner).ok() {
+      if let Some(mut unique) = triomphe::Arc::try_unique(inner).ok() {
         if let Some(pool) = unique.header.take() {
           pool.push(unique);
         }

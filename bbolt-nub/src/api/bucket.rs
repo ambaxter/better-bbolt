@@ -2,11 +2,11 @@ use crate::Result;
 use crate::api::bytes::TxSlice;
 use crate::api::cursor::{CursorApi, MutCursorApi};
 use crate::api::errors::DbError;
-use triomphe::Arc;
+use std::sync;
 
 #[derive(Clone)]
 pub struct BucketStats {
-  inner: Arc<InnerBucketStats>,
+  inner: sync::Arc<InnerBucketStats>,
 }
 
 struct InnerBucketStats {}
