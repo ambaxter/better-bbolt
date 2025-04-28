@@ -3,6 +3,7 @@ use crate::common::errors::CursorError;
 use crate::common::layout::node::LeafFlag;
 use crate::components::bucket::OnDiskBucket;
 use crate::components::tx::{TheLazyTx, TheTx};
+use crate::io::TxSlot;
 use crate::io::bytes::ref_bytes::RefTxBytes;
 use crate::io::pages::direct::DirectPage;
 use crate::io::pages::direct::ops::KvDataType;
@@ -19,6 +20,7 @@ use crate::io::pages::{
 use error_stack::ResultExt;
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::sync;
 
 pub struct StackEntry<B, L> {
   page: NodePage<B, L>,
@@ -122,34 +124,40 @@ pub trait CoreCursorApi<'tx>: CoreCursorMoveApi {
   fn key_value(&self) -> Option<(Self::KvTx, Self::KvTx)>;
 }
 
-pub struct CoreCursor<'c, B, L, TX> {
-  bucket: &'c OnDiskBucket<B, L, TX>,
+pub struct CoreCursor<'tx, B, L, TX> {
+  tx: sync::Arc<TX>,
+  root: NodePage<B, L>,
   stack: Vec<StackEntry<B, L>>,
   location: CursorLocation,
+  tx_slot: TxSlot<'tx>,
 }
 
-impl<'c, 'tx, TX> CoreCursor<'c, TX::BranchType, TX::LeafType, TX>
+impl<'tx, TX> CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>
 where
   TX: TheTx<'tx>,
 {
-  pub fn new(bucket: &'c OnDiskBucket<TX::BranchType, TX::LeafType, TX>) -> Self {
+  pub fn new(bucket: &OnDiskBucket<TX::BranchType, TX::LeafType, TX>) -> Self {
     bucket.tx.stats().inc_cursor_count(1);
     Self {
-      bucket,
+      tx: bucket.tx.clone(),
+      root: bucket.root.clone(),
       stack: vec![],
       location: CursorLocation::Begin,
+      tx_slot: TxSlot::default(),
     }
   }
 
   pub fn new_with_stack(
-    bucket: &'c OnDiskBucket<TX::BranchType, TX::LeafType, TX>,
+    bucket: &OnDiskBucket<TX::BranchType, TX::LeafType, TX>,
     stack: Vec<StackEntry<TX::BranchType, TX::LeafType>>,
   ) -> Self {
     bucket.tx.stats().inc_cursor_count(1);
     Self {
-      bucket,
+      tx: bucket.tx.clone(),
+      root: bucket.root.clone(),
       stack,
       location: CursorLocation::Begin,
+      tx_slot: TxSlot::default(),
     }
   }
 
@@ -167,7 +175,6 @@ where
       };
 
       let node = self
-        .bucket
         .tx
         .read_node_page(node_page_id)
         .change_context(CursorError::GoToFirstElement)?;
@@ -191,7 +198,6 @@ where
       };
 
       let node = self
-        .bucket
         .tx
         .read_node_page(node_page_id)
         .change_context(CursorError::GoToLastElement)?;
@@ -226,7 +232,6 @@ where
       };
 
       let node = self
-        .bucket
         .tx
         .read_node_page(node_page_id)
         .change_context(CursorError::Seek)?;
@@ -284,7 +289,6 @@ where
       };
 
       let node = self
-        .bucket
         .tx
         .read_node_page(node_page_id)
         .change_context(CursorError::Seek)?;
@@ -337,7 +341,7 @@ where
 impl<'tx, TX: TheTx<'tx>> CoreCursorMoveApi for CoreCursor<'tx, TX::BranchType, TX::LeafType, TX> {
   fn move_to_first_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
-    self.stack.push(StackEntry::new(self.bucket.root.clone()));
+    self.stack.push(StackEntry::new(self.root.clone()));
 
     self.move_to_first_element_on_stack()?;
 
@@ -443,7 +447,7 @@ impl<'tx, TX: TheTx<'tx>> CoreCursorMoveApi for CoreCursor<'tx, TX::BranchType, 
 
   fn move_to_last_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
-    self.stack.push(StackEntry::new(self.bucket.root.clone()));
+    self.stack.push(StackEntry::new(self.root.clone()));
 
     self.move_to_last_element_on_stack()?;
     if self.stack.last().expect("stack empty").element_count() == 0 {
@@ -522,7 +526,7 @@ where
 {
   fn seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
-    self.stack.push(StackEntry::new(self.bucket.root.clone()));
+    self.stack.push(StackEntry::new(self.root.clone()));
     self.seek_branches(v)?;
     Ok(self.seek_leaf(v))
   }
@@ -535,12 +539,16 @@ where
 {
   fn try_seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError> {
     self.stack.clear();
-    self.stack.push(StackEntry::new(self.bucket.root.clone()));
+    self.stack.push(StackEntry::new(self.root.clone()));
     self.try_seek_branches(v)?;
     self.try_seek_leaf(v)
   }
 }
 
+// TODO: LeafFlagFilterCursor is generic over C because I was trying to be lazy
+// Calling Bucket.get(&self) which creates a Cursor with &'a Bucket and Cursor.seek(&mut self) fails
+// due to Subtyping & Veriance (https://doc.rust-lang.org/nomicon/subtyping.html)
+// "mutable references are invariant over their type parameter"
 pub struct LeafFlagFilterCursor<C> {
   cursor: C,
   leaf_flag: LeafFlag,
@@ -1149,20 +1157,16 @@ mod tests {
       stats: tx_stats.clone(),
       tx_id,
     };
-    let tx = LazyTxHandle { handle: core_tx };
+    let tx = sync::Arc::new(LazyTxHandle { handle: core_tx });
     let root = tx.read_node_page(root_page.into()).unwrap();
     let bucket = OnDiskBucket {
-      tx: &tx,
+      tx: tx.clone(),
       header: Default::default(),
       root,
     };
     let mut cursor = LazyTxCursor {
       cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor {
-          bucket: &bucket,
-          stack: vec![],
-          location: CursorLocation::Begin,
-        },
+        cursor: CoreCursor::new(&bucket),
         leaf_flag: LeafFlag::BUCKET,
       },
     };
@@ -1187,11 +1191,7 @@ mod tests {
     };
     let dict_cursor = LazyTxCursor {
       cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor {
-          bucket: &dict_bucket,
-          stack: vec![],
-          location: CursorLocation::Begin,
-        },
+        cursor: CoreCursor::new(&dict_bucket),
         leaf_flag: LeafFlag::empty(),
       },
     };
@@ -1246,20 +1246,16 @@ mod tests {
       stats: tx_stats.clone(),
       tx_id,
     };
-    let tx = LazyTxHandle { handle: core_tx };
+    let tx = sync::Arc::new(LazyTxHandle { handle: core_tx });
     let root = tx.read_node_page(root_page.into()).unwrap();
     let bucket = OnDiskBucket {
-      tx: &tx,
+      tx: tx.clone(),
       header: Default::default(),
       root,
     };
     let mut cursor = LazyTxCursor {
       cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor {
-          bucket: &bucket,
-          stack: vec![],
-          location: CursorLocation::Begin,
-        },
+        cursor: CoreCursor::new(&bucket),
         leaf_flag: LeafFlag::BUCKET,
       },
     };
@@ -1284,11 +1280,7 @@ mod tests {
     };
     let dict_cursor = LazyTxCursor {
       cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor {
-          bucket: &dict_bucket,
-          stack: vec![],
-          location: CursorLocation::Begin,
-        },
+        cursor: CoreCursor::new(&dict_bucket),
         leaf_flag: LeafFlag::empty(),
       },
     };
@@ -1340,20 +1332,16 @@ mod tests {
       stats: tx_stats.clone(),
       tx_id,
     };
-    let tx = RefTxHandle { handle: core_tx };
+    let tx = sync::Arc::new(RefTxHandle { handle: core_tx });
     let root = tx.read_node_page(root_page.into()).unwrap();
     let bucket = OnDiskBucket {
-      tx: &tx,
+      tx: tx.clone(),
       header: Default::default(),
       root,
     };
     let mut cursor = RefTxCursor {
       cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor {
-          bucket: &bucket,
-          stack: vec![],
-          location: CursorLocation::Begin,
-        },
+        cursor: CoreCursor::new(&bucket),
         leaf_flag: LeafFlag::BUCKET,
       },
     };
@@ -1378,11 +1366,7 @@ mod tests {
     };
     let dict_cursor = RefTxCursor {
       cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor {
-          bucket: &dict_bucket,
-          stack: vec![],
-          location: CursorLocation::Begin,
-        },
+        cursor: CoreCursor::new(&dict_bucket),
         leaf_flag: LeafFlag::empty(),
       },
     };
