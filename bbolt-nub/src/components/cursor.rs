@@ -622,7 +622,7 @@ where
           if self.leaf_flag == LeafFlag::BUCKET {
             Err(CursorError::ValueIsABucket.into())
           } else {
-            Err(CursorError::ValueIsABucket.into())
+            Err(CursorError::ValueIsBytes.into())
           }
         }
       }
@@ -644,7 +644,7 @@ where
           if self.leaf_flag == LeafFlag::BUCKET {
             Err(CursorError::ValueIsABucket.into())
           } else {
-            Err(CursorError::ValueIsABucket.into())
+            Err(CursorError::ValueIsBytes.into())
           }
         }
       }
