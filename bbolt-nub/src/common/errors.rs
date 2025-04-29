@@ -82,4 +82,6 @@ pub enum BucketError {
   ValueIsABucket,
   #[error("Bucket Error: GetError")]
   GetError,
+  #[error("Bucket Error: TruBuffKvError")]
+  TruBuffKvError,
 }

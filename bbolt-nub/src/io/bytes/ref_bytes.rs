@@ -2,7 +2,7 @@ use crate::common::errors::OpsError;
 use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::{SharedRefSlice, SharedTxSlice};
 use crate::io::bytes::{FromIOBytes, IOBytes, TxBytes};
-use crate::io::ops::{Buf, RefIntoCopiedIter};
+use crate::io::ops::Buf;
 use crate::io::pages::direct::ops::{DirectGet, KvDataType, KvEq, KvOrd};
 use crate::io::pages::lazy::ops::{KvTryEq, KvTryOrd, TryBuf, TryEq, TryPartialEq};
 use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice, SubRange};

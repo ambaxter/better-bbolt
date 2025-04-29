@@ -11,70 +11,9 @@ use std::ops::{Range, RangeBounds};
 use std::{io, slice};
 
 use crate::io::pages::lazy::ops::{
-  RefIntoTryBuf, RefIntoTryCopiedIter, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
+  RefIntoTryBuf, TryBuf, TryGet, TryHash, TryPartialEq, TryPartialOrd,
 };
 pub use bytes::Buf;
-
-impl<T> RefIntoTryCopiedIter for T
-where
-  T: AsRef<[u8]>,
-{
-  type Error = OpsError;
-
-  fn ref_into_try_copied_iter<'a>(
-    &'a self,
-  ) -> crate::Result<
-    impl Iterator<Item = crate::Result<u8, Self::Error>> + DoubleEndedIterator + 'a,
-    Self::Error,
-  > {
-    Ok(self.as_ref().iter().copied().map(|b| Ok(b)))
-  }
-}
-
-impl RefIntoTryCopiedIter for [u8] {
-  type Error = OpsError;
-
-  fn ref_into_try_copied_iter<'a>(
-    &'a self,
-  ) -> crate::Result<
-    impl Iterator<Item = crate::Result<u8, Self::Error>> + DoubleEndedIterator + 'a,
-    Self::Error,
-  > {
-    Ok(self.as_ref().iter().copied().map(|b| Ok(b)))
-  }
-}
-
-pub trait RefIntoCopiedIter {
-  type Iter<'a>: Iterator<Item = u8> + DoubleEndedIterator + ExactSizeIterator + 'a
-  where
-    Self: 'a;
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a>;
-}
-
-impl<T> RefIntoCopiedIter for T
-where
-  T: AsRef<[u8]>,
-{
-  type Iter<'a>
-    = Copied<slice::Iter<'a, u8>>
-  where
-    Self: 'a;
-
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
-    self.as_ref().iter().copied()
-  }
-}
-
-impl RefIntoCopiedIter for [u8] {
-  type Iter<'a>
-    = Copied<slice::Iter<'a, u8>>
-  where
-    Self: 'a;
-  #[inline]
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
-    self.iter().copied()
-  }
-}
 
 impl<T> TryHash for T
 where
@@ -82,14 +21,14 @@ where
 {
   type Error = OpsError;
 
-  fn try_hash<H: Hasher>(&self, state: &mut H) -> Result<(), Self::Error> {
+  fn try_hash<H: Hasher>(&self, state: &mut H) -> crate::Result<(), Self::Error> {
     Ok(self.as_ref().hash(state))
   }
 }
 
 impl TryHash for [u8] {
   type Error = OpsError;
-  fn try_hash<H: Hasher>(&self, state: &mut H) -> Result<(), Self::Error> {
+  fn try_hash<H: Hasher>(&self, state: &mut H) -> crate::Result<(), Self::Error> {
     Ok(self.hash(state))
   }
 }

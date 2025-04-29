@@ -1,4 +1,4 @@
-use crate::io::ops::{RefIntoBuf, RefIntoCopiedIter};
+use crate::io::ops::RefIntoBuf;
 use std::hash::Hash;
 use std::ops::RangeBounds;
 
@@ -10,4 +10,4 @@ pub trait KvEq: Eq + PartialEq<[u8]> {}
 
 pub trait KvOrd: Ord + PartialOrd<[u8]> + KvEq {}
 
-pub trait KvDataType: KvOrd + Hash + DirectGet<u8> + RefIntoCopiedIter + RefIntoBuf {}
+pub trait KvDataType: KvOrd + Hash + DirectGet<u8> + RefIntoBuf {}

@@ -3,18 +3,6 @@ use std::cmp::Ordering;
 use std::error::Error;
 use std::hash::Hasher;
 
-pub trait RefIntoTryCopiedIter {
-  type Error: Error + Send + Sync + 'static;
-
-  // TODO: Impl trait is not allowed for associated types. Fix this when possible
-  fn ref_into_try_copied_iter<'a>(
-    &'a self,
-  ) -> crate::Result<
-    impl Iterator<Item = crate::Result<u8, Self::Error>> + DoubleEndedIterator + 'a,
-    Self::Error,
-  >;
-}
-
 pub trait TryGet<T> {
   type Error: Error + Send + Sync + 'static;
 
@@ -24,7 +12,7 @@ pub trait TryGet<T> {
 pub trait TryHash {
   type Error: Error + Send + Sync + 'static;
 
-  fn try_hash<H: Hasher>(&self, state: &mut H) -> Result<(), Self::Error>;
+  fn try_hash<H: Hasher>(&self, state: &mut H) -> crate::Result<(), Self::Error>;
 }
 
 pub trait TryBuf: Sized {
@@ -92,7 +80,4 @@ pub trait KvTryEq: TryEq + TryPartialEq<[u8]> {}
 
 pub trait KvTryOrd: TryPartialOrd + TryPartialOrd<[u8]> + KvTryEq {}
 
-pub trait KvTryDataType:
-  KvTryOrd + TryHash + TryGet<u8> + RefIntoTryCopiedIter + RefIntoTryBuf + Sized
-{
-}
+pub trait KvTryDataType: KvTryOrd + TryHash + TryGet<u8> + RefIntoTryBuf + Sized {}

@@ -3,7 +3,7 @@ use crate::common::id::OverflowPageId;
 use crate::io::TxSlot;
 use crate::io::bytes::shared_bytes::SharedTxBytes;
 use crate::io::ops::RefIntoBuf;
-use crate::io::pages::lazy::ops::{LazyRefIntoTryBuf, RefIntoTryCopiedIter, TryBuf};
+use crate::io::pages::lazy::ops::{LazyRefIntoTryBuf, TryBuf};
 use crate::io::pages::lazy::ref_slice::LazyRefTryBuf;
 use crate::io::pages::lazy::tx_slice::LazyTxSlice;
 use crate::io::pages::{
@@ -198,19 +198,6 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> ExactSizeIterator for LazyTryIter<'a
   #[inline]
   fn len(&self) -> usize {
     self.range.len()
-  }
-}
-
-impl<'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> RefIntoTryCopiedIter for LazyRefSlice<'p, 'tx, L> {
-  type Error = PageError;
-
-  fn ref_into_try_copied_iter<'a>(
-    &'a self,
-  ) -> crate::Result<
-    impl Iterator<Item = crate::Result<u8, Self::Error>> + DoubleEndedIterator + 'a,
-    Self::Error,
-  > {
-    LazyTryIter::new(self.page, self.range.clone())
   }
 }
 

@@ -1,5 +1,4 @@
 use crate::common::errors::{OpsError, PageError};
-use crate::io::ops::RefIntoCopiedIter;
 use crate::io::pages::lazy::ops::{
   KvTryDataType, KvTryEq, KvTryOrd, LazyRefIntoTryBuf, RefIntoTryBuf, TryBuf, TryEq, TryGet,
   TryHash, TryPartialEq, TryPartialOrd,
@@ -84,22 +83,10 @@ impl<'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> GetGatKvRefSlice for LazyRefSlice<'p
   }
 }
 
-impl<'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> RefIntoCopiedIter for LazyRefSlice<'p, 'tx, L> {
-  type Iter<'a>
-    = LazyIter<'a, 'tx, L>
-  where
-    Self: 'a;
-
-  #[inline]
-  fn ref_into_copied_iter<'a>(&'a self) -> Self::Iter<'a> {
-    LazyIter::new(self.page, self.range.clone())
-  }
-}
-
 impl<'p, 'tx, L: TxReadLazyPageIO<'tx>> TryHash for LazyRefSlice<'p, 'tx, L> {
   type Error = OpsError;
 
-  fn try_hash<H: hash::Hasher>(&self, state: &mut H) -> Result<(), Self::Error> {
+  fn try_hash<H: hash::Hasher>(&self, state: &mut H) -> crate::Result<(), Self::Error> {
     todo!()
   }
 }

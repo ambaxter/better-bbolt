@@ -4,7 +4,6 @@ use crate::common::layout::page::PageHeader;
 use crate::io::TxSlot;
 use crate::io::backends::IOPageReader;
 use crate::io::bytes::TxBytes;
-use crate::io::ops::RefIntoCopiedIter;
 use crate::io::pages::direct::ops::KvDataType;
 use crate::io::pages::types::freelist::FreelistPage;
 use crate::io::pages::types::meta::MetaPage;
