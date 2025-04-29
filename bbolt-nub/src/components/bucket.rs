@@ -1,10 +1,9 @@
-use crate::common::data_pool::SharedData;
+use crate::common::data_pool::{DataPool, SharedData};
 use crate::common::errors::{BucketError, CursorError};
 use crate::common::layout::bucket::BucketHeader;
 use crate::common::layout::node::LeafFlag;
-use crate::components::cursor::{
-  CoreCursor, CoreCursorApi, CoreCursorSeekApi, LeafFlagFilterCursor, StackEntry,
-};
+use crate::common::vec_pool::{UniqueVec, VecPool};
+use crate::components::cursor::{CoreCursor, CoreCursorApi, CoreCursorSeekApi, CoreCursorTrySeekApi, LeafFlagFilterCursor, StackEntry};
 use crate::components::tx::{TheMutTx, TheTx};
 use crate::io::pages::lazy::ops::TryPartialOrd;
 use crate::io::pages::types::node::{HasKeys, NodePage};
@@ -20,6 +19,7 @@ use std::sync;
 
 pub struct OnDiskBucket<B, L, TX> {
   pub(crate) tx: sync::Arc<TX>,
+  pub(crate) stack_pool: VecPool<StackEntry<B, L>>,
   pub(crate) header: BucketHeader,
   pub(crate) root: NodePage<B, L>,
 }
@@ -39,7 +39,8 @@ where
   fn get(
     &self, key: &[u8],
   ) -> crate::Result<Option<<TX::LeafType as HasKeys<'tx>>::TxKv>, BucketError> {
-    let core_cursor = CoreCursor::new(self);
+    let stack = self.stack_pool.pop();
+    let core_cursor = CoreCursor::new_with_stack(self, stack);
     let mut c = LeafFlagFilterCursor::new(core_cursor, LeafFlag::default());
     match c.seek(key) {
       Ok(v) => Ok(v.map(|_| c.value()).flatten()),
@@ -62,8 +63,20 @@ where
 {
   fn try_get(
     &self, key: &[u8],
-  ) -> crate::Result<<TX::LeafType as HasKeys<'tx>>::TxKv, BucketError> {
-    todo!()
+  ) -> crate::Result<Option<<TX::LeafType as HasKeys<'tx>>::TxKv>, BucketError> {
+    let stack = self.stack_pool.pop();
+    let core_cursor = CoreCursor::new_with_stack(self, stack);
+    let mut c = LeafFlagFilterCursor::new(core_cursor, LeafFlag::default());
+    match c.try_seek(key) {
+      Ok(v) => Ok(v.map(|_| c.value()).flatten()),
+      Err(err) => {
+        let e = match err.current_context() {
+          CursorError::ValueIsABucket => err.change_context(BucketError::ValueIsABucket),
+          _ => err.change_context(BucketError::GetError),
+        };
+        Err(e)
+      }
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 use crate::common::data_pool::SharedData;
 use crate::common::errors::CursorError;
 use crate::common::layout::node::LeafFlag;
+use crate::common::vec_pool::UniqueVec;
 use crate::components::bucket::OnDiskBucket;
 use crate::components::tx::{TheLazyTx, TheTx};
 use crate::io::TxSlot;
@@ -127,7 +128,7 @@ pub trait CoreCursorApi<'tx>: CoreCursorMoveApi {
 pub struct CoreCursor<'tx, B, L, TX> {
   tx: sync::Arc<TX>,
   root: NodePage<B, L>,
-  stack: Vec<StackEntry<B, L>>,
+  stack: UniqueVec<StackEntry<B, L>>,
   location: CursorLocation,
   tx_slot: TxSlot<'tx>,
 }
@@ -136,20 +137,9 @@ impl<'tx, TX> CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>
 where
   TX: TheTx<'tx>,
 {
-  pub fn new(bucket: &OnDiskBucket<TX::BranchType, TX::LeafType, TX>) -> Self {
-    bucket.tx.stats().inc_cursor_count(1);
-    Self {
-      tx: bucket.tx.clone(),
-      root: bucket.root.clone(),
-      stack: vec![],
-      location: CursorLocation::Begin,
-      tx_slot: TxSlot::default(),
-    }
-  }
-
   pub fn new_with_stack(
     bucket: &OnDiskBucket<TX::BranchType, TX::LeafType, TX>,
-    stack: Vec<StackEntry<TX::BranchType, TX::LeafType>>,
+    stack: UniqueVec<StackEntry<TX::BranchType, TX::LeafType>>,
   ) -> Self {
     bucket.tx.stats().inc_cursor_count(1);
     Self {

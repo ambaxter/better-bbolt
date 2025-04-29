@@ -3,6 +3,7 @@ use crate::common::data_pool::{DataPool, SharedData};
 use crate::common::errors::{DiskReadError, PageError, TxError};
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId, TxId};
 use crate::common::layout::meta::Meta;
+use crate::common::vec_pool::VecPool;
 use crate::components::bucket::{BucketDelta, OnDiskBucket, ValueDelta};
 use crate::components::bucket_path::BucketPathBuf;
 use crate::io::TxSlot;
