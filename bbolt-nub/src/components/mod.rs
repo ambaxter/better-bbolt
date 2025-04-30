@@ -5,4 +5,6 @@ pub mod iter;
 pub mod tx;
 
 pub mod backend;
-mod bucket_path;
+pub mod bucket_path;
+
+pub mod free_index;

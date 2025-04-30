@@ -35,3 +35,4 @@ tracing.workspace = true
 error-stack.workspace = true
 rayon = {workspace = true}
 bytes.workspace = true
+rangemap.workspace = true

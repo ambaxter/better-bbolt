@@ -1,7 +1,7 @@
 use crate::common::layout::page::PageFlag;
 use bytemuck::{Pod, Zeroable};
 use std::fmt::Debug;
-use std::ops::{Add, Deref};
+use std::ops::{Add, AddAssign, Deref};
 // TODO: Clean this up once I'm done making sure everything is as it needs to be!
 
 pub trait DbId {
@@ -16,6 +16,22 @@ impl DbId for DiskPageId {
   #[inline]
   fn of(id: u64) -> Self {
     Self(id)
+  }
+}
+
+impl Add<u64> for DiskPageId {
+  type Output = DiskPageId;
+
+  #[inline]
+  fn add(self, rhs: u64) -> Self::Output {
+    DiskPageId(self.0 + rhs)
+  }
+}
+
+impl AddAssign<u64> for DiskPageId {
+  #[inline]
+  fn add_assign(&mut self, rhs: u64) {
+    self.0 += rhs
   }
 }
 
@@ -154,8 +170,11 @@ pub enum OverflowPageId {
 
 pub trait DiskPageTranslator: Debug + Clone {
   fn meta(&self) -> DiskPageId;
-  fn freelist(&self, page_id: FreelistPageId) -> DiskPageId;
-  fn node(&self, page_id: NodePageId) -> DiskPageId;
+  fn freelist_to_disk(&self, page_id: FreelistPageId) -> DiskPageId;
+  fn node_to_disk(&self, page_id: NodePageId) -> DiskPageId;
+
+  fn disk_to_freelist(&self, disk_page_id: DiskPageId) -> FreelistPageId;
+  fn disk_to_node(&self, disk_page_id: DiskPageId) -> NodePageId;
 }
 
 pub trait SupportsContigPages {}
@@ -179,13 +198,21 @@ impl DiskPageTranslator for DirectPageTranslator {
   }
 
   #[inline]
-  fn freelist(&self, page_id: FreelistPageId) -> DiskPageId {
+  fn freelist_to_disk(&self, page_id: FreelistPageId) -> DiskPageId {
     DiskPageId(page_id.0.0)
   }
 
   #[inline]
-  fn node(&self, page_id: NodePageId) -> DiskPageId {
+  fn node_to_disk(&self, page_id: NodePageId) -> DiskPageId {
     DiskPageId(page_id.0.0)
+  }
+  #[inline]
+  fn disk_to_freelist(&self, disk_page_id: DiskPageId) -> FreelistPageId {
+    FreelistPageId(DbPageId(disk_page_id.0))
+  }
+  #[inline]
+  fn disk_to_node(&self, disk_page_id: DiskPageId) -> NodePageId {
+    NodePageId(DbPageId(disk_page_id.0))
   }
 }
 
@@ -221,7 +248,7 @@ impl DiskPageTranslator for StableFreeSpaceTranslator {
     DiskPageId(self.tx_id.meta_offset())
   }
 
-  fn freelist(&self, page_id: FreelistPageId) -> DiskPageId {
+  fn freelist_to_disk(&self, page_id: FreelistPageId) -> DiskPageId {
     let meta_offset = self.tx_id.meta_offset();
     let freespace_cluster_len = self.freespace_cluster_len as u64;
     let data_cluster_idx = page_id.0.0 / freespace_cluster_len;
@@ -235,7 +262,7 @@ impl DiskPageTranslator for StableFreeSpaceTranslator {
     DiskPageId(freespace_disk_id)
   }
 
-  fn node(&self, page_id: NodePageId) -> DiskPageId {
+  fn node_to_disk(&self, page_id: NodePageId) -> DiskPageId {
     let freespace_cluster_len = self.freespace_cluster_len as u64;
     let data_cluster_idx = page_id.0.0 / self.page_size as u64;
     let node_offset = page_id.0.0 % self.page_size as u64;
@@ -244,6 +271,14 @@ impl DiskPageTranslator for StableFreeSpaceTranslator {
       data_cluster_idx * cluster_len; // the data pages for each cluster;
     let node_disk_id = disk_offset + (2 * freespace_cluster_len) + node_offset;
     DiskPageId(node_disk_id)
+  }
+
+  fn disk_to_freelist(&self, disk_page_id: DiskPageId) -> FreelistPageId {
+    todo!("I definitely do not remember what I was planning :D")
+  }
+
+  fn disk_to_node(&self, disk_page_id: DiskPageId) -> NodePageId {
+    todo!("I definitely do not remember what I was planning :D")
   }
 }
 
@@ -260,8 +295,8 @@ mod tests {
   fn test() {
     let tr = DirectPageTranslator::new(TxId::of(1));
     let meta = tr.meta();
-    let freelist_page = tr.freelist(FreelistPageId::of(2));
-    let node_page = tr.node(NodePageId::of(3));
+    let freelist_page = tr.freelist_to_disk(FreelistPageId::of(2));
+    let node_page = tr.node_to_disk(NodePageId::of(3));
     println!("{:#?}", meta);
   }
 
@@ -269,11 +304,11 @@ mod tests {
   fn test2() {
     let tr = StableFreeSpaceTranslator::new(TxId::of(1), 2, 4096);
     let meta = tr.meta();
-    let f0 = tr.freelist(FreelistPageId::of(0));
-    let f1 = tr.freelist(FreelistPageId::of(1));
-    let f2 = tr.freelist(FreelistPageId::of(2));
-    let f3 = tr.freelist(FreelistPageId::of(3));
-    let node_page = tr.node(NodePageId::of(0));
+    let f0 = tr.freelist_to_disk(FreelistPageId::of(0));
+    let f1 = tr.freelist_to_disk(FreelistPageId::of(1));
+    let f2 = tr.freelist_to_disk(FreelistPageId::of(2));
+    let f3 = tr.freelist_to_disk(FreelistPageId::of(3));
+    let node_page = tr.node_to_disk(NodePageId::of(0));
     println!("{:#?}", meta);
   }
 }
