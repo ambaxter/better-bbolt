@@ -36,3 +36,4 @@ error-stack.workspace = true
 rayon = {workspace = true}
 bytes.workspace = true
 rangemap.workspace = true
+bon.workspace = true

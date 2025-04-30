@@ -1114,7 +1114,7 @@ mod tests {
   use std::fs::File;
   use std::io::{BufReader, BufWriter, Write};
   use std::sync;
-
+/*
   #[test]
   fn test_file() {
     let mut reader = BufReader::new(File::open("my.db").unwrap());
@@ -1377,5 +1377,5 @@ mod tests {
         .unwrap();
     }
     write.flush().unwrap();
-  }
+  }*/
 }

@@ -85,3 +85,9 @@ pub enum BucketError {
   #[error("Bucket Error: TruBuffKvError")]
   TruBuffKvError,
 }
+
+#[derive(Debug, Error)]
+pub enum DbError {
+  #[error("DBError: Unspecified Failure")]
+  Failure,
+}
