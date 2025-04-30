@@ -76,32 +76,56 @@ where
       (Some(left_entry), None) => Some(left_entry),
       (None, None) => None,
     };
-    let left_range = DiskPageId(0)..desired;
-    let right_range = desired..self.current_eof.0;
-    let single_entry = if len == 1 {
-      let left_entry = self.singles.range(left_range.clone()).rev().next().copied();
-      let right_entry = self.singles.range(right_range.clone()).next().copied();
-      min_option(left_entry, right_entry)
-    } else {
-      None
+
+    let single_search = || {
+      if len == 1 {
+        let (left_entry, right_entry) = rayon::join(
+          || {
+            self
+              .singles
+              .range(DiskPageId(0)..desired)
+              .rev()
+              .next()
+              .copied()
+          },
+          || {
+            self
+              .singles
+              .range(desired..self.current_eof.0)
+              .next()
+              .copied()
+          },
+        );
+        min_option(left_entry, right_entry)
+      } else {
+        None
+      }
     };
 
-    let range_entry = {
-      let left_entry = self
-        .ranges
-        .overlapping(left_range)
-        .rev()
-        .filter(|range| range.end.0 - range.start.0 >= len)
-        .map(|range| range.start)
-        .next();
-      let right_entry = self
-        .ranges
-        .overlapping(right_range)
-        .filter(|range| range.end.0 - range.start.0 >= len)
-        .map(|range| range.start)
-        .next();
+    let range_search = || {
+      let (left_entry, right_entry) = rayon::join(
+        || {
+          self
+            .ranges
+            .overlapping(DiskPageId(0)..desired)
+            .rev()
+            .filter(|range| range.end.0 - range.start.0 >= len)
+            .map(|range| range.start)
+            .next()
+        },
+        || {
+          self
+            .ranges
+            .overlapping(desired..self.current_eof.0)
+            .filter(|range| range.end.0 - range.start.0 >= len)
+            .map(|range| range.start)
+            .next()
+        },
+      );
       min_option(left_entry, right_entry)
     };
+
+    let (single_entry, range_entry) = rayon::join(single_search, range_search);
 
     match (single_entry, range_entry) {
       (Some(single_entry), Some(range_entry)) => {
