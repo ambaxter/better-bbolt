@@ -9,7 +9,8 @@ pub struct FreeIndex<T> {
   page_translator: T,
   ranges: RangeSet<DiskPageId>,
   singles: BTreeSet<DiskPageId>,
-  eof_page_id: EOFPageId,
+  original_eof: EOFPageId,
+  current_eof: EOFPageId,
 }
 
 impl<D> FreeIndex<D>
@@ -33,13 +34,23 @@ where
       page_translator,
       ranges,
       singles,
-      eof_page_id,
+      original_eof: eof_page_id,
+      current_eof: eof_page_id,
     }
   }
 
   #[inline]
-  pub fn eof(&self) -> EOFPageId {
-    self.eof_page_id
+  pub fn original_eof(&self) -> EOFPageId {
+    self.original_eof
+  }
+
+  #[inline]
+  pub fn current_eof(&self) -> EOFPageId {
+    self.current_eof
+  }
+
+  pub fn required_file_growth(&self) -> u64 {
+    self.current_eof.0.0 - self.original_eof.0.0
   }
 
   pub fn assign_node(&mut self, desired: NodePageId, len: u64) -> NodePageId {
@@ -66,7 +77,7 @@ where
       (None, None) => None,
     };
     let left_range = DiskPageId(0)..desired;
-    let right_range = desired..self.eof_page_id.0;
+    let right_range = desired..self.current_eof.0;
     let single_entry = if len == 1 {
       let left_entry = self.singles.range(left_range.clone()).rev().next().copied();
       let right_entry = self.singles.range(right_range.clone()).next().copied();
@@ -92,13 +103,29 @@ where
       min_option(left_entry, right_entry)
     };
 
-    match min_option(single_entry, range_entry) {
-      None => {
-        let new_disk_page = self.eof_page_id.0;
-        self.eof_page_id.0 += len;
+    match (single_entry, range_entry) {
+      (Some(single_entry), Some(range_entry)) => {
+        if single_entry.0 - desired.0 <= range_entry.0 - desired.0 {
+          self.singles.remove(&single_entry);
+          single_entry
+        } else {
+          self.ranges.remove(range_entry..range_entry + len);
+          range_entry
+        }
+      }
+      (Some(single_entry), None) => {
+        self.singles.remove(&single_entry);
+        single_entry
+      }
+      (None, Some(range_entry)) => {
+        self.ranges.remove(range_entry..range_entry + len);
+        range_entry
+      }
+      (None, None) => {
+        let new_disk_page = self.current_eof.0;
+        self.current_eof.0 += len;
         new_disk_page
       }
-      Some(disk_page_id) => disk_page_id,
     }
   }
 }
