@@ -1,4 +1,4 @@
-use crate::common::errors::DiskReadError;
+use crate::common::errors::DiskError;
 use crate::common::id::DiskPageId;
 use crate::common::layout::meta::HeaderMetaPage;
 use bytemuck::bytes_of_mut;
@@ -68,12 +68,10 @@ impl MetaReader {
     }
   }
 
-  pub fn determine_file_meta(mut self) -> crate::Result<HeaderMetaPage, DiskReadError> {
-    let meta_page = self
-      .check_metadata()
-      .change_context(DiskReadError::MetaError)?;
+  pub fn determine_file_meta(mut self) -> crate::Result<HeaderMetaPage, DiskError> {
+    let meta_page = self.check_metadata().change_context(DiskError::MetaError)?;
     match meta_page {
-      None => Err(DiskReadError::MetaError.into()),
+      None => Err(DiskError::MetaError.into()),
       Some(meta) => Ok(meta),
     }
   }

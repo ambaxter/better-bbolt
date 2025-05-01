@@ -1,7 +1,7 @@
 use crate::common::id::{
   DbPageId, DiskPageId, EOFPageId, FreelistPageId, MetaPageId, NodePageId, OverflowPageId,
 };
-use crate::common::layout::page::PageFlag;
+use crate::common::layout::page::{PageFlag, PageHeader};
 use crate::io::pages::types::freelist::FreelistPage;
 use std::path::PathBuf;
 use thiserror::Error;
@@ -29,7 +29,7 @@ pub enum PageError {
 }
 
 #[derive(Debug, Error)]
-pub enum DiskReadError {
+pub enum DiskError {
   #[error("ReadError: Unable to open file at `{0:?}`.")]
   OpenError(PathBuf),
   #[error("ReadError: Unable to understand file metadata.")]
@@ -38,6 +38,8 @@ pub enum DiskReadError {
   UnexpectedEOF(DiskPageId, EOFPageId),
   #[error("ReadError: Read at `{0:?}`.")]
   ReadError(DiskPageId),
+  #[error("WriteError: Writing at `{0:?}`.")]
+  PageWriteError(PageHeader),
 }
 
 #[derive(Debug, Error)]

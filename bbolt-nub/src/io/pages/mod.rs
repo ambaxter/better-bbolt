@@ -1,4 +1,4 @@
-use crate::common::errors::{DiskReadError, PageError};
+use crate::common::errors::{DiskError, PageError};
 use crate::common::id::{FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
 use crate::io::TxSlot;
@@ -159,9 +159,9 @@ pub trait TxReadLoadedPageIO<'tx>: TxReadPageIO<'tx> {}
 pub trait TxReadLazyPageIO<'tx>: TxReadPageIO<'tx> {
   fn read_freelist_overflow(
     &self, freelist_page_id: FreelistPageId, overflow: u32,
-  ) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskReadError>;
+  ) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskError>;
 
   fn read_node_overflow(
     &self, node_page_id: NodePageId, overflow: u32,
-  ) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskReadError>;
+  ) -> crate::Result<<Self::TxPageType as TxPageType<'tx>>::TxPageBytes, DiskError>;
 }
