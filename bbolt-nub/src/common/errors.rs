@@ -38,6 +38,8 @@ pub enum DiskError {
   UnexpectedEOF(DiskPageId, EOFPageId),
   #[error("ReadError: Read at `{0:?}`.")]
   ReadError(DiskPageId),
+  #[error("ReadError: Write at `{0:?}`.")]
+  WriteError(DiskPageId),
   #[error("WriteError: Writing at `{0:?}`.")]
   PageWriteError(PageHeader),
 }

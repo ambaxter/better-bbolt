@@ -20,6 +20,14 @@ use std::sync::Arc;
 pub mod channel_store;
 
 pub mod file;
+
+#[cfg(target_family = "unix")]
+pub mod p_file;
+
+#[cfg(target_os = "linux")]
+#[cfg(feature = "io_uring")]
+pub mod io_uring;
+
 pub mod memmap;
 pub mod meta_reader;
 
@@ -29,13 +37,14 @@ pub trait WriteablePage {
 }
 
 pub trait BackendableBackendWritePageDamnit: BufMut {
-  fn write(self) -> Result<usize, DiskError>;
+  fn write(self) -> crate::Result<usize, DiskError>;
 }
 
 pub trait IOWriter {
   fn page_size(&self) -> usize;
-  fn write_single_page(&self, disk_page_id: DiskPageId, page: SharedBytes)
-  -> Result<(), DiskError>;
+  fn write_single_page(
+    &self, disk_page_id: DiskPageId, page: SharedBytes,
+  ) -> crate::Result<(), DiskError>;
 }
 
 pub trait IOReader {
@@ -250,13 +259,45 @@ where
 impl<R> RHandler<R> {}
 
 pub struct RWHandler<R, W> {
-  r: RHandler<R>,
+  reader: RHandler<R>,
   w: W,
 }
 
 impl<R, W> RWHandler<R, W> {
   pub fn flush(&mut self) -> crate::Result<(), io::Error> {
-    self.r.lock.flush()?;
+    self.reader.lock.flush()?;
     Ok(())
+  }
+}
+
+impl<R, W> IOPageReader for RWHandler<R, W>
+where
+  R: IOPageReader,
+{
+  type Bytes = R::Bytes;
+
+  delegate! {
+      to self.reader {
+        fn read_meta_page(&self, meta_page_id: MetaPageId)
+      -> crate::Result<Self::Bytes, DiskError>;
+        fn read_freelist_page(&self, freelist_page_id: FreelistPageId)
+      -> crate::Result<Self::Bytes, DiskError>;
+        fn read_node_page(&self, node_page_id: NodePageId)
+      -> crate::Result<Self::Bytes, DiskError>;
+    }
+  }
+}
+
+impl<R, W> IOOverflowPageReader for RWHandler<R, W>
+where
+  R: IOOverflowPageReader,
+{
+  delegate! {
+    to self.reader {
+        fn read_freelist_overflow(&self, freelist_page_id: FreelistPageId, overflow: u32,)
+      -> crate::Result<Self::Bytes, DiskError>;
+        fn read_node_overflow(&self, node_page_id: NodePageId, overflow: u32,)
+      -> crate::Result<Self::Bytes, DiskError>;
+    }
   }
 }

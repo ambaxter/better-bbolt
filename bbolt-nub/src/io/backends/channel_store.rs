@@ -1,4 +1,5 @@
 use crossbeam_channel::{Receiver, RecvError, Sender, TryRecvError, TrySendError};
+use std::borrow::Borrow;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -19,6 +20,12 @@ impl<T> Deref for ChannelEntry<T> {
 impl<T> DerefMut for ChannelEntry<T> {
   fn deref_mut(&mut self) -> &mut Self::Target {
     self.t.as_mut().unwrap()
+  }
+}
+
+impl<T> Borrow<T> for ChannelEntry<T> {
+  fn borrow(&self) -> &T {
+    &self.t
   }
 }
 

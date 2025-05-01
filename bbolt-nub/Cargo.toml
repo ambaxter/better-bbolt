@@ -8,6 +8,7 @@ description = "The Rust port Bolt database. Core functionality and types"
 [features]
 default = []
 mt_search = []
+io_uring = ["dep:io-uring"]
 
 [dependencies]
 parking_lot.workspace = true
@@ -37,3 +38,4 @@ rayon = {workspace = true}
 bytes.workspace = true
 rangemap.workspace = true
 bon.workspace = true
+io-uring = {workspace = true, optional = true}

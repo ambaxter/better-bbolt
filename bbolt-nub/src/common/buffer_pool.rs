@@ -4,6 +4,7 @@ use size::Size;
 use std::cmp::Ordering;
 use std::collections::Bound;
 use std::fmt::Debug;
+use std::fs::File;
 use std::iter::Copied;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, Range, RangeBounds};
@@ -54,6 +55,23 @@ impl UniqueBuffer {
     };
     let shared = unique.shareable();
 
+    Ok(SharedBytes {
+      inner: Some(shared),
+    })
+  }
+
+  #[cfg(target_family = "unix")]
+  pub fn read_exact_at_and_share(self, file: &File, offset: u64) -> io::Result<SharedBytes> {
+    use std::os::unix::fs::FileExt;
+    let mut unique = match self {
+      UniqueBuffer::Uninit(mut uninit) => {
+        uninit.slice.as_out().fill(0);
+        unsafe { uninit.assume_init_slice_with_header() }
+      }
+      UniqueBuffer::Init(init) => init,
+    };
+    file.read_exact_at(&mut unique.slice, offset)?;
+    let shared = unique.shareable();
     Ok(SharedBytes {
       inner: Some(shared),
     })
