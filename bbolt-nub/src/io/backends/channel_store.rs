@@ -13,19 +13,19 @@ pub struct ChannelEntry<T> {
 impl<T> Deref for ChannelEntry<T> {
   type Target = T;
   fn deref(&self) -> &Self::Target {
-    self.t.as_ref().unwrap()
+    self.t.as_ref().expect("must not be dropped")
   }
 }
 
 impl<T> DerefMut for ChannelEntry<T> {
   fn deref_mut(&mut self) -> &mut Self::Target {
-    self.t.as_mut().unwrap()
+    self.t.as_mut().expect("must not be dropped")
   }
 }
 
 impl<T> Borrow<T> for ChannelEntry<T> {
   fn borrow(&self) -> &T {
-    &self.t
+    self.t.as_ref().expect("must not be dropped")
   }
 }
 

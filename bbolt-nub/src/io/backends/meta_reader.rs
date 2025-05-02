@@ -1,9 +1,9 @@
-use crate::common::errors::DiskError;
+use crate::common::errors::IOError;
 use crate::common::id::DiskPageId;
 use crate::common::layout::meta::HeaderMetaPage;
 use bytemuck::bytes_of_mut;
 use error_stack::ResultExt;
-use fs_err::File;
+use std::fs::File;
 use std::io;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 
@@ -68,10 +68,10 @@ impl MetaReader {
     }
   }
 
-  pub fn determine_file_meta(mut self) -> crate::Result<HeaderMetaPage, DiskError> {
-    let meta_page = self.check_metadata().change_context(DiskError::MetaError)?;
+  pub fn determine_file_meta(mut self) -> crate::Result<HeaderMetaPage, IOError> {
+    let meta_page = self.check_metadata().change_context(IOError::MetaError)?;
     match meta_page {
-      None => Err(DiskError::MetaError.into()),
+      None => Err(IOError::MetaError.into()),
       Some(meta) => Ok(meta),
     }
   }

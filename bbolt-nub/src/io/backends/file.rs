@@ -1,8 +1,8 @@
 use crate::common::buffer_pool::BufferPool;
-use crate::common::errors::DiskError;
+use crate::common::errors::IOError;
 use crate::common::id::DiskPageId;
-use crate::io::backends::IOReader;
 use crate::io::backends::channel_store::ChannelStore;
+use crate::io::backends::{IOBackend, IOCore, IOReader, IOType, ROShell};
 use crate::io::bytes::shared_bytes::SharedBytes;
 use crossbeam_channel::{Receiver, Sender};
 use error_stack::ResultExt;
@@ -11,102 +11,152 @@ use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::ops::DerefMut;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-pub struct SingleFileReader {
-  path: PathBuf,
-  file: Mutex<BufReader<File>>,
+#[derive(Debug, Clone)]
+pub struct FileReadOptions {
   buffer_pool: BufferPool,
-  page_size: usize,
 }
 
-impl SingleFileReader {
-  pub fn new<P: AsRef<Path>>(
-    path: P, page_size: usize, buffer_pool: BufferPool,
-  ) -> crate::Result<Self, DiskError> {
-    let file = File::open(&path)
-      .change_context_lazy(|| DiskError::OpenError(path.as_ref().to_path_buf()))?;
-    let reader = BufReader::new(file);
-    Ok(SingleFileReader {
-      path: path.as_ref().to_path_buf(),
-      file: Mutex::new(reader),
-      buffer_pool,
-      page_size,
-    })
+#[derive(Debug, Clone)]
+pub struct FileWriteOptions {}
+
+pub struct SingleFileIO {
+  core: IOCore,
+  file: Mutex<BufReader<File>>,
+  buffer_pool: Option<BufferPool>,
+}
+
+impl IOBackend for SingleFileIO {
+  #[inline]
+  fn io_type(&self) -> IOType {
+    self.core.io_type
+  }
+
+  #[inline]
+  fn page_size(&self) -> usize {
+    self.core.page_size
   }
 }
 
-impl IOReader for SingleFileReader {
+impl IOReader for SingleFileIO {
   type Bytes = SharedBytes;
+  type ReadOptions = FileReadOptions;
 
-  fn page_size(&self) -> usize {
-    self.page_size
+  fn new_ro(
+    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
+  ) -> error_stack::Result<ROShell<Self>, IOError> {
+    let core = IOCore::new(path, page_size, IOType::RO);
+    let file = core.open_file()?;
+    Ok(ROShell::new(SingleFileIO {
+      core,
+      file: Mutex::new(BufReader::new(file)),
+      buffer_pool: Some(options.buffer_pool),
+    }))
   }
 
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_len: usize,
-  ) -> crate::Result<Self::Bytes, DiskError> {
-    let page_offset = disk_page_id.0 * self.page_size as u64;
+  ) -> crate::Result<Self::Bytes, IOError> {
+    let page_offset = disk_page_id.0 * self.core.page_size as u64;
     let mut lock = self.file.lock();
     lock
       .seek(SeekFrom::Start(page_offset))
       .and_then(|_| {
-        let mut buffer = self.buffer_pool.pop_with_len(page_len);
+        let mut buffer = self
+          .buffer_pool
+          .as_ref()
+          .expect("must be set to read")
+          .pop_with_len(page_len);
         buffer.read_exact_and_share(&mut *lock)
       })
-      .change_context(DiskError::ReadError(disk_page_id))
+      .change_context(IOError::ReadError(disk_page_id))
   }
 }
 
-pub struct MultiFileReader {
-  path: PathBuf,
-  channel_store: ChannelStore<BufReader<File>>,
+#[derive(Debug, Clone)]
+pub struct MultiFileReadOptions {
   buffer_pool: BufferPool,
-  page_size: usize,
+  reader_count: usize,
 }
 
-impl MultiFileReader {
-  pub fn new<P: AsRef<Path>>(
-    path: P, reader_count: usize, page_size: usize, buffer_pool: BufferPool,
-  ) -> crate::Result<Self, DiskError> {
-    let channel_store = ChannelStore::<BufReader<File>>::new_with_capacity(reader_count);
-    let path = path.as_ref().to_path_buf();
-    for _ in 0..reader_count {
-      let file = File::open(&path).change_context_lazy(|| DiskError::OpenError(path.clone()))?;
-      let reader = BufReader::new(file);
-      channel_store
-        .push(reader)
-        .change_context_lazy(|| DiskError::OpenError(path.clone()))?;
-    }
-    Ok(MultiFileReader {
-      path,
-      channel_store,
-      buffer_pool,
-      page_size,
-    })
+#[derive(Debug, Clone)]
+pub struct MultiFileWriteOptions {
+  writer_count: usize,
+}
+
+pub struct MultiFileIO {
+  core: IOCore,
+  read_channel: Option<ChannelStore<BufReader<File>>>,
+  write_channel: Option<ChannelStore<File>>,
+  buffer_pool: Option<BufferPool>,
+}
+
+impl IOBackend for MultiFileIO {
+  #[inline]
+  fn io_type(&self) -> IOType {
+    self.core.io_type
+  }
+
+  #[inline]
+  fn page_size(&self) -> usize {
+    self.core.page_size
   }
 }
 
-impl IOReader for MultiFileReader {
-  type Bytes = SharedBytes;
+impl MultiFileIO {
+  fn expect_read_resources(&self) -> (&ChannelStore<BufReader<File>>, &BufferPool) {
+    self
+      .read_channel
+      .as_ref()
+      .zip(self.buffer_pool.as_ref())
+      .expect("must be set to read")
+  }
 
-  fn page_size(&self) -> usize {
-    self.page_size
+  fn expect_write_resources(&self) -> &ChannelStore<File> {
+    self.write_channel
+      .as_ref().expect("must be set to write")
+  }
+}
+
+impl IOReader for MultiFileIO {
+  type Bytes = SharedBytes;
+  type ReadOptions = MultiFileReadOptions;
+
+  fn new_ro(
+    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
+  ) -> crate::Result<ROShell<Self>, IOError> {
+    let core = IOCore::new(path, page_size, IOType::RO);
+    let read_channel = ChannelStore::<BufReader<File>>::new_with_capacity(options.reader_count);
+    for _ in 0..options.reader_count {
+      let file = core.open_file()?;
+      let reader = BufReader::new(file);
+      read_channel
+        .push(reader)
+        .change_context_lazy(|| IOError::OpenError(core.path().into()))?;
+    }
+    Ok(ROShell::new(MultiFileIO {
+      core,
+      read_channel: Some(read_channel),
+      write_channel: None,
+      buffer_pool: Some(options.buffer_pool),
+    }))
   }
 
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_len: usize,
-  ) -> crate::Result<Self::Bytes, DiskError> {
-    let page_offset = disk_page_id.0 * self.page_size as u64;
-    let mut file = self
-      .channel_store
+  ) -> crate::Result<Self::Bytes, IOError> {
+    let page_offset = disk_page_id.0 * self.core.page_size as u64;
+    let (read_channel, buffer_pool) = self.expect_read_resources();
+    let mut file = read_channel
       .pop()
-      .change_context(DiskError::ReadError(disk_page_id))?;
+      .change_context(IOError::ReadError(disk_page_id))?;
     file
       .seek(SeekFrom::Start(page_offset))
       .and_then(|_| {
-        let mut buffer = self.buffer_pool.pop_with_len(page_len);
+        let mut buffer = buffer_pool.pop_with_len(page_len);
         buffer.read_exact_and_share(file.deref_mut())
       })
-      .change_context(DiskError::ReadError(disk_page_id))
+      .change_context(IOError::ReadError(disk_page_id))
   }
 }

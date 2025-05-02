@@ -20,11 +20,15 @@ pub struct RefBytes {
 }
 
 impl RefBytes {
-  pub(crate) fn from_ref(bytes: &[u8]) -> Self {
-    Self {
+  pub(crate) fn from_ref(bytes: &[u8]) -> RefBytes {
+    RefBytes {
       ptr: bytes.as_ptr(),
       len: bytes.len(),
     }
+  }
+
+  pub(crate) fn from_ptr_len(ptr: *const u8, len: usize) -> RefBytes {
+    RefBytes { ptr, len }
   }
 }
 

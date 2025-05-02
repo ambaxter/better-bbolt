@@ -1,4 +1,4 @@
-use crate::common::errors::DiskError;
+use crate::common::errors::IOError;
 use crate::common::id::{DiskPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
 use crate::io::bytes::IOBytes;
@@ -7,14 +7,14 @@ use crate::io::bytes::shared_bytes::SharedBytes;
 use crate::io::transmogrify::{TxContext, TxDirectContext};
 use bytes::BufMut;
 use delegate::delegate;
-use error_stack::Report;
-use fs_err::File;
+use error_stack::{Report, ResultExt};
 use moka::Entry;
 use moka::ops::compute::Op;
 use moka::sync::Cache;
+use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub mod channel_store;
@@ -46,42 +46,74 @@ pub struct IOCore {
   io_type: IOType,
 }
 
-pub trait IOBackend: Sized {
-  type ConfigOptions: Clone + Sized;
+impl IOCore {
+  pub fn new(path: Arc<PathBuf>, page_size: usize, io_type: IOType) -> Self {
+    IOCore {
+      path,
+      page_size,
+      io_type,
+    }
+  }
 
+  #[inline]
+  pub fn path(&self) -> &Path {
+    self.path.as_ref()
+  }
+
+  pub fn open_file(&self) -> crate::Result<File, IOError> {
+    let mut options = OpenOptions::new();
+    match self.io_type {
+      IOType::RO => options.read(true),
+      IOType::WO => options.write(true),
+      IOType::RW => options.read(true).write(true),
+    };
+    options
+      .open(self.path())
+      .change_context_lazy(|| IOError::OpenError(self.path().into()))
+  }
+}
+
+pub trait IOBackend: Sized {
   fn io_type(&self) -> IOType;
 
   fn page_size(&self) -> usize;
 
-  fn apply_length_update(&mut self, new_len: usize) -> crate::Result<(), DiskError>;
+  #[inline]
+  fn apply_length_update(&mut self, new_len: usize) -> crate::Result<(), IOError> {
+    Ok(())
+  }
 }
 
 pub trait WriteablePage {
   fn header(&self) -> &PageHeader;
-  fn write_out<B: BufMut>(self, mut_buf: &mut B) -> crate::Result<(), DiskError>;
+  fn write_out<B: BufMut>(self, mut_buf: &mut B) -> crate::Result<(), IOError>;
 }
 
 pub trait BackendableBackendWritePageDamnit: BufMut {
-  fn write(self) -> crate::Result<usize, DiskError>;
+  fn write(self) -> crate::Result<usize, IOError>;
 }
 
 pub trait IOWriter {
   fn page_size(&self) -> usize;
   fn write_single_page(
     &self, disk_page_id: DiskPageId, page: SharedBytes,
-  ) -> crate::Result<(), DiskError>;
+  ) -> crate::Result<(), IOError>;
 }
 
-pub trait IOReader {
+pub trait IOReader: IOBackend {
   type Bytes: IOBytes;
 
-  fn page_size(&self) -> usize;
+  type ReadOptions: Clone + Sized;
+
+  fn new_ro(
+    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
+  ) -> crate::Result<ROShell<Self>, IOError>;
 
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_len: usize,
-  ) -> crate::Result<Self::Bytes, DiskError>;
+  ) -> crate::Result<Self::Bytes, IOError>;
 
-  fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, DiskError> {
+  fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, IOError> {
     let page_size = self.page_size();
     let page_len = page_size;
     self.read_disk_page(disk_page_id, page_len)
@@ -89,8 +121,8 @@ pub trait IOReader {
 }
 
 pub trait ContigIOReader: IOReader {
-  fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, DiskError>;
-  fn read_contig_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, DiskError> {
+  fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, IOError>;
+  fn read_contig_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, IOError> {
     let page_size = self.page_size();
     let header = self.read_header(disk_page_id)?;
     let overflow = header.get_overflow();
@@ -109,19 +141,38 @@ impl<R> ROShell<R> {
   }
 }
 
+impl<R> IOBackend for ROShell<R>
+where
+  R: IOBackend,
+{
+  delegate! {
+      to self.read {
+          fn io_type(&self) -> IOType;
+          fn page_size(&self) -> usize;
+          fn apply_length_update(&mut self, new_len: usize) -> crate::Result<(), IOError>;
+      }
+  }
+}
 impl<R> IOReader for ROShell<R>
 where
   R: IOReader,
 {
   type Bytes = R::Bytes;
+  type ReadOptions = R::ReadOptions;
+
+  #[inline]
+  fn new_ro(
+    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
+  ) -> crate::Result<ROShell<Self>, IOError> {
+    R::new_ro(path, page_size, options)
+  }
 
   delegate! {
     to self.read {
-      fn page_size(&self) -> usize;
       fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_len: usize,
-  ) -> crate::Result<Self::Bytes, DiskError>;
-      fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, DiskError>;
+  ) -> crate::Result<Self::Bytes, IOError>;
+      fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, IOError>;
     }
   }
 }
@@ -147,19 +198,48 @@ impl<R, W> RWShell<R, W> {
   }
 }
 
+impl<R, W> IOBackend for RWShell<R, W>
+where
+  R: IOReader,
+  W: IOWriter,
+{
+  #[inline]
+  fn io_type(&self) -> IOType {
+    IOType::RW
+  }
+
+  #[inline]
+  fn page_size(&self) -> usize {
+    self.read.page_size()
+  }
+
+  fn apply_length_update(&mut self, new_len: usize) -> error_stack::Result<(), IOError> {
+    self.read.apply_length_update(new_len)?;
+    self.write.apply_length_update(new_len)
+  }
+}
+
 impl<R, W> IOReader for RWShell<R, W>
 where
   R: IOReader,
+  W: IOWriter,
 {
   type Bytes = R::Bytes;
+  type ReadOptions = R::ReadOptions;
+
+  #[inline]
+  fn new_ro(
+    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
+  ) -> crate::Result<ROShell<Self>, IOError> {
+    R::new_ro(path, page_size, options)
+  }
 
   delegate! {
     to self.read {
-      fn page_size(&self) -> usize;
       fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_len: usize,
-  ) -> crate::Result<Self::Bytes, DiskError>;
-      fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, DiskError>;
+  ) -> crate::Result<Self::Bytes, IOError>;
+      fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, IOError>;
     }
   }
 }
@@ -172,13 +252,13 @@ pub struct DirectReadHandler<T, I> {
 pub trait IOPageReader {
   type Bytes: IOBytes;
 
-  fn read_meta_page(&self, meta_page_id: MetaPageId) -> crate::Result<Self::Bytes, DiskError>;
+  fn read_meta_page(&self, meta_page_id: MetaPageId) -> crate::Result<Self::Bytes, IOError>;
 
   fn read_freelist_page(
     &self, freelist_page_id: FreelistPageId,
-  ) -> crate::Result<Self::Bytes, DiskError>;
+  ) -> crate::Result<Self::Bytes, IOError>;
 
-  fn read_node_page(&self, node_page_id: NodePageId) -> crate::Result<Self::Bytes, DiskError>;
+  fn read_node_page(&self, node_page_id: NodePageId) -> crate::Result<Self::Bytes, IOError>;
 }
 
 impl<T, I> IOPageReader for DirectReadHandler<T, I>
@@ -188,19 +268,19 @@ where
 {
   type Bytes = I::Bytes;
 
-  fn read_meta_page(&self, meta_page_id: MetaPageId) -> crate::Result<Self::Bytes, DiskError> {
+  fn read_meta_page(&self, meta_page_id: MetaPageId) -> crate::Result<Self::Bytes, IOError> {
     let disk_page_id = self.tx_context.trans_meta_id(meta_page_id);
     self.io.read_contig_page(disk_page_id)
   }
 
   fn read_freelist_page(
     &self, freelist_page_id: FreelistPageId,
-  ) -> crate::Result<Self::Bytes, DiskError> {
+  ) -> crate::Result<Self::Bytes, IOError> {
     let disk_page_id = self.tx_context.trans_freelist_id(freelist_page_id);
     self.io.read_contig_page(disk_page_id)
   }
 
-  fn read_node_page(&self, node_page_id: NodePageId) -> crate::Result<Self::Bytes, DiskError> {
+  fn read_node_page(&self, node_page_id: NodePageId) -> crate::Result<Self::Bytes, IOError> {
     let disk_page_id = self.tx_context.trans_node_id(node_page_id);
     self.io.read_contig_page(disk_page_id)
   }
@@ -218,11 +298,11 @@ where
 pub trait IOOverflowPageReader: IOPageReader {
   fn read_freelist_overflow(
     &self, freelist_page_id: FreelistPageId, overflow: u32,
-  ) -> crate::Result<Self::Bytes, DiskError>;
+  ) -> crate::Result<Self::Bytes, IOError>;
 
   fn read_node_overflow(
     &self, node_page_id: NodePageId, overflow: u32,
-  ) -> crate::Result<Self::Bytes, DiskError>;
+  ) -> crate::Result<Self::Bytes, IOError>;
 }
 
 pub struct CachedReadHandler<T, I: IOReader<Bytes = SharedBytes>> {
@@ -235,7 +315,7 @@ where
   T: TxContext,
   I: IOReader<Bytes = SharedBytes>,
 {
-  fn read_cache_or_disk(&self, disk_page_id: DiskPageId) -> crate::Result<SharedBytes, DiskError> {
+  fn read_cache_or_disk(&self, disk_page_id: DiskPageId) -> crate::Result<SharedBytes, IOError> {
     self
       .page_cache
       .entry(disk_page_id)
@@ -264,19 +344,19 @@ where
 {
   type Bytes = SharedBytes;
 
-  fn read_meta_page(&self, meta_page_id: MetaPageId) -> crate::Result<Self::Bytes, DiskError> {
+  fn read_meta_page(&self, meta_page_id: MetaPageId) -> crate::Result<Self::Bytes, IOError> {
     let disk_page_id = self.handler.tx_context.trans_meta_id(meta_page_id);
     self.read_cache_or_disk(disk_page_id)
   }
 
   fn read_freelist_page(
     &self, freelist_page_id: FreelistPageId,
-  ) -> crate::Result<Self::Bytes, DiskError> {
+  ) -> crate::Result<Self::Bytes, IOError> {
     let disk_page_id = self.handler.tx_context.trans_freelist_id(freelist_page_id);
     self.read_cache_or_disk(disk_page_id)
   }
 
-  fn read_node_page(&self, node_page_id: NodePageId) -> crate::Result<Self::Bytes, DiskError> {
+  fn read_node_page(&self, node_page_id: NodePageId) -> crate::Result<Self::Bytes, IOError> {
     let disk_page_id = self.handler.tx_context.trans_node_id(node_page_id);
     self.read_cache_or_disk(disk_page_id)
   }
@@ -289,7 +369,7 @@ where
 {
   fn read_freelist_overflow(
     &self, freelist_page_id: FreelistPageId, overflow: u32,
-  ) -> crate::Result<Self::Bytes, DiskError> {
+  ) -> crate::Result<Self::Bytes, IOError> {
     let disk_page_id = self
       .handler
       .tx_context
@@ -299,7 +379,7 @@ where
 
   fn read_node_overflow(
     &self, node_page_id: NodePageId, overflow: u32,
-  ) -> crate::Result<Self::Bytes, DiskError> {
+  ) -> crate::Result<Self::Bytes, IOError> {
     let disk_page_id = self
       .handler
       .tx_context
@@ -323,11 +403,11 @@ where
   delegate! {
       to self.reader {
         fn read_meta_page(&self, meta_page_id: MetaPageId)
-      -> crate::Result<Self::Bytes, DiskError>;
+      -> crate::Result<Self::Bytes, IOError>;
         fn read_freelist_page(&self, freelist_page_id: FreelistPageId)
-      -> crate::Result<Self::Bytes, DiskError>;
+      -> crate::Result<Self::Bytes, IOError>;
         fn read_node_page(&self, node_page_id: NodePageId)
-      -> crate::Result<Self::Bytes, DiskError>;
+      -> crate::Result<Self::Bytes, IOError>;
     }
   }
 }
@@ -339,9 +419,9 @@ where
   delegate! {
     to self.reader {
         fn read_freelist_overflow(&self, freelist_page_id: FreelistPageId, overflow: u32,)
-      -> crate::Result<Self::Bytes, DiskError>;
+      -> crate::Result<Self::Bytes, IOError>;
         fn read_node_overflow(&self, node_page_id: NodePageId, overflow: u32,)
-      -> crate::Result<Self::Bytes, DiskError>;
+      -> crate::Result<Self::Bytes, IOError>;
     }
   }
 }
@@ -369,11 +449,11 @@ where
   delegate! {
       to self.reader {
         fn read_meta_page(&self, meta_page_id: MetaPageId)
-      -> crate::Result<Self::Bytes, DiskError>;
+      -> crate::Result<Self::Bytes, IOError>;
         fn read_freelist_page(&self, freelist_page_id: FreelistPageId)
-      -> crate::Result<Self::Bytes, DiskError>;
+      -> crate::Result<Self::Bytes, IOError>;
         fn read_node_page(&self, node_page_id: NodePageId)
-      -> crate::Result<Self::Bytes, DiskError>;
+      -> crate::Result<Self::Bytes, IOError>;
     }
   }
 }
@@ -385,9 +465,9 @@ where
   delegate! {
     to self.reader {
         fn read_freelist_overflow(&self, freelist_page_id: FreelistPageId, overflow: u32,)
-      -> crate::Result<Self::Bytes, DiskError>;
+      -> crate::Result<Self::Bytes, IOError>;
         fn read_node_overflow(&self, node_page_id: NodePageId, overflow: u32,)
-      -> crate::Result<Self::Bytes, DiskError>;
+      -> crate::Result<Self::Bytes, IOError>;
     }
   }
 }

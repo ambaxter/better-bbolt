@@ -29,7 +29,7 @@ pub enum PageError {
 }
 
 #[derive(Debug, Error)]
-pub enum DiskError {
+pub enum IOError {
   #[error("ReadError: Unable to open file at `{0:?}`.")]
   OpenError(PathBuf),
   #[error("ReadError: Unable to understand file metadata.")]
@@ -38,10 +38,12 @@ pub enum DiskError {
   UnexpectedEOF(DiskPageId, EOFPageId),
   #[error("ReadError: Read at `{0:?}`.")]
   ReadError(DiskPageId),
-  #[error("ReadError: Write at `{0:?}`.")]
+  #[error("WriteError: Write at `{0:?}`.")]
   WriteError(DiskPageId),
-  #[error("WriteError: Writing at `{0:?}`.")]
+  #[error("PageWriteError: Writing at `{0:?}`.")]
   PageWriteError(PageHeader),
+  #[error("Error updating length")]
+  UpdateLengthError,
 }
 
 #[derive(Debug, Error)]

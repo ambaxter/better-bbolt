@@ -1,8 +1,8 @@
-use crate::common::errors::DiskError;
+use crate::common::errors::IOError;
 use crate::common::id::{DiskPageId, EOFPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
 use crate::io::backends::{
-  ContigIOReader, IOBackend, IOOverflowPageReader, IOPageReader, IOReader, IOType, ROShell,
+  ContigIOReader, IOBackend, IOCore, IOOverflowPageReader, IOPageReader, IOReader, IOType, ROShell,
   ReadLoadedPageIO, WOShell,
 };
 use crate::io::bytes::ref_bytes::RefBytes;
@@ -13,47 +13,149 @@ use memmap2::{Advice, Mmap, MmapOptions, MmapRaw};
 use std::fs::{File, OpenOptions};
 use std::mem;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use thiserror::Error;
 
-pub struct MemMapOptions {
-  pre_populate_pages: bool,
-  use_mlock: bool,
+#[derive(Debug, Error)]
+pub enum MemMapError {
+  #[error("MemMap Unlock Failure")]
+  MUnlockFailure,
+  #[error("MemMap Lock Failure")]
+  MLockFailure,
+  #[error("MemMap Advice Failure")]
+  AdviceFailure,
 }
 
+#[derive(Debug, Clone)]
+pub struct MemMapReadOptions {
+  pre_populate_pages: bool,
+  use_mlock: bool,
+  advise_random: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct MemMapWriteOptions {}
+
 pub struct MemMapIO {
-  io_type: IOType,
-  path: PathBuf,
+  core: IOCore,
   file: File,
   mmap: MmapRaw,
-  options: MmapOptions,
-  page_size: usize,
+  read_options: Option<MemMapReadOptions>,
 }
 
 impl IOBackend for MemMapIO {
-  type ConfigOptions = MemMapOptions;
-
   #[inline]
   fn io_type(&self) -> IOType {
-    self.io_type
+    self.core.io_type
   }
 
   #[inline]
   fn page_size(&self) -> usize {
-    self.page_size
+    self.core.page_size
   }
 
-  fn apply_length_update(&mut self, new_len: usize) -> crate::Result<(), DiskError> {
-    let options = self.options.clone();
-    let mut new_mmap = match self.io_type {
+  fn apply_length_update(&mut self, new_len: usize) -> crate::Result<(), IOError> {
+    let mut options = MmapOptions::new();
+    if let Some(read_options) = self.read_options.as_ref() {
+      if read_options.pre_populate_pages {
+        options.populate();
+      }
+    }
+    let mut new_mmap = match self.core.io_type {
       IOType::RO => options.map_raw_read_only(&self.file),
       _ => options.map_raw(&self.file),
     }
-    .change_context_lazy(|| DiskError::OpenError(self.path.clone()))?;
+    .change_context_lazy(|| IOError::OpenError((*self.core.path).clone()))?;
 
     mem::swap(&mut self.mmap, &mut new_mmap);
+
+    if let Some(read_options) = self.read_options.as_mut() {
+      if read_options.use_mlock {
+        new_mmap
+          .unlock()
+          .change_context(MemMapError::MUnlockFailure)
+          .change_context(IOError::UpdateLengthError)?;
+        self
+          .mmap
+          .lock()
+          .change_context(MemMapError::MLockFailure)
+          .change_context(IOError::UpdateLengthError)?;
+      }
+      if read_options.advise_random {
+        self
+          .mmap
+          .advise(Advice::Random)
+          .change_context(MemMapError::AdviceFailure)
+          .change_context(IOError::UpdateLengthError)?
+      }
+    }
     Ok(())
   }
 }
 
+impl IOReader for MemMapIO {
+  type Bytes = RefBytes;
+  type ReadOptions = MemMapReadOptions;
+
+  fn new_ro(
+    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
+  ) -> error_stack::Result<ROShell<Self>, IOError> {
+    let core = IOCore {
+      path,
+      page_size,
+      io_type: IOType::RO,
+    };
+    let file = core.open_file()?;
+    let mut mmap_options = MmapOptions::new();
+    if options.pre_populate_pages {
+      mmap_options.populate();
+    }
+    let mmap = mmap_options
+      .map_raw_read_only(&file)
+      .change_context_lazy(|| IOError::OpenError((*core.path).clone()))?;
+    if options.advise_random {
+      mmap
+        .advise(Advice::Random)
+        .change_context_lazy(|| IOError::OpenError((*core.path).clone()))?;
+    }
+    Ok(ROShell::new(MemMapIO {
+      core,
+      file,
+      mmap,
+      read_options: Some(options),
+    }))
+  }
+
+  fn read_disk_page(
+    &self, disk_page_id: DiskPageId, page_len: usize,
+  ) -> error_stack::Result<Self::Bytes, IOError> {
+    let page_offset = disk_page_id.0 as usize * self.core.page_size;
+    if page_offset + page_len > self.mmap.len() {
+      let eof = EOFPageId(DiskPageId((self.mmap.len() / self.core.page_size) as u64));
+      Err(IOError::UnexpectedEOF(disk_page_id, eof).into())
+    } else {
+      let ptr = unsafe { self.mmap.as_ptr().add(page_offset) };
+      Ok(RefBytes::from_ptr_len(ptr, page_len))
+    }
+  }
+}
+
+impl ContigIOReader for MemMapIO {
+  fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, IOError> {
+    let page_offset = disk_page_id.0 as usize * self.core.page_size;
+    let header_end = page_offset + size_of::<PageHeader>();
+    if header_end > self.mmap.len() {
+      let eof = EOFPageId(DiskPageId((self.mmap.len() / self.core.page_size) as u64));
+      Err(IOError::UnexpectedEOF(disk_page_id, eof.into()).into())
+    } else {
+      let ptr = unsafe { self.mmap.as_ptr().add(page_offset) };
+      let bytes = RefBytes::from_ptr_len(ptr, size_of::<PageHeader>());
+      Ok(*bytemuck::from_bytes(bytes.as_ref()))
+    }
+  }
+}
+
+/*
 impl MemMapIO {
   pub fn new_rw<P: AsRef<Path>>(path: P, page_size: usize) -> crate::Result<Self, DiskError> {
     let path = path.as_ref();
@@ -160,20 +262,5 @@ impl IOReader for MemMapReader {
   }
 }
 
-impl ContigIOReader for MemMapReader {
-  fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, DiskError> {
-    let page_offset = disk_page_id.0 as usize * self.page_size;
-    let header_end = page_offset + size_of::<PageHeader>();
-    if header_end > self.mmap.len() {
-      Err(
-        DiskError::UnexpectedEOF(
-          disk_page_id,
-          EOFPageId(DiskPageId((self.mmap.len() / self.page_size) as u64)),
-        )
-        .into(),
-      )
-    } else {
-      Ok(*bytemuck::from_bytes(&self.mmap[page_offset..header_end]))
-    }
-  }
-}
+
+*/
