@@ -5,7 +5,6 @@ use crate::common::ids::{NodePageId, PageId};
 use crate::common::io_pool::{ReadPool, WritePool};
 use crate::common::page::PageHeader;
 use bytemuck::bytes_of_mut;
-use dashmap::DashMap;
 use memmap2::Mmap;
 use moka::sync::Cache;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};

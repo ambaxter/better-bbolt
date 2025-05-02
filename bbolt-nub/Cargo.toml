@@ -13,7 +13,6 @@ io_uring = ["dep:io-uring"]
 [dependencies]
 parking_lot.workspace = true
 memmap2.workspace = true
-fs4.workspace = true
 bytemuck.workspace = true
 thiserror.workspace = true
 triomphe.workspace = true
@@ -29,7 +28,6 @@ crossbeam-channel.workspace = true
 dashmap.workspace = true
 fake.workspace = true
 hashbrown.workspace = true
-fs-err.workspace = true
 moka.workspace = true
 getset.workspace = true
 tracing.workspace = true
@@ -38,4 +36,5 @@ rayon = {workspace = true}
 bytes.workspace = true
 rangemap.workspace = true
 bon.workspace = true
+zeroize.workspace = true
 io-uring = {workspace = true, optional = true}

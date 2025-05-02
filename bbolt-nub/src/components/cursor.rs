@@ -1107,11 +1107,11 @@ mod tests {
   use crate::io::pages::lazy::ops::TryBuf;
   use crate::io::transmogrify::direct::DirectTransmogrify;
   use bytemuck::bytes_of_mut;
+  use fs_err::File;
   use memmap2::{Advice, Mmap, MmapOptions};
   use moka::sync::Cache;
   use parking_lot::RwLock;
   use size::Size;
-  use std::fs::File;
   use std::io::{BufReader, BufWriter, Write};
   use std::sync;
   /*

@@ -8,10 +8,10 @@ use crate::io::transmogrify::{TxContext, TxDirectContext};
 use bytes::BufMut;
 use delegate::delegate;
 use error_stack::Report;
+use fs_err::File;
 use moka::Entry;
 use moka::ops::compute::Op;
 use moka::sync::Cache;
-use std::fs::File;
 use std::io;
 use std::io::Write;
 use std::path::PathBuf;
@@ -30,6 +30,31 @@ pub mod io_uring;
 
 pub mod memmap;
 pub mod meta_reader;
+
+pub mod trait_playground;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum IOType {
+  RO,
+  WO,
+  RW,
+}
+
+pub struct IOCore {
+  path: Arc<PathBuf>,
+  page_size: usize,
+  io_type: IOType,
+}
+
+pub trait IOBackend: Sized {
+  type ConfigOptions: Clone + Sized;
+
+  fn io_type(&self) -> IOType;
+
+  fn page_size(&self) -> usize;
+
+  fn apply_length_update(&mut self, new_len: usize) -> crate::Result<(), DiskError>;
+}
 
 pub trait WriteablePage {
   fn header(&self) -> &PageHeader;
@@ -71,6 +96,71 @@ pub trait ContigIOReader: IOReader {
     let overflow = header.get_overflow();
     let page_len = page_size + (overflow + 1) as usize;
     self.read_disk_page(disk_page_id, page_len)
+  }
+}
+
+pub struct ROShell<R> {
+  read: R,
+}
+
+impl<R> ROShell<R> {
+  pub fn new(read: R) -> Self {
+    Self { read }
+  }
+}
+
+impl<R> IOReader for ROShell<R>
+where
+  R: IOReader,
+{
+  type Bytes = R::Bytes;
+
+  delegate! {
+    to self.read {
+      fn page_size(&self) -> usize;
+      fn read_disk_page(
+    &self, disk_page_id: DiskPageId, page_len: usize,
+  ) -> crate::Result<Self::Bytes, DiskError>;
+      fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, DiskError>;
+    }
+  }
+}
+
+pub struct WOShell<W> {
+  write: W,
+}
+
+impl<W> WOShell<W> {
+  pub fn new(write: W) -> Self {
+    Self { write }
+  }
+}
+
+pub struct RWShell<R, W> {
+  read: ROShell<R>,
+  write: WOShell<W>,
+}
+
+impl<R, W> RWShell<R, W> {
+  pub fn new(read: R, write: W) -> Self {
+    Self { read, write }
+  }
+}
+
+impl<R, W> IOReader for RWShell<R, W>
+where
+  R: IOReader,
+{
+  type Bytes = R::Bytes;
+
+  delegate! {
+    to self.read {
+      fn page_size(&self) -> usize;
+      fn read_disk_page(
+    &self, disk_page_id: DiskPageId, page_len: usize,
+  ) -> crate::Result<Self::Bytes, DiskError>;
+      fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, DiskError>;
+    }
   }
 }
 

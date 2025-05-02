@@ -3,7 +3,7 @@ use crate::common::id::DiskPageId;
 use crate::common::layout::meta::HeaderMetaPage;
 use bytemuck::bytes_of_mut;
 use error_stack::ResultExt;
-use std::fs::File;
+use fs_err::File;
 use std::io;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 
@@ -80,7 +80,7 @@ impl MetaReader {
 #[cfg(test)]
 mod tests {
   use crate::io::backends::meta_reader::MetaReader;
-  use std::fs::File;
+  use fs_err::File;
   use std::io::BufReader;
 
   #[test]
