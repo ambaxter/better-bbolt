@@ -2,8 +2,8 @@ use crate::common::errors::IOError;
 use crate::common::id::{DiskPageId, EOFPageId, FreelistPageId, MetaPageId, NodePageId};
 use crate::common::layout::page::PageHeader;
 use crate::io::backends::{
-  ContigIOReader, IOBackend, IOCore, IOOverflowPageReader, IOPageReader, IOReader, IOType, ROShell,
-  ReadLoadedPageIO, WOShell,
+  ContigIOReader, IOBackend, IOCore, IOOverflowPageReader, IOPageReader, IOReader, IOType,
+  NewIOReader, ROShell, ReadLoadedPageIO, WOShell,
 };
 use crate::io::bytes::ref_bytes::RefBytes;
 use crate::io::pages::{TxReadLazyPageIO, TxReadPageIO};
@@ -95,6 +95,37 @@ impl IOBackend for MemMapIO {
 
 impl IOReader for MemMapIO {
   type Bytes = RefBytes;
+
+  fn read_disk_page(
+    &self, disk_page_id: DiskPageId, page_len: usize,
+  ) -> error_stack::Result<Self::Bytes, IOError> {
+    let page_offset = disk_page_id.0 as usize * self.core.page_size;
+    if page_offset + page_len > self.mmap.len() {
+      let eof = EOFPageId(DiskPageId((self.mmap.len() / self.core.page_size) as u64));
+      Err(IOError::UnexpectedEOF(disk_page_id, eof).into())
+    } else {
+      let ptr = unsafe { self.mmap.as_ptr().add(page_offset) };
+      Ok(RefBytes::from_ptr_len(ptr, page_len))
+    }
+  }
+}
+
+impl ContigIOReader for MemMapIO {
+  fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, IOError> {
+    let page_offset = disk_page_id.0 as usize * self.core.page_size;
+    let header_end = page_offset + size_of::<PageHeader>();
+    if header_end > self.mmap.len() {
+      let eof = EOFPageId(DiskPageId((self.mmap.len() / self.core.page_size) as u64));
+      Err(IOError::UnexpectedEOF(disk_page_id, eof.into()).into())
+    } else {
+      let ptr = unsafe { self.mmap.as_ptr().add(page_offset) };
+      let bytes = RefBytes::from_ptr_len(ptr, size_of::<PageHeader>());
+      Ok(*bytemuck::from_bytes(bytes.as_ref()))
+    }
+  }
+}
+
+impl NewIOReader for MemMapIO {
   type ReadOptions = MemMapReadOptions;
 
   fn new_ro(
@@ -124,34 +155,6 @@ impl IOReader for MemMapIO {
       mmap,
       read_options: Some(options),
     }))
-  }
-
-  fn read_disk_page(
-    &self, disk_page_id: DiskPageId, page_len: usize,
-  ) -> error_stack::Result<Self::Bytes, IOError> {
-    let page_offset = disk_page_id.0 as usize * self.core.page_size;
-    if page_offset + page_len > self.mmap.len() {
-      let eof = EOFPageId(DiskPageId((self.mmap.len() / self.core.page_size) as u64));
-      Err(IOError::UnexpectedEOF(disk_page_id, eof).into())
-    } else {
-      let ptr = unsafe { self.mmap.as_ptr().add(page_offset) };
-      Ok(RefBytes::from_ptr_len(ptr, page_len))
-    }
-  }
-}
-
-impl ContigIOReader for MemMapIO {
-  fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, IOError> {
-    let page_offset = disk_page_id.0 as usize * self.core.page_size;
-    let header_end = page_offset + size_of::<PageHeader>();
-    if header_end > self.mmap.len() {
-      let eof = EOFPageId(DiskPageId((self.mmap.len() / self.core.page_size) as u64));
-      Err(IOError::UnexpectedEOF(disk_page_id, eof.into()).into())
-    } else {
-      let ptr = unsafe { self.mmap.as_ptr().add(page_offset) };
-      let bytes = RefBytes::from_ptr_len(ptr, size_of::<PageHeader>());
-      Ok(*bytemuck::from_bytes(bytes.as_ref()))
-    }
   }
 }
 

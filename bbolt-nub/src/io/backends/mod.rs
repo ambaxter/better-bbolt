@@ -31,8 +31,6 @@ pub mod io_uring;
 pub mod memmap;
 pub mod meta_reader;
 
-pub mod trait_playground;
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IOType {
   RO,
@@ -93,21 +91,8 @@ pub trait BackendableBackendWritePageDamnit: BufMut {
   fn write(self) -> crate::Result<usize, IOError>;
 }
 
-pub trait IOWriter {
-  fn page_size(&self) -> usize;
-  fn write_single_page(
-    &self, disk_page_id: DiskPageId, page: SharedBytes,
-  ) -> crate::Result<(), IOError>;
-}
-
 pub trait IOReader: IOBackend {
   type Bytes: IOBytes;
-
-  type ReadOptions: Clone + Sized;
-
-  fn new_ro(
-    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
-  ) -> crate::Result<ROShell<Self>, IOError>;
 
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_len: usize,
@@ -120,6 +105,14 @@ pub trait IOReader: IOBackend {
   }
 }
 
+pub trait NewIOReader: IOReader {
+  type ReadOptions: Clone + Sized;
+
+  fn new_ro(
+    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
+  ) -> crate::Result<ROShell<Self>, IOError>;
+}
+
 pub trait ContigIOReader: IOReader {
   fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, IOError>;
   fn read_contig_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, IOError> {
@@ -129,6 +122,26 @@ pub trait ContigIOReader: IOReader {
     let page_len = page_size + (overflow + 1) as usize;
     self.read_disk_page(disk_page_id, page_len)
   }
+}
+
+pub trait IOWriter: IOBackend {
+  fn write_single_page(
+    &self, disk_page_id: DiskPageId, page: SharedBytes,
+  ) -> crate::Result<(), IOError>;
+}
+
+pub trait NewIOWriter: IOWriter {
+  type WriteOptions: Clone + Sized;
+  fn new_wo(
+    path: Arc<PathBuf>, page_size: usize, options: Self::WriteOptions,
+  ) -> crate::Result<WOShell<Self>, IOError>;
+}
+
+pub trait NewIOReadWriter: NewIOReader + NewIOWriter {
+  fn new_rw(
+    path: Arc<PathBuf>, page_size: usize, read_options: Self::ReadOptions,
+    write_options: Self::WriteOptions,
+  ) -> crate::Result<Self, IOError>;
 }
 
 pub struct ROShell<R> {
@@ -158,14 +171,6 @@ where
   R: IOReader,
 {
   type Bytes = R::Bytes;
-  type ReadOptions = R::ReadOptions;
-
-  #[inline]
-  fn new_ro(
-    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
-  ) -> crate::Result<ROShell<Self>, IOError> {
-    R::new_ro(path, page_size, options)
-  }
 
   delegate! {
     to self.read {
@@ -174,6 +179,18 @@ where
   ) -> crate::Result<Self::Bytes, IOError>;
       fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, IOError>;
     }
+  }
+}
+
+impl<R> ROShell<R>
+where
+  R: NewIOReader,
+{
+  #[inline]
+  pub fn new_ro(
+    path: Arc<PathBuf>, page_size: usize, options: R::ReadOptions,
+  ) -> crate::Result<Self, IOError> {
+    R::new_ro(path, page_size, options)
   }
 }
 
@@ -187,21 +204,79 @@ impl<W> WOShell<W> {
   }
 }
 
+impl<W> IOBackend for WOShell<W>
+where
+  W: IOBackend,
+{
+  delegate! {
+      to self.write {
+          fn io_type(&self) -> IOType;
+          fn page_size(&self) -> usize;
+          fn apply_length_update(&mut self, new_len: usize) -> crate::Result<(), IOError>;
+      }
+  }
+}
+
+impl<W> IOWriter for WOShell<W>
+where
+  W: IOWriter,
+{
+  delegate! {
+    to self.write {
+      fn write_single_page(
+          &self, disk_page_id: DiskPageId, page: SharedBytes,
+        ) -> crate::Result<(), IOError>;
+    }
+  }
+}
+
+impl<W> WOShell<W>
+where
+  W: NewIOWriter,
+{
+  #[inline]
+  fn new_wo(
+    path: Arc<PathBuf>, page_size: usize, options: W::WriteOptions,
+  ) -> crate::Result<Self, IOError> {
+    W::new_wo(path, page_size, options)
+  }
+}
+
 pub struct RWShell<R, W> {
   read: ROShell<R>,
   write: WOShell<W>,
 }
 
-impl<R, W> RWShell<R, W> {
-  pub fn new(read: R, write: W) -> Self {
+impl<R, W> RWShell<R, W>
+where
+  R: IOReader,
+  W: IOWriter,
+{
+  pub fn new(read: ROShell<R>, write: WOShell<W>) -> Self {
+    assert_eq!(read.page_size(), write.page_size());
     Self { read, write }
+  }
+}
+
+impl<R, W> RWShell<R, W>
+where
+  R: NewIOReader,
+  W: NewIOWriter,
+{
+  fn new_rw(
+    path: Arc<PathBuf>, page_size: usize, read_options: R::ReadOptions,
+    write_options: W::WriteOptions,
+  ) -> crate::Result<Self, IOError> {
+    let read = R::new_ro(path.clone(), page_size, read_options)?;
+    let write = W::new_wo(path, page_size, write_options)?;
+    Ok(RWShell::new(read, write))
   }
 }
 
 impl<R, W> IOBackend for RWShell<R, W>
 where
-  R: IOReader,
-  W: IOWriter,
+  R: IOBackend,
+  W: IOBackend,
 {
   #[inline]
   fn io_type(&self) -> IOType {
@@ -225,14 +300,6 @@ where
   W: IOWriter,
 {
   type Bytes = R::Bytes;
-  type ReadOptions = R::ReadOptions;
-
-  #[inline]
-  fn new_ro(
-    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
-  ) -> crate::Result<ROShell<Self>, IOError> {
-    R::new_ro(path, page_size, options)
-  }
 
   delegate! {
     to self.read {
@@ -240,6 +307,20 @@ where
     &self, disk_page_id: DiskPageId, page_len: usize,
   ) -> crate::Result<Self::Bytes, IOError>;
       fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, IOError>;
+    }
+  }
+}
+
+impl<R, W> IOWriter for RWShell<R, W>
+where
+  R: IOReader,
+  W: IOWriter,
+{
+  delegate! {
+    to self.write {
+      fn write_single_page(
+          &self, disk_page_id: DiskPageId, page: SharedBytes,
+        ) -> crate::Result<(), IOError>;
     }
   }
 }

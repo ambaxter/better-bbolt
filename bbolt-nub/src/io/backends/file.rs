@@ -2,7 +2,7 @@ use crate::common::buffer_pool::BufferPool;
 use crate::common::errors::IOError;
 use crate::common::id::DiskPageId;
 use crate::io::backends::channel_store::ChannelStore;
-use crate::io::backends::{IOBackend, IOCore, IOReader, IOType, ROShell};
+use crate::io::backends::{IOBackend, IOCore, IOReader, IOType, NewIOReader, ROShell};
 use crate::io::bytes::shared_bytes::SharedBytes;
 use crossbeam_channel::{Receiver, Sender};
 use error_stack::ResultExt;
@@ -41,19 +41,6 @@ impl IOBackend for SingleFileIO {
 
 impl IOReader for SingleFileIO {
   type Bytes = SharedBytes;
-  type ReadOptions = FileReadOptions;
-
-  fn new_ro(
-    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
-  ) -> error_stack::Result<ROShell<Self>, IOError> {
-    let core = IOCore::new(path, page_size, IOType::RO);
-    let file = core.open_file()?;
-    Ok(ROShell::new(SingleFileIO {
-      core,
-      file: Mutex::new(BufReader::new(file)),
-      buffer_pool: Some(options.buffer_pool),
-    }))
-  }
 
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_len: usize,
@@ -71,6 +58,22 @@ impl IOReader for SingleFileIO {
         buffer.read_exact_and_share(&mut *lock)
       })
       .change_context(IOError::ReadError(disk_page_id))
+  }
+}
+
+impl NewIOReader for SingleFileIO {
+  type ReadOptions = FileReadOptions;
+
+  fn new_ro(
+    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
+  ) -> error_stack::Result<ROShell<Self>, IOError> {
+    let core = IOCore::new(path, page_size, IOType::RO);
+    let file = core.open_file()?;
+    Ok(ROShell::new(SingleFileIO {
+      core,
+      file: Mutex::new(BufReader::new(file)),
+      buffer_pool: Some(options.buffer_pool),
+    }))
   }
 }
 
@@ -114,13 +117,32 @@ impl MultiFileIO {
   }
 
   fn expect_write_resources(&self) -> &ChannelStore<File> {
-    self.write_channel
-      .as_ref().expect("must be set to write")
+    self.write_channel.as_ref().expect("must be set to write")
   }
 }
 
 impl IOReader for MultiFileIO {
   type Bytes = SharedBytes;
+
+  fn read_disk_page(
+    &self, disk_page_id: DiskPageId, page_len: usize,
+  ) -> crate::Result<Self::Bytes, IOError> {
+    let page_offset = disk_page_id.0 * self.core.page_size as u64;
+    let (read_channel, buffer_pool) = self.expect_read_resources();
+    let mut file = read_channel
+      .pop()
+      .change_context(IOError::ReadError(disk_page_id))?;
+    file
+      .seek(SeekFrom::Start(page_offset))
+      .and_then(|_| {
+        let mut buffer = buffer_pool.pop_with_len(page_len);
+        buffer.read_exact_and_share(file.deref_mut())
+      })
+      .change_context(IOError::ReadError(disk_page_id))
+  }
+}
+
+impl NewIOReader for MultiFileIO {
   type ReadOptions = MultiFileReadOptions;
 
   fn new_ro(
@@ -141,22 +163,5 @@ impl IOReader for MultiFileIO {
       write_channel: None,
       buffer_pool: Some(options.buffer_pool),
     }))
-  }
-
-  fn read_disk_page(
-    &self, disk_page_id: DiskPageId, page_len: usize,
-  ) -> crate::Result<Self::Bytes, IOError> {
-    let page_offset = disk_page_id.0 * self.core.page_size as u64;
-    let (read_channel, buffer_pool) = self.expect_read_resources();
-    let mut file = read_channel
-      .pop()
-      .change_context(IOError::ReadError(disk_page_id))?;
-    file
-      .seek(SeekFrom::Start(page_offset))
-      .and_then(|_| {
-        let mut buffer = buffer_pool.pop_with_len(page_len);
-        buffer.read_exact_and_share(file.deref_mut())
-      })
-      .change_context(IOError::ReadError(disk_page_id))
   }
 }

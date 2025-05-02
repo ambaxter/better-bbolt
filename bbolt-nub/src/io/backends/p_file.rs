@@ -1,7 +1,9 @@
 use crate::common::buffer_pool::BufferPool;
 use crate::common::errors::IOError;
 use crate::common::id::DiskPageId;
-use crate::io::backends::{IOBackend, IOCore, IOReader, IOType, IOWriter, ROShell, WOShell};
+use crate::io::backends::{
+  IOBackend, IOCore, IOReader, IOType, IOWriter, NewIOReader, ROShell, WOShell,
+};
 use crate::io::bytes::shared_bytes::SharedBytes;
 use error_stack::ResultExt;
 use std::fs::{File, OpenOptions};
@@ -39,24 +41,6 @@ impl IOBackend for PFileIO {
 
 impl IOReader for PFileIO {
   type Bytes = SharedBytes;
-  type ReadOptions = PFileReadOptions;
-
-  fn new_ro(
-    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
-  ) -> error_stack::Result<ROShell<Self>, IOError> {
-    let core = IOCore {
-      path,
-      page_size,
-      io_type: IOType::RO,
-    };
-    let file = core.open_file()?;
-    let p_file = PFileIO {
-      core,
-      file,
-      buffer_pool: Some(options.buffer_pool),
-    };
-    Ok(ROShell::new(p_file))
-  }
 
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_len: usize,
@@ -72,6 +56,28 @@ impl IOReader for PFileIO {
       .change_context(IOError::ReadError(disk_page_id))
   }
 }
+
+impl NewIOReader for PFileIO {
+  type ReadOptions = PFileReadOptions;
+
+  fn new_ro(
+    path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
+  ) -> crate::Result<ROShell<Self>, IOError> {
+    let core = IOCore {
+      path,
+      page_size,
+      io_type: IOType::RO,
+    };
+    let file = core.open_file()?;
+    let p_file = PFileIO {
+      core,
+      file,
+      buffer_pool: Some(options.buffer_pool),
+    };
+    Ok(ROShell::new(p_file))
+  }
+}
+
 /*
 impl PFileIO {
   pub fn new_rw<P: AsRef<Path>>(
