@@ -92,6 +92,12 @@ pub struct MultiFileReadOptions {
   reader_count: usize,
 }
 
+impl MultiFileReadOptions {
+  pub fn new(buffer_pool: BufferPool, reader_count: usize) -> MultiFileReadOptions {
+    MultiFileReadOptions { buffer_pool, reader_count }
+  }
+}
+
 #[derive(Debug, Clone)]
 pub struct MultiFileWriteOptions {
   writer_count: usize,
@@ -158,7 +164,7 @@ impl NewIOReader for MultiFileIO {
     path: Arc<PathBuf>, page_size: usize, options: Self::ReadOptions,
   ) -> crate::Result<ROShell<Self>, IOError> {
     let core = IOCore::new(path, page_size, IOType::RO);
-    let read_channel = ChannelStore::<BufReader<File>>::new_with_capacity(options.reader_count);
+    let read_channel = ChannelStore::new_with_capacity(options.reader_count);
     for _ in 0..options.reader_count {
       let file = core.open_file()?;
       let reader = BufReader::new(file);

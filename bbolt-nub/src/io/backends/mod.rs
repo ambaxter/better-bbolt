@@ -194,6 +194,15 @@ where
   }
 }
 
+impl<R> ContigIOReader for ROShell<R> where R: ContigIOReader {
+  delegate! {
+    to self.read {
+      fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, IOError>;
+      fn read_contig_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, IOError>;
+    }
+  }
+}
+
 pub struct WOShell<W> {
   write: W,
 }
@@ -307,6 +316,15 @@ where
     &self, disk_page_id: DiskPageId, page_len: usize,
   ) -> crate::Result<Self::Bytes, IOError>;
       fn read_single_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, IOError>;
+    }
+  }
+}
+
+impl<R, W> ContigIOReader for RWShell<R, W> where R: ContigIOReader, W: IOWriter {
+  delegate! {
+    to self.read {
+      fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, IOError>;
+      fn read_contig_page(&self, disk_page_id: DiskPageId) -> crate::Result<Self::Bytes, IOError>;
     }
   }
 }

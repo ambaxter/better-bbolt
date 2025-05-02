@@ -1100,8 +1100,8 @@ mod tests {
   use crate::common::layout::bucket::BucketHeader;
   use crate::common::vec_pool::VecPool;
   use crate::components::tx::{CoreTxHandle, LazyTxHandle, RefTxHandle};
-  use crate::io::backends::file::{FileReadOptions, MultiFileIO, SingleFileIO};
-  use crate::io::backends::memmap::MemMapIO;
+  use crate::io::backends::file::{FileReadOptions, MultiFileIO, MultiFileReadOptions, SingleFileIO};
+  use crate::io::backends::memmap::{MemMapIO, MemMapReadOptions};
   use crate::io::backends::meta_reader::MetaReader;
   use crate::io::backends::{CachedReadHandler, DirectReadHandler, NewIOReader, ROShell};
   use crate::io::pages::lazy::ops::RefIntoTryBuf;
@@ -1116,7 +1116,6 @@ mod tests {
   use std::io::{BufReader, BufWriter, Write};
   use std::path::PathBuf;
   use std::sync;
-  use std::sync::Arc;
 
   #[test]
   fn test_file() {
@@ -1134,7 +1133,7 @@ mod tests {
       Size::from_kibibytes(256),
     );
     let tx_stats = sync::Arc::new(TxStats::default());
-    let path = Arc::new(PathBuf::from("./my.db"));
+    let path = sync::Arc::new(PathBuf::from("./my.db"));
     let read_options = FileReadOptions::new(buffer_pool.clone());
     let backend = SingleFileIO::new_ro(path, page_size, read_options).unwrap();
     let tx_context = DirectTransmogrify {};
@@ -1210,7 +1209,7 @@ mod tests {
     }
     write.flush().unwrap();
   }
-  /*
+
   #[test]
   fn test_multifile() {
     let mut reader = BufReader::new(File::open("my.db").unwrap());
@@ -1227,12 +1226,13 @@ mod tests {
       Size::from_kibibytes(256),
     );
     let tx_stats = sync::Arc::new(TxStats::default());
-    let backend = MultiFileReader::new("my.db", 32, page_size, buffer_pool).unwrap();
+    let path = sync::Arc::new(PathBuf::from("./my.db"));
+    let options = MultiFileReadOptions::new(buffer_pool.clone(), 10);
+    let backend = MultiFileIO::new_ro(path.clone(), page_size, options).unwrap();
     let tx_context = DirectTransmogrify {};
-    let handler = ReadHandler {
+    let handler = DirectReadHandler {
       tx_context,
       io: backend,
-      page_size,
     };
     let cached_read_handler = RwLock::new(CachedReadHandler {
       handler,
@@ -1246,14 +1246,16 @@ mod tests {
     };
     let tx = sync::Arc::new(LazyTxHandle { handle: core_tx });
     let root = tx.read_node_page(root_page.into()).unwrap();
+    let stack_pool = VecPool::new(10, 5, 100);
     let bucket = OnDiskBucket {
       tx: tx.clone(),
+      stack_pool: stack_pool.clone(),
       header: Default::default(),
       root,
     };
     let mut cursor = LazyTxCursor {
       cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor::new(&bucket),
+        cursor: CoreCursor::new_with_stack(&bucket, stack_pool.pop()),
         leaf_flag: LeafFlag::BUCKET,
       },
     };
@@ -1273,12 +1275,13 @@ mod tests {
     let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
     let dict_bucket = OnDiskBucket {
       tx: tx.clone(),
+      stack_pool: stack_pool.clone(),
       header: Default::default(),
       root: dict_root,
     };
     let dict_cursor = LazyTxCursor {
       cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor::new(&dict_bucket),
+        cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
         leaf_flag: LeafFlag::empty(),
       },
     };
@@ -1316,12 +1319,13 @@ mod tests {
       Size::from_kibibytes(256),
     );
     let tx_stats = sync::Arc::new(TxStats::default());
-    let backend = MemMapReader::new("my.db", page_size);
+    let path = sync::Arc::new(PathBuf::from("./my.db"));
+    let options = MemMapReadOptions::new(true, true, true);
+    let backend = MemMapIO::new_ro(path.clone(), page_size, options).unwrap();
     let tx_context = DirectTransmogrify {};
-    let handler = ReadHandler {
+    let handler = DirectReadHandler {
       tx_context,
       io: backend,
-      page_size,
     };
     let cached_read_handler = RwLock::new(handler);
     let read_lock = cached_read_handler.read();
@@ -1332,14 +1336,16 @@ mod tests {
     };
     let tx = sync::Arc::new(RefTxHandle { handle: core_tx });
     let root = tx.read_node_page(root_page.into()).unwrap();
+    let stack_pool = VecPool::new(10, 5, 100);
     let bucket = OnDiskBucket {
       tx: tx.clone(),
+      stack_pool: stack_pool.clone(),
       header: Default::default(),
       root,
     };
     let mut cursor = RefTxCursor {
       cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor::new(&bucket),
+        cursor: CoreCursor::new_with_stack(&bucket, stack_pool.pop()),
         leaf_flag: LeafFlag::BUCKET,
       },
     };
@@ -1359,12 +1365,13 @@ mod tests {
     let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
     let dict_bucket = OnDiskBucket {
       tx: tx.clone(),
+      stack_pool: stack_pool.clone(),
       header: Default::default(),
       root: dict_root,
     };
     let dict_cursor = RefTxCursor {
       cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor::new(&dict_bucket),
+        cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
         leaf_flag: LeafFlag::empty(),
       },
     };
@@ -1384,5 +1391,5 @@ mod tests {
         .unwrap();
     }
     write.flush().unwrap();
-  }*/
+  }
 }
