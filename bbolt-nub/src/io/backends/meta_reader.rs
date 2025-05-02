@@ -80,7 +80,7 @@ impl MetaReader {
 #[cfg(test)]
 mod tests {
   use crate::io::backends::meta_reader::MetaReader;
-  use fs_err::File;
+  use std::fs::File;
   use std::io::BufReader;
 
   #[test]

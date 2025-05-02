@@ -18,6 +18,12 @@ pub struct FileReadOptions {
   buffer_pool: BufferPool,
 }
 
+impl FileReadOptions {
+  pub fn new(buffer_pool: BufferPool) -> FileReadOptions {
+    FileReadOptions { buffer_pool }
+  }
+}
+
 #[derive(Debug, Clone)]
 pub struct FileWriteOptions {}
 
@@ -25,6 +31,12 @@ pub struct SingleFileIO {
   core: IOCore,
   file: Mutex<BufReader<File>>,
   buffer_pool: Option<BufferPool>,
+}
+
+impl SingleFileIO {
+  fn expect_read_resources(&self) -> &BufferPool {
+    self.buffer_pool.as_ref().expect("must be set to read")
+  }
 }
 
 impl IOBackend for SingleFileIO {
@@ -45,16 +57,13 @@ impl IOReader for SingleFileIO {
   fn read_disk_page(
     &self, disk_page_id: DiskPageId, page_len: usize,
   ) -> crate::Result<Self::Bytes, IOError> {
+    let buffer_pool = self.expect_read_resources();
     let page_offset = disk_page_id.0 * self.core.page_size as u64;
     let mut lock = self.file.lock();
     lock
       .seek(SeekFrom::Start(page_offset))
       .and_then(|_| {
-        let mut buffer = self
-          .buffer_pool
-          .as_ref()
-          .expect("must be set to read")
-          .pop_with_len(page_len);
+        let mut buffer = buffer_pool.pop_with_len(page_len);
         buffer.read_exact_and_share(&mut *lock)
       })
       .change_context(IOError::ReadError(disk_page_id))

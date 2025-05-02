@@ -121,6 +121,22 @@ impl<T> Clone for VecPool<T> {
 }
 
 impl<T> VecPool<T> {
+  pub fn new(init_size: usize, min_size: usize, max_size: usize) -> Self {
+    let mut pool = Vec::with_capacity(init_size);
+    for _ in 0..init_size {
+      pool.push(Vec::new());
+    }
+    let inner = InnerVecPool {
+      init_size,
+      min_size,
+      max_size,
+      pool: Mutex::new(pool),
+    };
+    VecPool {
+      inner: sync::Arc::new(inner),
+    }
+  }
+
   pub fn push(&self, vec: Vec<T>) {
     self.inner.push(vec);
   }
