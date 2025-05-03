@@ -409,30 +409,45 @@ pub struct CachedReadHandler<T, I: IOReader<Bytes = SharedBytes>> {
   pub(crate) page_cache: Cache<DiskPageId, SharedBytes>,
 }
 
+const TRY_AND_COMPUTE: bool = false;
+
 impl<T, I> CachedReadHandler<T, I>
 where
   T: TxContext,
   I: IOReader<Bytes = SharedBytes>,
 {
   fn read_cache_or_disk(&self, disk_page_id: DiskPageId) -> crate::Result<SharedBytes, IOError> {
-    self
-      .page_cache
-      .entry(disk_page_id)
-      .and_try_compute_with(|entry| match entry {
-        None => self
+    if TRY_AND_COMPUTE {
+      self
+        .page_cache
+        .entry(disk_page_id)
+        .and_try_compute_with(|entry| match entry {
+          None => self
+            .handler
+            .io
+            .read_single_page(disk_page_id)
+            .map(|bytes| Op::Put(bytes)),
+          Some(_) => Ok(Op::Nop),
+        })
+        .map(|comp_result| {
+          comp_result
+            .into_entry()
+            .expect("Should not be StillNone")
+            .value()
+            .clone()
+        })
+    } else {
+      let l = self
+        .page_cache
+        .entry(disk_page_id)
+        .or_try_insert_with(|| self
           .handler
           .io
-          .read_single_page(disk_page_id)
-          .map(|bytes| Op::Put(bytes)),
-        Some(_) => Ok(Op::Nop),
-      })
-      .map(|comp_result| {
-        comp_result
-          .into_entry()
-          .expect("Should not be StillNone")
-          .value()
-          .clone()
-      })
+          .read_single_page(disk_page_id))
+        .map(|entry| entry.value().clone());
+      // TODO: Log this since this is just so much faster
+      l.map_err(|_| IOError::ReadError(disk_page_id).into())
+    }
   }
 }
 
