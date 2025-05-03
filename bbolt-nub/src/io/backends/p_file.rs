@@ -18,6 +18,12 @@ pub struct PFileReadOptions {
   buffer_pool: BufferPool,
 }
 
+impl PFileReadOptions {
+  pub fn new(buffer_pool: BufferPool) -> Self {
+    Self { buffer_pool }
+  }
+}
+
 #[derive(Debug, Clone)]
 pub struct PFileWriteOptions {}
 

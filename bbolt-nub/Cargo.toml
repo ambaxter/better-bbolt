@@ -38,3 +38,6 @@ rangemap.workspace = true
 bon.workspace = true
 zeroize.workspace = true
 io-uring = {workspace = true, optional = true}
+
+[profile.release]
+debug = true

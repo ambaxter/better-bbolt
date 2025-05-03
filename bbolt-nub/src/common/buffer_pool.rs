@@ -6,7 +6,7 @@ use std::collections::Bound;
 use std::fmt::Debug;
 use std::fs::File;
 use std::iter::Copied;
-use std::mem::MaybeUninit;
+use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ops::{Deref, Range, RangeBounds};
 use std::sync::atomic::AtomicI64;
 use std::{io, sync};
@@ -56,7 +56,7 @@ impl UniqueBuffer {
     let shared = unique.shareable();
 
     Ok(SharedBytes {
-      inner: Some(shared),
+      inner: ManuallyDrop::new(shared),
     })
   }
 
@@ -73,7 +73,7 @@ impl UniqueBuffer {
     file.read_exact_at(&mut unique.slice, offset)?;
     let shared = unique.shareable();
     Ok(SharedBytes {
-      inner: Some(shared),
+      inner: ManuallyDrop::new(shared),
     })
   }
 }
@@ -199,11 +199,11 @@ mod test {
     println!("pool size: {:?}", size_of_val(&pool));
     println!("pool.inner alignment: {:?}", align_of_val(&pool.inner));
     println!("pool.inner size: {:?}", size_of_val(&pool.inner));
-    let arc = pool.inner.as_ref().unwrap();
+    let arc = pool.inner.as_ref();
     println!("arc.header alignment: {:?}", align_of_val(&arc.header));
     println!("arc.header size: {:?}", size_of_val(&arc.header));
     println!("arc.slice alignment: {:?}", align_of_val(&arc.slice));
     println!("arc.slice size: {:?}", size_of_val(&arc.slice));
-    println!("layout: {:?}", Layout::for_value(&**arc));
+    println!("layout: {:?}", Layout::for_value(arc));
   }
 }

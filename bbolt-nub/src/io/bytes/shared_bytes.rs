@@ -11,14 +11,17 @@ use std::hash::{Hash, Hasher};
 use std::iter::Copied;
 use std::ops::{Deref, Range, RangeBounds};
 use std::{io, slice};
+use std::mem::ManuallyDrop;
 
 #[derive(Clone)]
 pub struct SharedBytes {
-  pub(crate) inner: Option<triomphe::Arc<PoolBuffer>>,
+  pub(crate) inner: ManuallyDrop<triomphe::Arc<PoolBuffer>>,
 }
 
 impl Deref for SharedBytes {
   type Target = [u8];
+
+  #[inline]
   fn deref(&self) -> &Self::Target {
     self.as_ref()
   }
@@ -26,27 +29,20 @@ impl Deref for SharedBytes {
 
 impl AsRef<[u8]> for SharedBytes {
   fn as_ref(&self) -> &[u8] {
-    self
+    &self
       .inner
-      .as_ref()
-      .expect("shared buffer is dropped")
       .slice
-      .as_ref()
   }
 }
 
 impl Drop for SharedBytes {
   fn drop(&mut self) {
-    let inner = self.inner.take().expect("shared buffer is dropped");
-    rayon::spawn(move || {
-      // There is a race condition here, but there's nothing we can do about it
-      // https://github.com/Manishearth/triomphe/pull/109
-      if let Some(mut unique) = triomphe::Arc::try_unique(inner).ok() {
-        if let Some(pool) = unique.header.take() {
-          pool.push(unique);
-        }
+    let inner = unsafe { ManuallyDrop::take(&mut self.inner) };
+    if let Some(mut unique) = triomphe::Arc::try_unique(inner).ok() {
+      if let Some(pool) = unique.header.take() {
+        pool.push(unique);
       }
-    });
+    }
   }
 }
 
@@ -69,12 +65,14 @@ impl<'tx> SharedTxBytes<'tx> {
 
 impl<'tx> Deref for SharedTxBytes<'tx> {
   type Target = [u8];
+  #[inline]
   fn deref(&self) -> &Self::Target {
     self.inner.as_ref()
   }
 }
 
 impl<'tx> AsRef<[u8]> for SharedTxBytes<'tx> {
+  #[inline]
   fn as_ref(&self) -> &[u8] {
     self.inner.as_ref()
   }

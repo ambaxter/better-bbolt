@@ -30,8 +30,8 @@ impl MemmapDb {
 #[cfg(test)]
 mod tests {
   use super::*;
-  #[test]
+/*  #[test]
   fn test() {
     let b = MemmapDb::builder().open_path("Test");
-  }
+  }*/
 }

@@ -1116,6 +1116,8 @@ mod tests {
   use std::io::{BufReader, BufWriter, Write};
   use std::path::PathBuf;
   use std::sync;
+  use std::time::Instant;
+  use crate::io::backends::p_file::{PFileIO, PFileReadOptions};
 
   #[test]
   fn test_file() {
@@ -1128,9 +1130,9 @@ mod tests {
     let root_page = meta.root.root();
     let buffer_pool = BufferPool::new(
       page_size,
-      Size::from_kibibytes(64),
-      Size::from_kibibytes(32),
-      Size::from_kibibytes(256),
+      Size::from_megabytes(64),
+      Size::from_megabytes(32),
+      Size::from_megabytes(256),
     );
     let tx_stats = sync::Arc::new(TxStats::default());
     let path = sync::Arc::new(PathBuf::from("./my.db"));
@@ -1153,7 +1155,7 @@ mod tests {
     };
     let tx = sync::Arc::new(LazyTxHandle { handle: core_tx });
     let root = tx.read_node_page(root_page.into()).unwrap();
-    let stack_pool = VecPool::new(10, 5, 100);
+    let stack_pool = VecPool::new(10, 5, 5_000);
     let bucket = OnDiskBucket {
       tx: tx.clone(),
       stack_pool: stack_pool.clone(),
@@ -1186,6 +1188,32 @@ mod tests {
       header: Default::default(),
       root: dict_root,
     };
+    let now = Instant::now();
+    for _ in 0..5_000 {
+      let mut dict_cursor = LazyTxCursor {
+        cursor: LeafFlagFilterCursor {
+          cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
+          leaf_flag: LeafFlag::empty(),
+        },
+      };
+      let _ = dict_cursor.first_ref().unwrap();
+      loop {
+        match dict_cursor.next_ref().unwrap() {
+          Some(_) => continue,
+          None => break,
+        }
+      }
+/*      let mut dict_iter = CursorIter {
+        cursor: dict_cursor,
+        started: false,
+        _tx: Default::default(),
+      };
+      for result in dict_iter {
+        let (_k, _v) = result.unwrap();
+      }*/
+    }
+    println!("file: {:?}", now.elapsed());
+    /*
     let dict_cursor = LazyTxCursor {
       cursor: LeafFlagFilterCursor {
         cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
@@ -1198,6 +1226,7 @@ mod tests {
       _tx: Default::default(),
     };
     let mut write = BufWriter::new(File::create("out_file.csv").unwrap());
+    let now = Instant::now();
     for result in dict_iter {
       let (k, v) = result.unwrap();
       let mut k_buf = k.ref_into_try_buf().unwrap();
@@ -1208,7 +1237,130 @@ mod tests {
         .unwrap();
     }
     write.flush().unwrap();
+    println!("file: {:?}", now.elapsed());*/
   }
+
+
+  #[test]
+  fn test_pfile() {
+    let mut reader = BufReader::new(File::open("my.db").unwrap());
+    let metadata = MetaReader::new(reader).determine_file_meta().unwrap();
+    println!("{:?}", metadata);
+    let meta = metadata.meta;
+    let tx_id = meta.tx_id;
+    let page_size = meta.page_size as usize;
+    let root_page = meta.root.root();
+    let buffer_pool = BufferPool::new(
+      page_size,
+      Size::from_megabytes(64),
+      Size::from_megabytes(32),
+      Size::from_megabytes(256),
+    );
+    let tx_stats = sync::Arc::new(TxStats::default());
+    let path = sync::Arc::new(PathBuf::from("./my.db"));
+    let read_options = PFileReadOptions::new(buffer_pool.clone());
+    let backend = PFileIO::new_ro(path, page_size, read_options).unwrap();
+    let tx_context = DirectTransmogrify {};
+    let handler = DirectReadHandler {
+      tx_context,
+      io: backend,
+    };
+    let cached_read_handler = RwLock::new(CachedReadHandler {
+      handler,
+      page_cache: Cache::new(10_000),
+    });
+    let read_lock = cached_read_handler.read();
+    let core_tx = CoreTxHandle {
+      io: read_lock.into(),
+      stats: tx_stats.clone(),
+      tx_id,
+    };
+    let tx = sync::Arc::new(LazyTxHandle { handle: core_tx });
+    let root = tx.read_node_page(root_page.into()).unwrap();
+    let stack_pool = VecPool::new(10, 5, 5_000);
+    let bucket = OnDiskBucket {
+      tx: tx.clone(),
+      stack_pool: stack_pool.clone(),
+      header: Default::default(),
+      root,
+    };
+    let mut cursor = LazyTxCursor {
+      cursor: LeafFlagFilterCursor {
+        cursor: CoreCursor::new_with_stack(&bucket, stack_pool.pop()),
+        leaf_flag: LeafFlag::BUCKET,
+      },
+    };
+    let kv = cursor.seek_ref(b"dict".as_slice()).expect("no_errors");
+    let (k, v) = kv.unwrap();
+    let mut k_buf = k.ref_into_try_buf().unwrap();
+    println!("{:?}", k_buf.remaining());
+    println!("{:?}", k_buf.chunk());
+    k_buf.try_advance(4).unwrap();
+    println!("{:?}", k_buf.remaining());
+    let mut v_buf = v.ref_into_try_buf().unwrap();
+    println!("{:?}", v_buf.remaining());
+    let mut bucket_header = BucketHeader::default();
+    bytes_of_mut(&mut bucket_header).copy_from_slice(v_buf.chunk());
+    println!("{:?}", bucket_header);
+
+    let dict_root = tx.read_node_page(bucket_header.root().into()).unwrap();
+    let dict_bucket = OnDiskBucket {
+      tx: tx.clone(),
+      stack_pool: stack_pool.clone(),
+      header: Default::default(),
+      root: dict_root,
+    };
+    let now = Instant::now();
+    for _ in 0..5_000 {
+      let mut dict_cursor = LazyTxCursor {
+        cursor: LeafFlagFilterCursor {
+          cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
+          leaf_flag: LeafFlag::empty(),
+        },
+      };
+      let _ = dict_cursor.first_ref().unwrap();
+      loop {
+        match dict_cursor.next_ref().unwrap() {
+          Some(_) => continue,
+          None => break,
+        }
+      }
+/*      let mut dict_iter = CursorIter {
+        cursor: dict_cursor,
+        started: false,
+        _tx: Default::default(),
+      };
+      for result in dict_iter {
+        let (_k, _v) = result.unwrap();
+      }*/
+    }
+    println!("pfile: {:?}", now.elapsed());/*
+    let dict_cursor = LazyTxCursor {
+      cursor: LeafFlagFilterCursor {
+        cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
+        leaf_flag: LeafFlag::empty(),
+      },
+    };
+    let mut dict_iter = CursorIter {
+      cursor: dict_cursor,
+      started: false,
+      _tx: Default::default(),
+    };
+    let mut write = BufWriter::new(File::create("out_file.csv").unwrap());
+    let now = Instant::now();
+    for result in dict_iter {
+      let (k, v) = result.unwrap();
+      let mut k_buf = k.ref_into_try_buf().unwrap();
+      let v_buf = v.ref_into_try_buf().unwrap();
+      let k_string = String::from_utf8_lossy(k_buf.chunk());
+      write
+        .write_fmt(format_args!("{},{}\n", k_string, v_buf.remaining()))
+        .unwrap();
+    }
+    write.flush().unwrap();
+    println!("pfile: {:?}", now.elapsed());*/
+  }
+
 
   #[test]
   fn test_multifile() {
@@ -1221,9 +1373,9 @@ mod tests {
     let root_page = meta.root.root();
     let buffer_pool = BufferPool::new(
       page_size,
-      Size::from_kibibytes(64),
-      Size::from_kibibytes(32),
-      Size::from_kibibytes(256),
+      Size::from_megabytes(64),
+      Size::from_megabytes(32),
+      Size::from_megabytes(256),
     );
     let tx_stats = sync::Arc::new(TxStats::default());
     let path = sync::Arc::new(PathBuf::from("./my.db"));
@@ -1246,7 +1398,7 @@ mod tests {
     };
     let tx = sync::Arc::new(LazyTxHandle { handle: core_tx });
     let root = tx.read_node_page(root_page.into()).unwrap();
-    let stack_pool = VecPool::new(10, 5, 100);
+    let stack_pool = VecPool::new(10, 5, 5_000);
     let bucket = OnDiskBucket {
       tx: tx.clone(),
       stack_pool: stack_pool.clone(),
@@ -1279,6 +1431,33 @@ mod tests {
       header: Default::default(),
       root: dict_root,
     };
+    let now = Instant::now();
+    for _ in 0..5_000 {
+      let mut dict_cursor = LazyTxCursor {
+        cursor: LeafFlagFilterCursor {
+          cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
+          leaf_flag: LeafFlag::empty(),
+        },
+      };
+      let _ = dict_cursor.first_ref().unwrap();
+      loop {
+        match dict_cursor.next_ref().unwrap() {
+          Some(_) => continue,
+          None => break,
+        }
+      }
+/*      let mut dict_iter = CursorIter {
+        cursor: dict_cursor,
+        started: false,
+        _tx: Default::default(),
+      };
+      for result in dict_iter {
+        let (_k, _v) = result.unwrap();
+      }*/
+    }
+    println!("multifile: {:?}", now.elapsed());
+
+    /*
     let dict_cursor = LazyTxCursor {
       cursor: LeafFlagFilterCursor {
         cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
@@ -1291,6 +1470,7 @@ mod tests {
       _tx: Default::default(),
     };
     let mut write = BufWriter::new(File::create("out_multi.csv").unwrap());
+    let now = Instant::now();
     for result in dict_iter {
       let (k, v) = result.unwrap();
       let mut k_buf = k.ref_into_try_buf().unwrap();
@@ -1301,6 +1481,7 @@ mod tests {
         .unwrap();
     }
     write.flush().unwrap();
+    println!("multifile: {:?}", now.elapsed());*/
   }
 
   #[test]
@@ -1336,7 +1517,7 @@ mod tests {
     };
     let tx = sync::Arc::new(RefTxHandle { handle: core_tx });
     let root = tx.read_node_page(root_page.into()).unwrap();
-    let stack_pool = VecPool::new(10, 5, 100);
+    let stack_pool = VecPool::new(10, 5, 5_000);
     let bucket = OnDiskBucket {
       tx: tx.clone(),
       stack_pool: stack_pool.clone(),
@@ -1369,7 +1550,32 @@ mod tests {
       header: Default::default(),
       root: dict_root,
     };
-    let dict_cursor = RefTxCursor {
+    let now = Instant::now();
+    for _ in 0..5_000 {
+      let mut dict_cursor = RefTxCursor {
+        cursor: LeafFlagFilterCursor {
+          cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
+          leaf_flag: LeafFlag::empty(),
+        },
+      };
+      let _ = dict_cursor.first_ref().unwrap();
+      loop {
+        match dict_cursor.next_ref().unwrap() {
+          Some(_) => continue,
+          None => break,
+        }
+      }
+/*      let mut dict_iter = CursorIter {
+        cursor: dict_cursor,
+        started: false,
+        _tx: Default::default(),
+      };
+      for result in dict_iter {
+        let (_k, _v) = result.unwrap();
+      }*/
+    }
+    println!("memmap: {:?}", now.elapsed());
+    /*let dict_cursor = RefTxCursor {
       cursor: LeafFlagFilterCursor {
         cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
         leaf_flag: LeafFlag::empty(),
@@ -1381,6 +1587,7 @@ mod tests {
       _tx: Default::default(),
     };
     let mut write = BufWriter::new(File::create("out_memmap.csv").unwrap());
+    let now = Instant::now();
     for result in dict_iter {
       let (k, v) = result.unwrap();
       let mut k_buf = k.ref_into_try_buf().unwrap();
@@ -1391,5 +1598,6 @@ mod tests {
         .unwrap();
     }
     write.flush().unwrap();
+    println!("memmap: {:?}", now.elapsed());*/
   }
 }
