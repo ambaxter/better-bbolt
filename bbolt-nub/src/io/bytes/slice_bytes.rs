@@ -20,6 +20,7 @@ impl<'a, 'tx> GatKvRef<'a> for &'tx [u8] {
 }
 
 impl<'tx> GetGatKvRefSlice for &'tx [u8] {
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())]
   }

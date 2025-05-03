@@ -75,6 +75,7 @@ impl<'a, 'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> GatKvRef<'a> for LazyRefSlice<'p
 }
 
 impl<'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> GetGatKvRefSlice for LazyRefSlice<'p, 'tx, L> {
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     LazyRefSlice {
       page: self.page,

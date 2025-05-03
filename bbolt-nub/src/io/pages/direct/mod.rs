@@ -37,6 +37,7 @@ impl<'tx, P: TxBytes<'tx>> GetGatKvRefSlice for DirectPage<'tx, P>
 where
   P: GetGatKvRefSlice,
 {
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     self.root.get_ref_slice(range)
   }

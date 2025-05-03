@@ -101,6 +101,7 @@ impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> GatKvRef<'a> for LazyTxSlice<'tx, L> {
 }
 
 impl<'tx, L: TxReadLazyPageIO<'tx>> GetGatKvRefSlice for LazyTxSlice<'tx, L> {
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     let range = self.range.sub_range(range);
     LazyRefSlice::new(&self.page, range)

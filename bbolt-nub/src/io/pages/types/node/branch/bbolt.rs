@@ -42,6 +42,7 @@ impl<'tx, T> GetGatKvRefSlice for BBoltBranch<'tx, T>
 where
   T: TxPageType<'tx>,
 {
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     self.page.get_ref_slice(range)
   }

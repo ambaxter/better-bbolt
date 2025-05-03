@@ -199,6 +199,7 @@ impl<'a, 'p> GatKvRef<'a> for SharedRefSlice<'p> {
 }
 
 impl<'p> GetGatKvRefSlice for SharedRefSlice<'p> {
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
@@ -280,6 +281,7 @@ impl<'a, 'tx> GatKvRef<'a> for SharedTxSlice<'tx> {
 }
 
 impl<'tx> GetGatKvRefSlice for SharedTxSlice<'tx> {
+  #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     SharedRefSlice {
       inner: &self.as_ref()[(range.start_bound().cloned(), range.end_bound().cloned())],
