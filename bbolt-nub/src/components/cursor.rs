@@ -1100,9 +1100,12 @@ mod tests {
   use crate::common::layout::bucket::BucketHeader;
   use crate::common::vec_pool::VecPool;
   use crate::components::tx::{CoreTxHandle, LazyTxHandle, RefTxHandle};
-  use crate::io::backends::file::{FileReadOptions, MultiFileIO, MultiFileReadOptions, SingleFileIO};
+  use crate::io::backends::file::{
+    FileReadOptions, MultiFileIO, MultiFileReadOptions, SingleFileIO,
+  };
   use crate::io::backends::memmap::{MemMapIO, MemMapReadOptions};
   use crate::io::backends::meta_reader::MetaReader;
+  use crate::io::backends::p_file::{PFileIO, PFileReadOptions};
   use crate::io::backends::{CachedReadHandler, DirectReadHandler, NewIOReader, ROShell};
   use crate::io::pages::lazy::ops::RefIntoTryBuf;
   use crate::io::pages::lazy::ops::TryBuf;
@@ -1117,7 +1120,6 @@ mod tests {
   use std::path::PathBuf;
   use std::sync;
   use std::time::Instant;
-  use crate::io::backends::p_file::{PFileIO, PFileReadOptions};
 
   #[test]
   fn test_file() {
@@ -1203,7 +1205,7 @@ mod tests {
           None => break,
         }
       }
-/*      let mut dict_iter = CursorIter {
+      /*      let mut dict_iter = CursorIter {
         cursor: dict_cursor,
         started: false,
         _tx: Default::default(),
@@ -1239,7 +1241,6 @@ mod tests {
     write.flush().unwrap();
     println!("file: {:?}", now.elapsed());*/
   }
-
 
   #[test]
   fn test_pfile() {
@@ -1325,7 +1326,7 @@ mod tests {
           None => break,
         }
       }
-/*      let mut dict_iter = CursorIter {
+      /*      let mut dict_iter = CursorIter {
         cursor: dict_cursor,
         started: false,
         _tx: Default::default(),
@@ -1334,33 +1335,32 @@ mod tests {
         let (_k, _v) = result.unwrap();
       }*/
     }
-    println!("pfile: {:?}", now.elapsed());/*
+    println!("pfile: {:?}", now.elapsed()); /*
     let dict_cursor = LazyTxCursor {
-      cursor: LeafFlagFilterCursor {
-        cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
-        leaf_flag: LeafFlag::empty(),
-      },
+    cursor: LeafFlagFilterCursor {
+    cursor: CoreCursor::new_with_stack(&dict_bucket, stack_pool.pop()),
+    leaf_flag: LeafFlag::empty(),
+    },
     };
     let mut dict_iter = CursorIter {
-      cursor: dict_cursor,
-      started: false,
-      _tx: Default::default(),
+    cursor: dict_cursor,
+    started: false,
+    _tx: Default::default(),
     };
     let mut write = BufWriter::new(File::create("out_file.csv").unwrap());
     let now = Instant::now();
     for result in dict_iter {
-      let (k, v) = result.unwrap();
-      let mut k_buf = k.ref_into_try_buf().unwrap();
-      let v_buf = v.ref_into_try_buf().unwrap();
-      let k_string = String::from_utf8_lossy(k_buf.chunk());
-      write
-        .write_fmt(format_args!("{},{}\n", k_string, v_buf.remaining()))
-        .unwrap();
+    let (k, v) = result.unwrap();
+    let mut k_buf = k.ref_into_try_buf().unwrap();
+    let v_buf = v.ref_into_try_buf().unwrap();
+    let k_string = String::from_utf8_lossy(k_buf.chunk());
+    write
+    .write_fmt(format_args!("{},{}\n", k_string, v_buf.remaining()))
+    .unwrap();
     }
     write.flush().unwrap();
     println!("pfile: {:?}", now.elapsed());*/
   }
-
 
   #[test]
   fn test_multifile() {
@@ -1446,7 +1446,7 @@ mod tests {
           None => break,
         }
       }
-/*      let mut dict_iter = CursorIter {
+      /*      let mut dict_iter = CursorIter {
         cursor: dict_cursor,
         started: false,
         _tx: Default::default(),
@@ -1565,7 +1565,7 @@ mod tests {
           None => break,
         }
       }
-/*      let mut dict_iter = CursorIter {
+      /*      let mut dict_iter = CursorIter {
         cursor: dict_cursor,
         started: false,
         _tx: Default::default(),

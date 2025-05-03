@@ -94,7 +94,10 @@ pub struct MultiFileReadOptions {
 
 impl MultiFileReadOptions {
   pub fn new(buffer_pool: BufferPool, reader_count: usize) -> MultiFileReadOptions {
-    MultiFileReadOptions { buffer_pool, reader_count }
+    MultiFileReadOptions {
+      buffer_pool,
+      reader_count,
+    }
   }
 }
 

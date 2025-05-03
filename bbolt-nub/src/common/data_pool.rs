@@ -29,9 +29,7 @@ impl Deref for SharedData {
 impl AsRef<[u8]> for SharedData {
   #[inline]
   fn as_ref(&self) -> &[u8] {
-    &self
-      .inner
-      .slice
+    &self.inner.slice
   }
 }
 

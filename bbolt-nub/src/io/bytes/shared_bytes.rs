@@ -9,9 +9,9 @@ use crate::io::pages::{GatKvRef, GetGatKvRefSlice, GetKvTxSlice, SubRange};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::iter::Copied;
+use std::mem::ManuallyDrop;
 use std::ops::{Deref, Range, RangeBounds};
 use std::{io, slice};
-use std::mem::ManuallyDrop;
 
 #[derive(Clone)]
 pub struct SharedBytes {
@@ -29,9 +29,7 @@ impl Deref for SharedBytes {
 
 impl AsRef<[u8]> for SharedBytes {
   fn as_ref(&self) -> &[u8] {
-    &self
-      .inner
-      .slice
+    &self.inner.slice
   }
 }
 

@@ -34,8 +34,12 @@ pub struct MemMapReadOptions {
 }
 
 impl MemMapReadOptions {
-  pub fn new(pre_populate_pages: bool,use_mlock: bool, advise_random: bool ) -> Self {
-    Self { pre_populate_pages, use_mlock, advise_random }
+  pub fn new(pre_populate_pages: bool, use_mlock: bool, advise_random: bool) -> Self {
+    Self {
+      pre_populate_pages,
+      use_mlock,
+      advise_random,
+    }
   }
 }
 

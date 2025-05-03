@@ -194,7 +194,10 @@ where
   }
 }
 
-impl<R> ContigIOReader for ROShell<R> where R: ContigIOReader {
+impl<R> ContigIOReader for ROShell<R>
+where
+  R: ContigIOReader,
+{
   delegate! {
     to self.read {
       fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, IOError>;
@@ -320,7 +323,11 @@ where
   }
 }
 
-impl<R, W> ContigIOReader for RWShell<R, W> where R: ContigIOReader, W: IOWriter {
+impl<R, W> ContigIOReader for RWShell<R, W>
+where
+  R: ContigIOReader,
+  W: IOWriter,
+{
   delegate! {
     to self.read {
       fn read_header(&self, disk_page_id: DiskPageId) -> crate::Result<PageHeader, IOError>;
@@ -439,12 +446,9 @@ where
     } else {
       let l = self
         .page_cache
-        .entry(disk_page_id)
-        .or_try_insert_with(|| self
-          .handler
-          .io
-          .read_single_page(disk_page_id))
-        .map(|entry| entry.value().clone());
+        .try_get_with(disk_page_id, || {
+          self.handler.io.read_single_page(disk_page_id)
+        });
       // TODO: Log this since this is just so much faster
       l.map_err(|_| IOError::ReadError(disk_page_id).into())
     }
