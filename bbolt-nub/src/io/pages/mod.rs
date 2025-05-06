@@ -16,7 +16,7 @@ use bytemuck::from_bytes;
 use delegate::delegate;
 use std::collections::Bound;
 use std::hash::Hash;
-use std::ops::{Deref, Range, RangeBounds};
+use std::ops::{Deref, Range, RangeBounds, RangeFrom};
 use std::sync;
 
 pub mod direct;
@@ -24,11 +24,12 @@ pub mod lazy;
 pub mod types;
 
 pub trait SubRange {
-  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self;
+  fn sub_range_bound<R: RangeBounds<usize>>(&self, range: R) -> Self;
 }
 
 impl SubRange for Range<usize> {
-  fn sub_range<R: RangeBounds<usize>>(&self, range: R) -> Self {
+
+  fn sub_range_bound<R: RangeBounds<usize>>(&self, range: R) -> Self {
     let start = match range.start_bound().cloned() {
       Bound::Included(start) => self.start + start,
       Bound::Excluded(start) => self.start + start + 1,

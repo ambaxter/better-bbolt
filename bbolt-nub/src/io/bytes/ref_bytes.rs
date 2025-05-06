@@ -165,7 +165,7 @@ impl<'tx> GetKvTxSlice<'tx> for RefTxBytes<'tx> {
   type KvTx = RefTxSlice<'tx>;
 
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::KvTx {
-    let range = (0..self.bytes.len()).sub_range(range);
+    let range = (0..self.bytes.len()).sub_range_bound(range);
     RefTxSlice {
       bytes: self.bytes,
       range,
@@ -208,7 +208,7 @@ impl<'tx> GetKvTxSlice<'tx> for RefTxSlice<'tx> {
   type KvTx = Self;
 
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::KvTx {
-    let range = self.range.sub_range(range);
+    let range = self.range.sub_range_bound(range);
     RefTxSlice {
       bytes: self.bytes,
       range,
@@ -240,7 +240,7 @@ impl<'a> Buf for RefBuf<'a> {
   }
 
   fn advance(&mut self, cnt: usize) {
-    self.range = self.range.sub_range(cnt..);
+    self.range = self.range.sub_range_bound(cnt..);
   }
 }
 

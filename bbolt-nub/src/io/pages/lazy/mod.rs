@@ -97,7 +97,7 @@ impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> GatKvRef<'a> for LazyPage<'tx, L> {
 impl<'tx, L: TxReadLazyPageIO<'tx>> GetGatKvRefSlice for LazyPage<'tx, L> {
   #[inline]
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
-    let range = (0..self.len()).sub_range(range);
+    let range = (0..self.len()).sub_range_bound(range);
     LazyRefSlice::new(self, range)
   }
 }
@@ -106,7 +106,7 @@ impl<'tx, L: TxReadLazyPageIO<'tx>> GetKvTxSlice<'tx> for LazyPage<'tx, L> {
   type KvTx = LazyTxSlice<'tx, L>;
 
   fn get_tx_slice<R: RangeBounds<usize>>(&self, range: R) -> Self::KvTx {
-    let range = (0..self.len()).sub_range(range);
+    let range = (0..self.len()).sub_range_bound(range);
     LazyTxSlice::new(self.clone(), range)
   }
 }
@@ -131,7 +131,7 @@ impl<'a, 'tx: 'a, L: TxReadLazyPageIO<'tx>> LazyTryIter<'a, 'tx, L> {
   ) -> crate::Result<LazyTryIter<'a, 'tx, L>, PageError> {
     let page_size = page.root_page().len();
     let overflow_count = page.page_header().get_overflow();
-    let range = (0..page.len()).sub_range(range);
+    let range = (0..page.len()).sub_range_bound(range);
     let next_overflow_index = (range.start / page_size) as u32;
     let next_page = page.read_overflow_page(next_overflow_index)?;
     let next_back_overflow_index = (range.end / page_size) as u32;

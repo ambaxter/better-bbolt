@@ -79,7 +79,7 @@ impl<'p, 'tx: 'p, L: TxReadLazyPageIO<'tx>> GetGatKvRefSlice for LazyRefSlice<'p
   fn get_ref_slice<'a, R: RangeBounds<usize>>(&'a self, range: R) -> <Self as GatKvRef<'a>>::KvRef {
     LazyRefSlice {
       page: self.page,
-      range: self.range.sub_range(range),
+      range: self.range.sub_range_bound(range),
     }
   }
 }
@@ -170,7 +170,7 @@ impl<'a, 'tx, L: TxReadLazyPageIO<'tx>> TryBuf for LazyRefTryBuf<'a, 'tx, L> {
       self.overflow_index = overflow_index;
       self.page = page;
     }
-    self.range = self.range.sub_range(cnt..);
+    self.range = self.range.sub_range_bound(cnt..);
     Ok(())
   }
 }
