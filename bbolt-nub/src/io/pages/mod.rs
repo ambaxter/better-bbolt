@@ -28,7 +28,6 @@ pub trait SubRange {
 }
 
 impl SubRange for Range<usize> {
-
   fn sub_range_bound<R: RangeBounds<usize>>(&self, range: R) -> Self {
     let start = match range.start_bound().cloned() {
       Bound::Included(start) => self.start + start,

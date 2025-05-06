@@ -1,4 +1,6 @@
-use crate::common::id::{DbId, DiskPageId, DiskPageTranslator, EOFPageId, FreelistPageId, NodePageId};
+use crate::common::id::{
+  DbId, DiskPageId, DiskPageTranslator, EOFPageId, FreelistPageId, NodePageId,
+};
 use crate::io::transmogrify::direct::DirectTransmogrify;
 use rangemap::RangeSet;
 use std::cmp::min_by;
@@ -23,10 +25,13 @@ enum FreelistRange {
 struct FreelistRangeIter<I> {
   fuse: bool,
   current_range: Range<DiskPageId>,
-  inner: I
+  inner: I,
 }
 
-impl<I> FreelistRangeIter<I> where I: Iterator<Item = DiskPageId> {
+impl<I> FreelistRangeIter<I>
+where
+  I: Iterator<Item = DiskPageId>,
+{
   fn new(mut inner: I) -> Self {
     let (current_range, fuse) = if let Some(page) = inner.next() {
       (page..page + 1, false)
@@ -41,7 +46,10 @@ impl<I> FreelistRangeIter<I> where I: Iterator<Item = DiskPageId> {
   }
 }
 
-impl<I> Iterator for FreelistRangeIter<I> where I: Iterator<Item = DiskPageId> {
+impl<I> Iterator for FreelistRangeIter<I>
+where
+  I: Iterator<Item = DiskPageId>,
+{
   type Item = FreelistRange;
 
   fn next(&mut self) -> Option<Self::Item> {
@@ -61,9 +69,9 @@ impl<I> Iterator for FreelistRangeIter<I> where I: Iterator<Item = DiskPageId> {
             let range = self.current_range.clone();
             self.current_range = page..page + 1;
             Some(FreelistRange::Range(range))
-          }
+          };
         }
-      }else {
+      } else {
         self.fuse = true;
         return Some(FreelistRange::Range(self.current_range.clone()));
       }
@@ -84,7 +92,9 @@ where
     let mut singles = BTreeSet::new();
     for r in FreelistRangeIter::new(free_ids.into_iter()) {
       match r {
-        FreelistRange::Single(s) => {singles.insert(s);},
+        FreelistRange::Single(s) => {
+          singles.insert(s);
+        }
         FreelistRange::Range(r) => ranges.insert(r),
       }
     }

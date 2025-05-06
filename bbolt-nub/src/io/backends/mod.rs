@@ -444,13 +444,15 @@ where
             .clone()
         })
     } else {
-      let l = self
+      self
         .page_cache
         .try_get_with(disk_page_id, || {
           self.handler.io.read_single_page(disk_page_id)
-        });
-      // TODO: Log this since this is just so much faster
-      l.map_err(|_| IOError::ReadError(disk_page_id).into())
+        })
+        .map_err(|source| {
+          let report: Report<IOError> = IOError::ReadError(disk_page_id).into();
+          report.attach_printable(source)
+        })
     }
   }
 }
