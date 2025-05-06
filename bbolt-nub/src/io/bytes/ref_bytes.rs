@@ -274,7 +274,7 @@ impl<'a> TryBuf for RefTryBuf<'a> {
 }
 
 impl<'tx> DirectGet<u8> for RefTxBytes<'tx> {
-  fn direct_get<'a>(&'a self, index: usize) -> Option<u8> {
+  fn direct_get(&self, index: usize) -> Option<u8> {
     self.bytes.get(index).copied()
   }
 }
