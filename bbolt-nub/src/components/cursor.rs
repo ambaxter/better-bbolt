@@ -768,6 +768,7 @@ pub trait CursorRefApi: for<'a> GatKvRef<'a> {
   >;
 }
 
+#[derive(Clone)]
 pub struct CursorIter<'tx, C> {
   cursor: C,
   started: bool,
