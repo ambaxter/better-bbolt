@@ -140,7 +140,11 @@ pub struct CoreCursor<'tx, B, L, TX> {
   tx_slot: TxSlot<'tx>,
 }
 
-impl<'tx, B, L, TX> Clone for CoreCursor<'tx, B, L, TX> where B: Clone, L: Clone, {
+impl<'tx, B, L, TX> Clone for CoreCursor<'tx, B, L, TX>
+where
+  B: Clone,
+  L: Clone,
+{
   fn clone(&self) -> Self {
     CoreCursor {
       tx: self.tx.clone(),
@@ -795,7 +799,7 @@ where
   }
 }
 
-pub trait CursorApi<'tx>: Clone {
+pub trait CursorApi<'tx> {
   type KvTx: GetKvTxSlice<'tx>;
 
   fn first(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
@@ -850,7 +854,9 @@ pub struct RefTxCursor<'tx, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxByt
   cursor: LeafFlagFilterCursor<CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>>,
 }
 
-impl<'tx, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> Clone for RefTxCursor<'tx, TX> {
+impl<'tx, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> Clone
+  for RefTxCursor<'tx, TX>
+{
   fn clone(&self) -> Self {
     RefTxCursor {
       cursor: self.cursor.clone(),

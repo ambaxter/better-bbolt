@@ -6,7 +6,6 @@ rust-version.workspace = true
 description = "The Rust port Bolt database index"
 
 [dependencies]
-aligners.workspace = true
 parking_lot.workspace = true
 memmap2.workspace = true
 bytemuck.workspace = true
@@ -19,7 +18,6 @@ delegate.workspace = true
 fnv_rs.workspace = true
 rayon.workspace = true
 crossbeam-channel.workspace = true
-dashmap.workspace = true
 fake.workspace = true
 hashbrown.workspace = true
 moka.workspace = true

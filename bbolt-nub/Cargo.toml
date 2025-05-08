@@ -25,12 +25,10 @@ size.workspace = true
 delegate.workspace = true
 fnv_rs.workspace = true
 crossbeam-channel.workspace = true
-dashmap.workspace = true
 fake.workspace = true
 hashbrown.workspace = true
 moka.workspace = true
 getset.workspace = true
-tracing.workspace = true
 error-stack.workspace = true
 rayon = {workspace = true}
 bytes.workspace = true

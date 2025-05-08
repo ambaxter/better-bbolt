@@ -1,5 +1,4 @@
 use bbolt_engine::backend::ReadHandle;
-use bumpalo::Bump;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
