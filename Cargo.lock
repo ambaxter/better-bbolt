@@ -30,28 +30,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
-name = "bbolt-engine"
-version = "0.1.0"
-dependencies = [
- "bitflags",
- "bytemuck",
- "crossbeam-channel",
- "delegate",
- "fake",
- "fnv_rs",
- "getset",
- "hashbrown",
- "itertools",
- "memmap2",
- "moka",
- "once_cell",
- "page_size",
- "parking_lot",
- "rayon",
- "size",
-]
-
-[[package]]
 name = "bbolt-nub"
 version = "0.1.0"
 dependencies = [
@@ -86,7 +64,6 @@ dependencies = [
 name = "better-bbolt"
 version = "0.1.0"
 dependencies = [
- "bbolt-engine",
  "bbolt-nub",
  "bon",
  "itertools",

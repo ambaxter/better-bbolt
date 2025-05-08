@@ -16,7 +16,6 @@ use ref_slice::LazyRefSlice;
 use std::cmp::Ordering;
 use std::ops::{Deref, Range, RangeBounds};
 use std::{hash, sync};
-use tracing::warn;
 
 pub mod ops;
 pub mod ref_slice;

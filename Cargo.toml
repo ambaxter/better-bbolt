@@ -1,11 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "bbolt-engine",
     "bbolt-nub",
     "."
 ]
-default-members = ["bbolt-engine", "bbolt-nub", "."]
+default-members = ["bbolt-nub", "."]
 
 [workspace.package]
 version = "0.1.0"
@@ -26,7 +25,6 @@ size.workspace = true
 rayon.workspace = true
 parking_lot.workspace = true
 lz4_flex.workspace = true
-bbolt-engine.workspace = true
 bbolt-nub.workspace = true
 
 [workspace.dependencies]
@@ -76,7 +74,6 @@ thiserror = "2.0.12"
 fake = { version = "4.3.0", features = ["derive"] }
 
 # bbolt internal libraries
-bbolt-engine = {path = "bbolt-engine" }
 bbolt-nub = {path = "bbolt-nub" }
 
 [profile.release]

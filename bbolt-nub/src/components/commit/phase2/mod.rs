@@ -75,7 +75,7 @@ where
     let seek_r = seek(&mut bucket_cursor, last_key)?;
     match seek_r {
       None => {todo!("all new bucket!")}
-      Some(_) => {todo!(existing bucket!)}
+      Some(_) => {todo!("existing bucket!")}
     }
   }
 }
