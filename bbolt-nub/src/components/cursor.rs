@@ -23,6 +23,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync;
 
+#[derive(Clone)]
 pub struct StackEntry<B, L> {
   page: NodePage<B, L>,
   index: usize,
@@ -95,6 +96,12 @@ pub trait CoreCursorMoveApi {
   fn move_to_last_element(&mut self) -> crate::Result<Option<LeafFlag>, CursorError>;
 }
 
+pub trait CoreCursorMoveLeafApi<L>: CoreCursorMoveApi {
+  fn move_to_prev_leaf(&mut self) -> crate::Result<Option<LeafFlag>, CursorError>;
+  fn move_to_next_leaf(&mut self) -> crate::Result<Option<LeafFlag>, CursorError>;
+  fn get_leaf_page(&self) -> Option<&L>;
+}
+
 pub trait CoreCursorSeekApi {
   fn seek(&mut self, v: &[u8]) -> crate::Result<Option<LeafFlag>, CursorError>;
 }
@@ -131,6 +138,18 @@ pub struct CoreCursor<'tx, B, L, TX> {
   stack: UniqueVec<StackEntry<B, L>>,
   location: CursorLocation,
   tx_slot: TxSlot<'tx>,
+}
+
+impl<'tx, B, L, TX> Clone for CoreCursor<'tx, B, L, TX> where B: Clone, L: Clone, {
+  fn clone(&self) -> Self {
+    CoreCursor {
+      tx: self.tx.clone(),
+      root: self.root.clone(),
+      stack: self.stack.clone(),
+      location: self.location,
+      tx_slot: self.tx_slot,
+    }
+  }
 }
 
 impl<'tx, TX> CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>
@@ -456,6 +475,32 @@ impl<'tx, TX: TheTx<'tx>> CoreCursorMoveApi for CoreCursor<'tx, TX::BranchType, 
   }
 }
 
+impl<'tx, TX: TheTx<'tx>> CoreCursorMoveLeafApi<TX::LeafType>
+  for CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>
+{
+  fn move_to_prev_leaf(&mut self) -> crate::Result<Option<LeafFlag>, CursorError> {
+    if let Some(last) = self.stack.last_mut() {
+      last.index = 0;
+    }
+    self.move_to_prev_element()
+  }
+
+  fn move_to_next_leaf(&mut self) -> error_stack::Result<Option<LeafFlag>, CursorError> {
+    if let Some(last) = self.stack.last_mut() {
+      let index = match &last.page {
+        NodePage::Branch(_) => unreachable!("cannot be branch"),
+        NodePage::Leaf(leaf) => leaf.element_count() - 1,
+      };
+      last.index = index;
+    }
+    self.move_to_next_element()
+  }
+
+  fn get_leaf_page(&self) -> Option<&TX::LeafType> {
+    self.get_leaf_for_kv().map(|(_, page)| page)
+  }
+}
+
 impl<'tx, TX: TheTx<'tx>> CoreCursorRefApi for CoreCursor<'tx, TX::BranchType, TX::LeafType, TX> {
   type KvRef<'a>
     = <TX::LeafType as GatKvRef<'a>>::KvRef
@@ -540,6 +585,7 @@ where
 // due to Subtyping & Veriance (https://doc.rust-lang.org/nomicon/subtyping.html)
 // "mutable references are invariant over their type parameter"
 // Ideally we don't want to have to clone 2 Arcs for every Bucket.get() invocation
+#[derive(Clone)]
 pub struct LeafFlagFilterCursor<C> {
   cursor: C,
   leaf_flag: LeafFlag,
@@ -748,14 +794,22 @@ where
   }
 }
 
-pub trait CursorApi<'tx> {
+pub trait CursorApi<'tx>: Clone {
   type KvTx: GetKvTxSlice<'tx>;
 
   fn first(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
   fn next(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
   fn prev(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
   fn last(&mut self) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
-  fn seek(&mut self, v: &[u8]) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
+  fn seek(&mut self, key: &[u8]) -> crate::Result<Option<(Self::KvTx, Self::KvTx)>, CursorError>;
+}
+
+pub trait CursorLeafApi<'tx> {
+  type LeafType: HasLeaves<'tx>;
+
+  fn move_to_prev_leaf(&mut self) -> crate::Result<Option<LeafFlag>, CursorError>;
+  fn move_to_next_leaf(&mut self) -> crate::Result<Option<LeafFlag>, CursorError>;
+  fn seek_leaf(&mut self, key: &[u8]) -> Option<&Self::LeafType>;
 }
 
 pub enum CursorMutKv<D> {
@@ -793,6 +847,14 @@ pub struct CursorMutIter<'tx, C> {
 
 pub struct RefTxCursor<'tx, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> {
   cursor: LeafFlagFilterCursor<CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>>,
+}
+
+impl<'tx, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> Clone for RefTxCursor<'tx, TX> {
+  fn clone(&self) -> Self {
+    RefTxCursor {
+      cursor: self.cursor.clone(),
+    }
+  }
 }
 
 impl<'a, 'tx, TX: TheTx<'tx, TxPageType = DirectPage<'tx, RefTxBytes<'tx>>>> GatKvRef<'a>
@@ -944,6 +1006,14 @@ where
 
 pub struct LazyTxCursor<'tx, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> {
   cursor: LeafFlagFilterCursor<CoreCursor<'tx, TX::BranchType, TX::LeafType, TX>>,
+}
+
+impl<'tx, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> Clone for LazyTxCursor<'tx, TX> {
+  fn clone(&self) -> Self {
+    LazyTxCursor {
+      cursor: self.cursor.clone(),
+    }
+  }
 }
 
 impl<'a, 'tx, TX: TheLazyTx<'tx, TxPageType = LazyPage<'tx, TX>>> GatKvRef<'a>

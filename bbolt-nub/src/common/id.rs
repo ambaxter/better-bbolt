@@ -284,6 +284,31 @@ impl DiskPageTranslator for StableFreeSpaceTranslator {
 
 impl SupportsNonContigPages for StableFreeSpaceTranslator {}
 
+#[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Hash)]
+pub struct WipNodeId(pub u64);
+
+pub struct WipNodeGenerator {
+  current_id: WipNodeId,
+}
+
+impl WipNodeGenerator {
+  pub fn new() -> WipNodeGenerator {
+    WipNodeGenerator {
+      current_id: WipNodeId(0),
+    }
+  }
+}
+
+impl Iterator for WipNodeGenerator {
+  type Item = WipNodeId;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    let id = self.current_id;
+    self.current_id.0 += 1;
+    Some(id)
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use crate::common::id::{

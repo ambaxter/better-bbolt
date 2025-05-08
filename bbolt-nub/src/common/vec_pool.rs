@@ -12,6 +12,21 @@ pub struct UniqueVec<T> {
   data: Vec<T>,
 }
 
+impl<T> Clone for UniqueVec<T> where T: Clone {
+  fn clone(&self) -> Self {
+    if let Some(pool) = &self.pool {
+      let mut vec = pool.pop();
+      vec.clone_from_slice(&self.data);
+      vec
+    } else {
+      UniqueVec {
+        pool: None,
+        data: self.data.clone(),
+      }
+    }
+  }
+}
+
 impl<T> Deref for UniqueVec<T> {
   type Target = Vec<T>;
   fn deref(&self) -> &Self::Target {
