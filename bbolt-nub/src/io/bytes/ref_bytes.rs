@@ -114,6 +114,14 @@ pub struct RefTxSlice<'tx> {
   range: Range<usize>,
 }
 
+impl<'tx> Deref for RefTxSlice<'tx> {
+  type Target = [u8];
+
+  fn deref(&self) -> &Self::Target {
+    self.as_ref()
+  }
+}
+
 impl<'tx> AsRef<[u8]> for RefTxSlice<'tx> {
   fn as_ref(&self) -> &[u8] {
     &self.bytes[self.range.clone()]

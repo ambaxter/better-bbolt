@@ -297,15 +297,14 @@ impl WipNodeGenerator {
       current_id: WipNodeId(0),
     }
   }
-}
 
-impl Iterator for WipNodeGenerator {
-  type Item = WipNodeId;
+  pub fn root(&self) ->  WipNodeId {
+    WipNodeId(0)
+  }
 
-  fn next(&mut self) -> Option<Self::Item> {
-    let id = self.current_id;
+  pub fn gen_next(&mut self) -> WipNodeId {
     self.current_id.0 += 1;
-    Some(id)
+    self.current_id
   }
 }
 

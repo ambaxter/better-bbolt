@@ -144,6 +144,14 @@ pub struct SharedRefSlice<'a> {
   pub(crate) inner: &'a [u8],
 }
 
+impl<'a> Deref for SharedRefSlice<'a> {
+  type Target = [u8];
+
+  fn deref(&self) -> &Self::Target {
+    self.inner
+  }
+}
+
 impl<'a> AsRef<[u8]> for SharedRefSlice<'a> {
   fn as_ref(&self) -> &[u8] {
     self.inner
@@ -154,6 +162,13 @@ impl<'a> AsRef<[u8]> for SharedRefSlice<'a> {
 pub struct SharedTxSlice<'tx> {
   pub(crate) inner: SharedTxBytes<'tx>,
   pub(crate) range: Range<usize>,
+}
+
+impl<'tx> Deref for SharedTxSlice<'tx> {
+  type Target = [u8];
+  fn deref(&self) -> &Self::Target {
+    self.as_ref()
+  }
 }
 
 impl<'tx> AsRef<[u8]> for SharedTxSlice<'tx> {
